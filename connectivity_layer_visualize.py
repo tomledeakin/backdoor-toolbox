@@ -10,6 +10,7 @@ import config
 from matplotlib import pyplot as plt
 from sklearn import svm
 from umap import UMAP
+import umap.plot  # Thêm thư viện umap.plot
 import matplotlib.cm as cm
 import matplotlib.colors as mcolors
 from matplotlib.lines import Line2D
@@ -239,11 +240,11 @@ for vid, path in enumerate(model_list):
         num_total_classes = num_classes + 1 if len(poison_indices) > 0 else num_classes
 
         # Define colors: use a base colormap for normal classes and black for the poisoned class
-        base_cmap = cm.get_cmap('tab10', num_classes)  # You can choose another colormap if preferred
+        base_cmap = cm.get_cmap('Set3', num_classes)  # You can choose another colormap if preferred
         colors = [base_cmap(i) for i in range(num_classes)]
 
         if len(poison_indices) > 0:
-            colors.append((1.0, 0.0, 0.0, 1.0))  # Black color for poisoned class
+            colors.append((1.0, 0.0, 0.0, 1.0))
 
         # Create a ListedColormap
         custom_cmap = mcolors.ListedColormap(colors)
@@ -254,7 +255,7 @@ for vid, path in enumerate(model_list):
         # Apply UMAP
         reduced_features = visualizer.fit_transform(feats_np)
 
-        # Plotting
+        # Plotting UMAP embedding
         plt.figure(figsize=(10, 8))
         scatter = plt.scatter(
             reduced_features[:, 0],
@@ -271,7 +272,7 @@ for vid, path in enumerate(model_list):
         for i in range(num_total_classes):
             if i == poisoned_label:
                 label_name = 'Poisoned Samples'
-                color = (1.0, 0.0, 0.0, 1.0)  # Black
+                color = (1.0, 0.0, 0.0, 1.0)
             else:
                 label_name = f'Class {i}'
                 color = colors[i]  # Color from base_cmap
@@ -294,7 +295,34 @@ for vid, path in enumerate(model_list):
             filename
         )
 
-        # Save the figure
+        # Save the UMAP embedding figure
         plt.savefig(save_path, dpi=300)
-        print(f"Saved figure at {save_path}")
+        print(f"Saved UMAP figure at {save_path}")
         plt.clf()
+
+        # --- Thêm phần trực quan hóa UMAP Connectivity ---
+        # Visualize connectivity graph with edge bundling
+        print(f"Visualizing connectivity for layer {layer_name}...")
+        plt.figure(figsize=(10, 8))
+
+        # Sử dụng umap.plot.connectivity
+        # Chúng ta cần truyền visualizer đã được fit vào dữ liệu
+        umap.plot.connectivity(visualizer, edge_bundling='hammer', show_points=False)
+
+        plt.title(f"Connectivity Graph for Layer {layer_name}")
+        plt.tight_layout()
+
+        # Construct the filename for connectivity graph
+        connectivity_filename = f"connectivity_{layer_name}_{args.method}_{core_dir}_{alias}_class={target_class}.png"
+
+        # Full save path
+        connectivity_save_path = os.path.join(
+            save_dir,
+            connectivity_filename
+        )
+
+        # Save the connectivity graph figure
+        plt.savefig(connectivity_save_path, dpi=300)
+        print(f"Saved connectivity figure at {connectivity_save_path}")
+        plt.clf()
+
