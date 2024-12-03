@@ -14,6 +14,21 @@ import matplotlib.cm as cm
 import matplotlib.colors as mcolors
 from matplotlib.lines import Line2D
 
+# Hàm để kết hợp nhiều colormap
+def get_combined_colormap(num_classes, colormaps):
+    colors = []
+    for cmap_name in colormaps:
+        cmap = cm.get_cmap(cmap_name)
+        num_colors = cmap.N
+        for i in range(num_colors):
+            colors.append(cmap(i / num_colors))
+            if len(colors) >= num_classes:  # Đủ màu thì dừng
+                return colors
+    # Nếu chưa đủ màu, bổ sung thêm màu bằng cách lặp lại
+    while len(colors) < num_classes:
+        colors.extend(colors[:num_classes - len(colors)])
+    return colors
+
 # Argument Parsing
 parser = argparse.ArgumentParser()
 parser.add_argument('-method', type=str, required=False, default='umap',
@@ -245,15 +260,21 @@ for vid, path in enumerate(model_list):
             labels = all_labels.numpy()
             feats_np = all_features.numpy()
 
-        # Prepare colormap with poisoned class as black
-        num_total_classes = num_classes + 1 if len(poison_indices) > 0 else num_classes
+        # Prepare colormap
+        num_total_classes = num_classes + (1 if len(poison_indices) > 0 else 0)
 
-        # Define colors: use a base colormap for normal classes and black for the poisoned class
-        base_cmap = cm.get_cmap('Set3', num_classes)  # You can choose another colormap if preferred
-        colors = [base_cmap(i) for i in range(num_classes)]
+        # Danh sách các colormap bạn muốn sử dụng
+        colormap_list = ['Set2', 'Set3', 'Accent', 'tab20b']
+        colors = get_combined_colormap(num_total_classes, colormap_list)
 
+        # Update color for the target class
+        target_color = (0.0, 0.0, 0.0, 1.0)  # Black
+        colors[target_class] = target_color
+
+        # Add red for poisoned samples if any
         if len(poison_indices) > 0:
-            colors.append((1.0, 0.0, 0.0, 1.0))  # Black color for poisoned class
+            poisoned_color = (1.0, 0.0, 0.0, 1.0)  # Red
+            colors[num_classes] = poisoned_color  # Add or replace the last color
 
         # Create a ListedColormap
         custom_cmap = mcolors.ListedColormap(colors)
@@ -264,28 +285,45 @@ for vid, path in enumerate(model_list):
         # Apply UMAP
         reduced_features = visualizer.fit_transform(feats_np)
 
+        # Prepare markers and colors per class
+        class_markers = {}
+        class_colors = {}
+        unique_labels = np.unique(labels)
+
+        for label in unique_labels:
+            if label == target_class:
+                class_markers[label] = '*'
+                class_colors[label] = target_color
+            elif len(poison_indices) > 0 and label == poisoned_label:
+                # Poisoned samples
+                class_markers[label] = 'X'
+                class_colors[label] = poisoned_color
+            else:
+                # Other classes
+                class_markers[label] = 'o'
+                class_colors[label] = colors[int(label)]  # Since colors[0] is for class 0, etc.
+
         # Plotting
         plt.figure(figsize=(10, 8))
-        scatter = plt.scatter(
-            reduced_features[:, 0],
-            reduced_features[:, 1],
-            c=labels,
-            cmap=custom_cmap,
-            norm=norm,
-            s=10,
-            alpha=0.7
-        )
 
-        # Create a legend with custom colors
-        handles = []
-        for i in range(num_total_classes):
-            if i == poisoned_label:
-                label_name = 'Poisoned Samples'
-                color = (1.0, 0.0, 0.0, 1.0)  # Black
-            else:
-                label_name = f'Class {i}'
-                color = colors[i]  # Color from base_cmap
-            handles.append(Line2D([], [], marker='o', color=color, linestyle='None', markersize=6, label=label_name))
+        for label in unique_labels:
+            idx = labels == label
+            plt.scatter(
+                reduced_features[idx, 0],
+                reduced_features[idx, 1],
+                c=[class_colors[label]],
+                marker=class_markers[label],
+                s=10,
+                alpha=0.7,
+                label=f'Class {int(label)}' if label not in [target_class, poisoned_label] else ''
+            )
+
+        # Create custom legend handles
+        handles = [
+            Line2D([], [], marker='*', color=target_color, linestyle='None', markersize=6, label='Target Class'),
+            Line2D([], [], marker='X', color=poisoned_color, linestyle='None', markersize=6, label='Poisoned Samples'),
+            Line2D([], [], marker='o', color='grey', linestyle='None', markersize=6, label='Other Classes')
+        ]
 
         plt.legend(handles=handles, title='Classes', bbox_to_anchor=(1.05, 1), loc='upper left')
         plt.title(f'UMAP Visualization for Layer {layer_name}')
