@@ -15,9 +15,10 @@ cd "$HOME/BackdoorBox Research/backdoor-toolbox" || { echo "Directory not found"
 source "my_env/bin/activate"
 
 # Define arrays for datasets, attack types, and poison rates
-datasets=("cifar10" "gtsrb")                              # Add more datasets if needed
-attacks=("badnet" "blend" "trojan" "adaptive_blend" "adaptive_patch")  # List of attack types
-poison_rates=(0.05 0.1)                         # Poison rates to loop through
+datasets=("gtsrb" "cifar10")                              # Add more datasets if needed
+attacks=("adaptive_patch")                                # List of attack types
+poison_rates=(0.05 0.1)                                   # Poison rates to loop through
+cover_rate=0.05                                           # Fixed cover rate for all runs
 
 # Iterate over each combination of dataset, attack type, and poison rate
 for dataset in "${datasets[@]}"; do
@@ -27,9 +28,33 @@ for dataset in "${datasets[@]}"; do
             echo "Dataset: $dataset, Attack: $attack, Poison Rate: $poison_rate"
             echo "============================================"
 
-            # Visualize the model's latent space (Step 4)
+            # Step 1: Create the poisoned dataset
+            echo "Creating the poisoned dataset..."
+            python create_poisoned_set.py -dataset="$dataset" -poison_type="$attack" -poison_rate="$poison_rate" -cover_rate="$cover_rate"
+            if [ $? -ne 0 ]; then
+                echo "Error in creating poisoned set for Dataset: $dataset, Attack: $attack, Poison Rate: $poison_rate"
+                continue
+            fi
+
+            # Step 2: Train on the poisoned dataset
+            echo "Training the model on the poisoned dataset..."
+            python train_on_poisoned_set.py -dataset="$dataset" -poison_type="$attack" -poison_rate="$poison_rate" -cover_rate="$cover_rate"
+            if [ $? -ne 0 ]; then
+                echo "Error in training model for Dataset: $dataset, Attack: $attack, Poison Rate: $poison_rate"
+                continue
+            fi
+
+            # Step 3: Test the trained model
+            echo "Testing the trained model..."
+            python test_model.py -dataset="$dataset" -poison_type="$attack" -poison_rate="$poison_rate" -cover_rate="$cover_rate"
+            if [ $? -ne 0 ]; then
+                echo "Error in testing model for Dataset: $dataset, Attack: $attack, Poison Rate: $poison_rate"
+                continue
+            fi
+
+            # Step 4: Visualize the model's latent space
             echo "Visualizing the model's latent space..."
-            python test_model.py -dataset="$dataset" -poison_type="$attack" -poison_rate="$poison_rate"
+            python resnet18_layer_visualize.py -dataset="$dataset" -poison_type="$attack" -poison_rate="$poison_rate" -cover_rate="$cover_rate" -n_neighbors=50
             if [ $? -ne 0 ]; then
                 echo "Error in visualizing latent space for Dataset: $dataset, Attack: $attack, Poison Rate: $poison_rate"
                 continue
@@ -41,4 +66,4 @@ for dataset in "${datasets[@]}"; do
     done
 done
 
-echo "All visualization tasks completed successfully."
+echo "All tasks completed successfully."

@@ -14,7 +14,7 @@ import matplotlib.cm as cm
 import matplotlib.colors as mcolors
 from matplotlib.lines import Line2D
 
-# Hàm để kết hợp nhiều colormap
+# Function to combine multiple colormaps
 def get_combined_colormap(num_classes, colormaps):
     colors = []
     for cmap_name in colormaps:
@@ -22,9 +22,9 @@ def get_combined_colormap(num_classes, colormaps):
         num_colors = cmap.N
         for i in range(num_colors):
             colors.append(cmap(i / num_colors))
-            if len(colors) >= num_classes:  # Đủ màu thì dừng
+            if len(colors) >= num_classes:  # Stop when enough colors
                 return colors
-    # Nếu chưa đủ màu, bổ sung thêm màu bằng cách lặp lại
+    # If not enough colors, repeat the list
     while len(colors) < num_classes:
         colors.extend(colors[:num_classes - len(colors)])
     return colors
@@ -208,7 +208,17 @@ for vid, path in enumerate(model_list):
         for batch_idx, (data, target) in enumerate(poisoned_set_loader):
             data, target = data.cuda(), target.cuda()
             targets.append(target.cpu())
-            _ = model(data)
+            output = model(data)
+            # Compute softmax output
+            softmax_output = torch.nn.functional.softmax(output, dim=1)
+            # Store softmax output
+            if 'softmax' not in layer_outputs:
+                layer_outputs['softmax'] = []
+            layer_outputs['softmax'].append(softmax_output.detach().cpu())
+            # Store model outputs before softmax
+            if 'model_output' not in layer_outputs:
+                layer_outputs['model_output'] = []
+            layer_outputs['model_output'].append(output.detach().cpu())
             # Outputs from layers are collected via hooks
 
     targets = torch.cat(targets, dim=0)
@@ -228,6 +238,11 @@ for vid, path in enumerate(model_list):
         # Flatten features if needed
         if len(layer_features.size()) > 2:
             layer_features = layer_features.view(layer_features.size(0), -1)
+
+        # Special handling for 'softmax' and 'model_output' layers if needed
+        if layer_name in ['softmax', 'model_output']:
+            # Outputs are already in the shape [batch_size, num_classes]
+            pass
 
         # Only UMAP visualizer is needed
         visualizer = UMAP(
@@ -263,7 +278,7 @@ for vid, path in enumerate(model_list):
         # Prepare colormap
         num_total_classes = num_classes + (1 if len(poison_indices) > 0 else 0)
 
-        # Danh sách các colormap bạn muốn sử dụng
+        # List of colormaps to use
         colormap_list = ['Set2', 'Set3', 'Accent', 'tab20b']
         colors = get_combined_colormap(num_total_classes, colormap_list)
 
@@ -334,7 +349,10 @@ for vid, path in enumerate(model_list):
         # Construct the filename
         core_dir = supervisor.get_dir_core(args, include_poison_seed=True)
         alias = alias_list[vid]
-        filename = f"{layer_name}_{args.method}_{core_dir}_{alias}_class={target_class}.png"
+        if layer_name == 'model_output':
+            filename = f"model_{args.method}_{core_dir}_{alias}_class={target_class}.png"
+        else:
+            filename = f"{layer_name}_{args.method}_{core_dir}_{alias}_class={target_class}.png"
 
         # Full save path
         save_path = os.path.join(
