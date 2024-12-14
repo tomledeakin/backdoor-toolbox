@@ -258,8 +258,13 @@ elif args.defense == "BaDExpert":
     from other_defenses_tool_box.bad_expert import BaDExpert
     defense = BaDExpert(args, defense_fpr=None)
     defense.detect()
+elif args.defense == 'TED':
+    from other_defenses_tool_box.TED import TED
+    defense = TED(args)
+    defense.detect()
 else:
     raise NotImplementedError()
 
 end_time = time.perf_counter()
 print("Elapsed time: {:.2f}s".format(end_time - start_time))
+

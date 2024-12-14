@@ -21,18 +21,19 @@ echo "cifar10 - badnet | START"
 # python create_poisoned_set.py -dataset=cifar10 -poison_type=badnet -poison_rate=0.1
 # python train_on_poisoned_set.py -dataset=cifar10 -poison_type=badnet -poison_rate=0.1
 # python test_model.py -dataset=cifar10 -poison_type=badnet -poison_rate=0.1
-python connectivity_resnet18_layer_visualize.py -dataset=cifar10 -poison_type=badnet -poison_rate=0.1 -n_neighbors=50
+python other_defense.py -defense=TED -dataset=cifar10 -poison_type=badnet -poison_rate=0.1
 python other_defense.py -defense=IBD_PSC -dataset=cifar10 -poison_type=badnet -poison_rate=0.1
+# python connectivity_resnet18_layer_visualize.py -dataset=cifar10 -poison_type=badnet -poison_rate=0.1 -n_neighbors=50
 echo "cifar10 - badnet | COMPLETE"
 
-# cifar10 - adaptive_patch
-echo "cifar10 - adaptive_patch | START"
+# # cifar10 - adaptive_patch
+# echo "cifar10 - adaptive_patch | START"
 # python create_poisoned_set.py -dataset=cifar10 -poison_type=adaptive_patch -poison_rate=0.1 -cover_rate=0.05
 # python train_on_poisoned_set.py -dataset=cifar10 -poison_type=adaptive_patch -poison_rate=0.1 -cover_rate=0.05
 # python test_model.py -dataset=cifar10 -poison_type=adaptive_patch -poison_rate=0.1 -cover_rate=0.05
-python connectivity_resnet18_layer_visualize.py -dataset=cifar10 -poison_type=adaptive_patch -poison_rate=0.1 -cover_rate=0.05 -n_neighbors=50
-python other_defense.py -defense=IBD_PSC -dataset=cifar10 -poison_type=adaptive_patch -poison_rate=0.1 -cover_rate=0.05
-echo "cifar10 - adaptive_patch | COMPLETE"
+# python other_defense.py -defense=IBD_PSC -dataset=cifar10 -poison_type=adaptive_patch -poison_rate=0.1 -cover_rate=0.05
+# python connectivity_resnet18_layer_visualize.py -dataset=cifar10 -poison_type=adaptive_patch -poison_rate=0.1 -cover_rate=0.05 -n_neighbors=50
+# echo "cifar10 - adaptive_patch | COMPLETE"
 
 
 
