@@ -76,7 +76,7 @@ else:
 if args.trigger is None:
     args.trigger = config.trigger_default[args.dataset][args.poison_type]
 
-batch_size = 128
+batch_size = 64
 kwargs = {'num_workers': 4, 'pin_memory': True}
 
 # Determine number of classes based on dataset
