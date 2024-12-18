@@ -34,7 +34,7 @@ def get_combined_colormap(num_classes, colormaps):
 parser = argparse.ArgumentParser()
 parser.add_argument('-method', type=str, required=False, default='umap',
                     choices=['umap'])  # Only UMAP is allowed
-parser.add_argument('-n_neighbors', type=int, default=15, help='Number of neighbors for UMAP')
+parser.add_argument('-n_neighbors', type=int, default=10, help='Number of neighbors for UMAP (reduced from 15 to 10)')
 parser.add_argument('-min_dist', type=float, default=0.1, help='Minimum distance for UMAP')
 parser.add_argument('-n_components', type=int, default=2, help='Number of components for UMAP')
 parser.add_argument('-metric', type=str, default='euclidean', help='Metric for UMAP')
@@ -76,8 +76,10 @@ else:
 if args.trigger is None:
     args.trigger = config.trigger_default[args.dataset][args.poison_type]
 
-batch_size = 128
-kwargs = {'num_workers': 4, 'pin_memory': True}
+# Giảm batch_size để giảm tải bộ nhớ
+batch_size = 32
+# Giảm num_workers
+kwargs = {'num_workers': 2, 'pin_memory': True}
 
 # Determine number of classes based on dataset
 if args.dataset == 'cifar10':
@@ -110,13 +112,25 @@ poison_indices_path = os.path.join(poison_set_dir, 'poison_indices')
 poisoned_set = tools.IMG_Dataset(data_dir=poisoned_set_img_dir,
                                  label_path=poisoned_set_label_path, transforms=data_transform)
 
+# Giới hạn số lượng mẫu để giảm sử dụng bộ nhớ (chỉ lấy 1000 mẫu nếu dữ liệu lớn hơn)
+max_samples = 1000
+if len(poisoned_set) > max_samples:
+    subset_indices = torch.arange(0, max_samples)
+    poisoned_set = torch.utils.data.Subset(poisoned_set, subset_indices)
+
 poisoned_set_loader = torch.utils.data.DataLoader(
     poisoned_set,
     batch_size=batch_size, shuffle=False, **kwargs)
 
 # Load poison indices
 if os.path.exists(poison_indices_path):
-    poison_indices = torch.tensor(torch.load(poison_indices_path))
+    poison_indices_full = torch.tensor(torch.load(poison_indices_path))
+    # Cần lọc poison_indices cho trường hợp đã lấy subset
+    if len(poisoned_set) == max_samples:
+        # Chỉ giữ lại những index trong subset
+        poison_indices = poison_indices_full[poison_indices_full < max_samples]
+    else:
+        poison_indices = poison_indices_full
 else:
     poison_indices = torch.tensor([])  # No poisoned samples
 
@@ -160,7 +174,9 @@ else:
     source_classes = None
 
 for vid, path in enumerate(model_list):
-    ckpt = torch.load(path)
+    # Sử dụng weights_only để tránh load object lạ (Yêu cầu PyTorch >=2.0)
+    # Nếu dùng phiên bản cũ hơn, có thể bỏ weights_only.
+    ckpt = torch.load(path, weights_only=True)
 
     # Load the model
     model = arch(num_classes=num_classes)
@@ -219,7 +235,6 @@ for vid, path in enumerate(model_list):
     save_dir = os.path.join('assets', 'resnet18_layer_visualization', args.dataset, args.poison_type)
     os.makedirs(save_dir, exist_ok=True)
 
-    # Iterate over layers and visualize
     for layer_name in tqdm(layer_outputs.keys(), desc="Layers"):
         print(f"Processing layer {layer_name}...")
 
@@ -251,9 +266,6 @@ for vid, path in enumerate(model_list):
         else:
             # There are poisoned samples
             poisoned_label = num_classes
-            non_poison_indices = list(set(range(len(poisoned_set))) - set(poison_indices.tolist()))
-            poison_indices_list = poison_indices.tolist()
-
             # Update labels for poisoned samples
             all_labels[poison_indices] = poisoned_label
             labels = all_labels.numpy()
@@ -313,7 +325,7 @@ for vid, path in enumerate(model_list):
         # Create custom legend handles
         handles = [
             Line2D([], [], marker='*', color=target_color, linestyle='None', markersize=6, label='Target Class'),
-            Line2D([], [], marker='X', color=poisoned_color, linestyle='None', markersize=6, label='Poisoned Samples'),
+            Line2D([], [], marker='X', color=(1.0, 0.0, 0.0, 1.0), linestyle='None', markersize=6, label='Poisoned Samples'),
             Line2D([], [], marker='o', color='grey', linestyle='None', markersize=6, label='Other Classes')
         ]
 
