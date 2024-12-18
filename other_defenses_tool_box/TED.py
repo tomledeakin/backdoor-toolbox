@@ -16,6 +16,7 @@ from utils import supervisor, tools
 class TED(BackdoorDefense):
     """
     TED Defense Method Implementation
+<<<<<<< HEAD
     
     Updated logic based on ScaleUp and IBD_PSC:
     - If poison_type == 'TaCT': malicious samples have labels == config.source_class
@@ -23,6 +24,10 @@ class TED(BackdoorDefense):
     
     Additionally, uses poison_transform similar to IBD_PSC/ScaleUp to determine which samples are malicious.
     According to the original paper:
+=======
+
+    According to the paper:
+>>>>>>> 0fb4361dfcb5cda17f3453d38460cdf384bbe008
     - m = 20 for datasets like MNIST and CIFAR-10.
     - alpha (α) = 0.05.
     The threshold τ is computed dynamically from PCA scores.
@@ -41,14 +46,23 @@ class TED(BackdoorDefense):
         self.m = 20
         self.alpha = 0.05
 
+        # From the paper:
+        # For MNIST and CIFAR-10 (10 classes), m=20 per class.
+        # alpha = 0.05
+        self.m = 20
+        self.alpha = 0.05
+
         # Set device
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.model.to(self.device)
 
+<<<<<<< HEAD
         # Assume poison_transform is provided by BackdoorDefense or args
         # self.poison_transform = self.args.poison_transform (if defined)
         # If not defined, ensure it's defined similarly to IBD_PSC or ScaleUp before proceeding.
 
+=======
+>>>>>>> 0fb4361dfcb5cda17f3453d38460cdf384bbe008
         # Dataloaders
         self.train_loader = generate_dataloader(
             dataset=self.dataset,
@@ -84,6 +98,10 @@ class TED(BackdoorDefense):
         )
 
         # According to the paper, we pick m=20 benign samples from each class.
+<<<<<<< HEAD
+=======
+        # We need to gather them from the dataset. We assume we have at least m samples per class.
+>>>>>>> 0fb4361dfcb5cda17f3453d38460cdf384bbe008
         train_data, train_labels = self._collect_data_from_loader(self.train_loader)
         defense_data, defense_labels = self._sample_m_per_class(train_data, train_labels, self.m)
         self.defense_loader = self._create_loader_from_numpy(defense_data, defense_labels)
@@ -112,6 +130,11 @@ class TED(BackdoorDefense):
         for c in classes:
             c_indices = np.where(labels == c)[0]
             # Ensure we have at least m samples per class.
+<<<<<<< HEAD
+=======
+            # If fewer than m are available, take all available. 
+            # (The paper assumes enough samples are available.)
+>>>>>>> 0fb4361dfcb5cda17f3453d38460cdf384bbe008
             if len(c_indices) < m:
                 chosen_indices = c_indices
             else:
@@ -186,7 +209,9 @@ class TED(BackdoorDefense):
         return all_labels, activation_container, pred_set
 
     def _get_poisoned_flags(self):
+        # According to the paper, malicious samples are those that are not original (label != 0)
         labels = self._test_labels
+<<<<<<< HEAD
         if self.args.poison_type == 'TaCT':
             # If TaCT: malicious samples are those whose labels == config.source_class
             return (labels == config.source_class).int()
@@ -199,6 +224,9 @@ class TED(BackdoorDefense):
             print('----------------------')
             print(f'self._poison_test_labels: {self._poison_test_labels}')
             return (labels != self._poison_test_labels).int()
+=======
+        return (labels != 0).int()
+>>>>>>> 0fb4361dfcb5cda17f3453d38460cdf384bbe008
 
     def _euclidean_distance(self, x, Y):
         # x: 1D, Y: 2D
@@ -242,6 +270,7 @@ class TED(BackdoorDefense):
         return errors
 
     def test(self):
+<<<<<<< HEAD
         # First, fetch the test data and produce poison_imgs, poison_labels for entire test set
         clean_imgs_list = []
         labels_list = []
@@ -264,14 +293,22 @@ class TED(BackdoorDefense):
         test_dataset = torch.utils.data.TensorDataset(clean_imgs, labels)
         test_loader_activations = torch.utils.data.DataLoader(test_dataset, batch_size=50, shuffle=False)
         
+=======
+>>>>>>> 0fb4361dfcb5cda17f3453d38460cdf384bbe008
         # Fetch reference set activations
         h_defense_labels, h_defense_activations, h_defense_preds = self._fetch_activation(self.defense_loader)
         if h_defense_labels is None:
             print("No defense data available.")
             return
 
+<<<<<<< HEAD
         # Fetch test set activations from clean data
         h_test_labels, h_test_activations, h_test_preds = self._fetch_activation(test_loader_activations)
+=======
+        # Fetch test set activations
+        h_test_labels, h_test_activations, h_test_preds = self._fetch_activation(self.test_loader)
+        self._test_labels = h_test_labels
+>>>>>>> 0fb4361dfcb5cda17f3453d38460cdf384bbe008
         if h_test_labels is None:
             print("No test data available.")
             return
@@ -285,12 +322,21 @@ class TED(BackdoorDefense):
         # Fit PCA model
         pca = SKPCA(n_components=min(defense_features.shape[1], defense_features.shape[0]))
         pca.fit(defense_features)
+<<<<<<< HEAD
 
         # Compute defense scores
         defense_scores = self._compute_reconstruction_errors(defense_features, pca)
         # alpha = 0.05, find tau
         tau = np.percentile(defense_scores, 100*(1 - self.alpha))
 
+=======
+
+        # Compute defense scores
+        defense_scores = self._compute_reconstruction_errors(defense_features, pca)
+        # alpha = 0.05, find tau
+        tau = np.percentile(defense_scores, 100*(1 - self.alpha))
+
+>>>>>>> 0fb4361dfcb5cda17f3453d38460cdf384bbe008
         # Build rank features for test set
         test_features = self._build_rank_features(h_test_activations, h_test_preds, h_defense_activations, h_defense_labels)
         if test_features.shape[0] == 0:

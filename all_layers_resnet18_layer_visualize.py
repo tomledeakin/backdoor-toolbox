@@ -76,10 +76,15 @@ else:
 if args.trigger is None:
     args.trigger = config.trigger_default[args.dataset][args.poison_type]
 
+<<<<<<< HEAD
 # Giảm batch_size để giảm tải bộ nhớ
 batch_size = 32
 # Giảm num_workers
 kwargs = {'num_workers': 2, 'pin_memory': True}
+=======
+batch_size = 64
+kwargs = {'num_workers': 4, 'pin_memory': True}
+>>>>>>> 0fb4361dfcb5cda17f3453d38460cdf384bbe008
 
 # Determine number of classes based on dataset
 if args.dataset == 'cifar10':
