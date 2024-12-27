@@ -1,3 +1,5 @@
+# This is the test code of TED defense.
+# TED: Robust Backdoor Detection for Deep Learning via Topological Evolution Dynamics [IEEE, 2024] (https://arxiv.org/abs/2312.02673)
 import os
 from collections import Counter, defaultdict
 from tqdm import tqdm
