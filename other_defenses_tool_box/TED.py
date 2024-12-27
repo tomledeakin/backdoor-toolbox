@@ -1,7 +1,6 @@
 import os
 from collections import Counter, defaultdict
 from tqdm import tqdm
-
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -19,15 +18,11 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.utils.data as data
 from torchmetrics.functional import pairwise_euclidean_distance
-import wandb
-
 import config
 from utils import supervisor, tools
 from utils.supervisor import get_transforms
 from other_defenses_tool_box.tools import generate_dataloader
 from other_defenses_tool_box.backdoor_defense import BackdoorDefense
-
-wandb.login(key="e09f73bb0df882dd4606253c95e1bc68801828a0")
 
 
 class TED(BackdoorDefense):
