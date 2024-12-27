@@ -40,7 +40,7 @@ class TED(BackdoorDefense):
         self.model.to(self.device)
 
         self.target = self.target_class
-
+        print(f'Target Class: {self.target}')
         self.train_loader = generate_dataloader(
             dataset=self.dataset,
             dataset_path=config.data_dir,
@@ -59,9 +59,10 @@ class TED(BackdoorDefense):
         unique_classes = set(all_labels)
         num_classes = len(unique_classes)
         print(f"Number of unique classes in the dataset: {num_classes}")
-
+        print(f"Number of unique classes in the dataset: {self.num_classes}")
+        
         # Set DEFENSE_TRAIN_SIZE
-        self.DEFENSE_TRAIN_SIZE = 400
+        self.DEFENSE_TRAIN_SIZE = num_classes * 40
 
         # Create test_loader
         self.test_loader = generate_dataloader(
@@ -136,7 +137,8 @@ class TED(BackdoorDefense):
         }
 
         self.VICTIM = config.source_class
-
+        print(f'Victim Class: {self.VICTIM}')
+        
         self.UNKNOWN_SIZE_POISON = 400
         self.UNKNOWN_SIZE_CLEAN = 200
 
