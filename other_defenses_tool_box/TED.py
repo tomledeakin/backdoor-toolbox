@@ -1,12 +1,11 @@
 # This is the test code of TED defense.
-# TED: Robust Backdoor Detection for Deep Learning via Topological Evolution Dynamics [IEEE, 2024] (https://arxiv.org/abs/2312.02673)
+# Robust Backdoor Detection for Deep Learning via Topological Evolution Dynamics [IEEE, 2024] (https://arxiv.org/abs/2312.02673)
 import os
 from collections import Counter, defaultdict
 from tqdm import tqdm
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import plotly.express as px
 import pickle
 from sklearn import metrics
 from sklearn.decomposition import PCA as sklearn_PCA
@@ -20,7 +19,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.utils.data as data
 from torchmetrics.functional import pairwise_euclidean_distance
-
+import plotly.express as px
 import config
 from utils import supervisor, tools
 from utils.supervisor import get_transforms
@@ -31,21 +30,21 @@ from other_defenses_tool_box.backdoor_defense import BackdoorDefense
 class TED(BackdoorDefense):
     def __init__(self, args):
         """
-        Initialize the TED Defense, load model and data, set up necessary variables.
+        Initialize the TED Defense, load the model and data, and set up necessary variables.
         """
-        super().__init__(args)  # Call the constructor of BackdoorDefense (or parent class)
+        super().__init__(args)  # Calls the constructor of the parent class, BackdoorDefense
         self.args = args
 
-        # 1) Model Setup
+        # 1) Model Configuration
         self.model.eval()
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.model.to(self.device)
 
-        # 2) Define the target class (backdoor attack)
+        # 2) Define the backdoor target class
         self.target = self.target_class
         print(f'Target Class: {self.target}')
 
-        # 3) Create train_loader
+        # 3) Create train_loader to scan the training set
         self.train_loader = generate_dataloader(
             dataset=self.dataset,
             dataset_path=config.data_dir,
@@ -57,20 +56,20 @@ class TED(BackdoorDefense):
             noisy_test=False
         )
 
-        # 4) Determine the unique classes in the training set
+        # 4) Determine unique classes by scanning the training set
         all_labels = []
         for _, labels in self.train_loader:
             all_labels.extend(labels.tolist())
         unique_classes = set(all_labels)
         num_classes = len(unique_classes)
 
-        print(f"Number of unique classes in the dataset (by scanning train_loader): {num_classes}")
+        print(f"Number of unique classes in the dataset (scanned from train_loader): {num_classes}")
         print(f"Number of unique classes from args: {self.num_classes}")
 
-        # 5) Defense training size (for example logic)
+        # 5) Defense training size (for example)
         self.DEFENSE_TRAIN_SIZE = num_classes * 40
 
-        # 6) Create test_loader
+        # 6) Create a test_loader
         self.test_loader = generate_dataloader(
             dataset=self.dataset,
             dataset_path=config.data_dir,
@@ -82,16 +81,16 @@ class TED(BackdoorDefense):
             noisy_test=False
         )
         self.testset = self.test_loader.dataset
-        # 7) self.NUM_SAMPLES: Lấy 500 sạch + 500 nhiễm => total 1000
+
+        # 7) Define NUM_SAMPLES: we take 500 for clean + 500 for poison => total 1000
         self.NUM_SAMPLES = 500
 
-        # 8) Tạo defense_loader TỪ TẬP HUẤN LUYỆN (train_loader), THAY VÌ testset
-        # ---------------------------------------------------------------
-        # Thay vì lấy 10% từ test, ta sẽ lấy 10% từ trainset -> Tập defense subset
+        # 8) Create defense_loader from the training set rather than the test set
+        #    Instead of using 10% of the test set, we use 10% of the trainset for defense data
         trainset = self.train_loader.dataset
         indices = np.arange(len(trainset))
 
-        # Lấy 10% từ trainset làm defense subset
+        # Randomly select 10% of the training set for the defense subset
         _, defense_subset_indices = train_test_split(
             indices, test_size=0.1, random_state=42
         )
@@ -104,7 +103,7 @@ class TED(BackdoorDefense):
             shuffle=True
         )
 
-        # 9) Chỉ lấy các mẫu được mô hình dự đoán chính xác (optional logic)
+        # 9) Filter the defense set to keep correctly predicted samples only (optional)
         h_benign_preds = []
         h_benign_ori_labels = []
 
@@ -122,15 +121,20 @@ class TED(BackdoorDefense):
         benign_mask = h_benign_ori_labels == h_benign_preds
         benign_indices = defense_subset_indices[benign_mask]
 
+        # Limit the size of the defense subset if needed
         if len(benign_indices) > self.DEFENSE_TRAIN_SIZE:
             benign_indices = np.random.choice(benign_indices, self.DEFENSE_TRAIN_SIZE, replace=False)
 
-        # Tạo defense_subset từ trainset thay vì testset
+        # Rebuild defense_loader from the filtered training subset
         defense_subset = data.Subset(trainset, benign_indices)
-        self.defense_loader = data.DataLoader(defense_subset, batch_size=50, num_workers=2,
-                                              shuffle=True)
+        self.defense_loader = data.DataLoader(
+            defense_subset,
+            batch_size=50,
+            num_workers=2,
+            shuffle=True
+        )
 
-        # 10) Define two classes: Poison and Clean
+        # 10) Define two temporary labels: Poison and Clean
         self.POISON_TEMP_LABEL = "Poison"
         self.CLEAN_TEMP_LABEL = "Clean"
         self.label_mapping = {
@@ -138,18 +142,18 @@ class TED(BackdoorDefense):
             "Clean": 102
         }
 
-        # Tất cả các lớp không phải self.target là VICTIM
+        # Classes that are not self.target become victim classes
         self.VICTIM = [cls for cls in unique_classes if cls != self.target]
         print(f'Victim Class: {self.VICTIM}')
 
-        self.UNKNOWN_SIZE_POISON = 400  # cũ
-        self.UNKNOWN_SIZE_CLEAN = 200   # cũ
+        self.UNKNOWN_SIZE_POISON = 400
+        self.UNKNOWN_SIZE_CLEAN = 200
 
-        # Count Poison / Clean samples
+        # Poison and Clean sample counters
         self.poison_count = 0
         self.clean_count = 0
 
-        # 11) Temporary containers for Poison/Clean
+        # Temporary containers for building Poison and Clean sets
         self.temp_poison_inputs_set = []
         self.temp_poison_labels_set = []
         self.temp_poison_pred_set = []
@@ -158,34 +162,35 @@ class TED(BackdoorDefense):
         self.temp_clean_labels_set = []
         self.temp_clean_pred_set = []
 
-        # 12) Hooks for activation extraction
+        # Hooks for activation extraction
         self.hook_handles = []
         self.activations = {}
         self.register_hooks()
 
-        # 13) Other intermediate variables
+        # Additional intermediate variables
         self.Test_C = num_classes + 2
         self.topological_representation = {}
         self.candidate_ = {}
 
-        # 14) Save dir for visualizations
+        # Directory to save visualizations
         self.save_dir = f"TED/{self.dataset}/{self.poison_type}"
         os.makedirs(self.save_dir, exist_ok=True)
 
-
     # ==============================
-    #     HELPER FUNCS
+    #     HELPER FUNCTIONS
     # ==============================
-
     def register_hooks(self):
         """
         Register forward hooks for layers to extract activations.
         """
+
         def get_activation(name):
             def hook(model, input, output):
                 self.activations[name] = output.detach()
+
             return hook
 
+        # Remove previous hooks if any
         for handle in self.hook_handles:
             handle.remove()
         self.hook_handles = []
@@ -193,6 +198,7 @@ class TED(BackdoorDefense):
         net_children = self.model.modules()
         index = 0
         for child in net_children:
+            # Register hooks for specific layers
             if isinstance(child, nn.Conv2d) and child.kernel_size != (1, 1):
                 self.hook_handles.append(
                     child.register_forward_hook(get_activation("Conv2d_" + str(index)))
@@ -211,91 +217,78 @@ class TED(BackdoorDefense):
 
     def create_targets(self, targets, label):
         """
-        Assign new labels (Poison=101, Clean=102).
+        Assign a new label to targets (e.g., Poison=101, Clean=102).
         """
         new_targets = torch.ones_like(targets) * label
         return new_targets.to(self.device)
 
-
     # ==============================
-    #  CREATE POISON/CLEAN SETS
+    #   CREATE POISON & CLEAN SETS
     # ==============================
     def generate_poison_clean_sets(self):
         """
-        Instead of carefully picking unknown_size_poison/clean, we define self.NUM_SAMPLES = 500
-        => We'll pick 500 for clean + 500 for poison from the testset => total 1000 samples for testing
+        Use self.NUM_SAMPLES to pick a fixed number of samples from the test set. 
+        We generate 500 clean samples and then transform the same set into 500 poisoned samples.
         """
-        # 1) Lấy 500 samples từ testset làm clean
-        # 2) Lấy 500 samples khác từ testset, áp dụng poison transform => poison
-        # => self.temp_poison_inputs_set / self.temp_clean_inputs_set
-
-        # Lấy ngẫu nhiên 2 * self.NUM_SAMPLES indices từ testset
         all_indices = np.arange(len(self.testset))
-        if len(all_indices) < 2 * self.NUM_SAMPLES:
-            print(f"Warning: testset size < {2*self.NUM_SAMPLES}, adjusting.")
+        if len(all_indices) < self.NUM_SAMPLES:
+            print(f"Warning: testset size < {self.NUM_SAMPLES}, adjusting.")
             chosen = all_indices
         else:
-            chosen = np.random.choice(all_indices, size=2 * self.NUM_SAMPLES, replace=False)
+            chosen = np.random.choice(all_indices, size=self.NUM_SAMPLES, replace=False)
 
-        chosen_clean = chosen[:self.NUM_SAMPLES]
-        chosen_poison = chosen[self.NUM_SAMPLES:]
+        subset = data.Subset(self.testset, chosen)
+        loader = data.DataLoader(subset, batch_size=50, shuffle=False)
 
-        # 2) Tạo Data Subset
-        clean_subset = data.Subset(self.testset, chosen_clean)
-        poison_subset = data.Subset(self.testset, chosen_poison)
-
-        # 3) Tạo DataLoader tạm
-        clean_loader = data.DataLoader(clean_subset, batch_size=50, shuffle=False)
-        poison_loader = data.DataLoader(poison_subset, batch_size=50, shuffle=False)
-
-        # 4) Nạp clean vào temp_clean
-        for (inputs, labels) in clean_loader:
+        # Create CLEAN set
+        for (inputs, labels) in loader:
             inputs, labels = inputs.to(self.device), labels.to(self.device)
-            # Tạo label CLEAN
             label_value = self.label_mapping[self.CLEAN_TEMP_LABEL]
             targets_clean = self.create_targets(labels, label_value)
             preds = torch.argmax(self.model(inputs), dim=1)
 
-            # Lưu trữ
             self.temp_clean_inputs_set.append(inputs.cpu())
             self.temp_clean_labels_set.append(targets_clean.cpu())
             self.temp_clean_pred_set.append(preds.cpu())
 
             self.clean_count += labels.size(0)
 
-        # 5) Nạp poison vào temp_poison
+        # Create POISON set from the same subset
+        poison_loader = data.DataLoader(subset, batch_size=50, shuffle=False)
         for (inputs, labels) in poison_loader:
             inputs, labels = inputs.to(self.device), labels.to(self.device)
-            # Gọi poison_transform => thay đổi trigger & nhãn => self.target
+
             poisoned_inputs, poisoned_labels = self.poison_transform.transform(inputs, labels)
             preds_bd = torch.argmax(self.model(poisoned_inputs), dim=1)
 
-            # Gán nhãn Poison=101
             label_value = self.label_mapping[self.POISON_TEMP_LABEL]
             targets_poison = self.create_targets(labels, label_value)
 
-            # Lưu trữ
             self.temp_poison_inputs_set.append(poisoned_inputs.cpu())
             self.temp_poison_labels_set.append(targets_poison.cpu())
             self.temp_poison_pred_set.append(preds_bd.cpu())
 
             self.poison_count += labels.size(0)
 
-        print(f"Finished generate_poison_clean_sets. Clean_count = {self.clean_count}, Poison_count = {self.poison_count}")
-
+        print(
+            f"Finished generate_poison_clean_sets. Clean_count = {self.clean_count}, Poison_count = {self.poison_count}"
+        )
 
     def create_poison_clean_dataloaders(self):
-        # Tạo Poison set
+        """
+        Build DataLoaders for both Poison and Clean sets.
+        """
+        # Poison set
         bd_inputs_set = torch.cat(self.temp_poison_inputs_set, dim=0)
         bd_labels_set = np.hstack(self.temp_poison_labels_set)
         bd_pred_set = np.hstack(self.temp_poison_pred_set)
 
-        # Tạo Clean set
+        # Clean set
         clean_inputs_set = torch.cat(self.temp_clean_inputs_set, dim=0)
         clean_labels_set = np.hstack(self.temp_clean_labels_set)
         clean_pred_set = np.hstack(self.temp_clean_pred_set)
 
-        # Tạo dataset & loader
+        # Define a custom Dataset
         class CustomDataset(data.Dataset):
             def __init__(self, data_, labels_):
                 super(CustomDataset, self).__init__()
@@ -310,25 +303,27 @@ class TED(BackdoorDefense):
                 label = self.labels[index]
                 return img, label
 
-        # Poison loader
+        # Create poison_loader
         poison_set = CustomDataset(bd_inputs_set, bd_labels_set)
         self.poison_loader = data.DataLoader(poison_set, batch_size=50, num_workers=2, shuffle=True)
         print("Poison set size:", len(self.poison_loader))
 
-        # Clean loader
+        # Create clean_loader
         clean_set = CustomDataset(clean_inputs_set, clean_labels_set)
         self.clean_loader = data.DataLoader(clean_set, batch_size=50, num_workers=2, shuffle=True)
         print("Clean set size:", len(self.clean_loader))
 
-        # Xoá các biến tạm
+        # Remove temporary variables
         del bd_inputs_set, bd_labels_set, bd_pred_set
         del clean_inputs_set, clean_labels_set, clean_pred_set
 
-
     # ==============================
-    #         HOOK & TEST
+    #       HOOK & MAIN TEST
     # ==============================
     def fetch_activation(self, loader):
+        """
+        Run the model on the given loader and fetch intermediate activations based on the registered hooks.
+        """
         print("Starting fetch_activation")
         self.model.eval()
         all_h_label = []
@@ -336,17 +331,15 @@ class TED(BackdoorDefense):
         h_batch = {}
         activation_container = {}
 
-        # Run 1 batch to init keys
+        # Initialize hooks with one batch
         for (images, labels) in loader:
             print("Running the first batch to init hooks")
             _ = self.model(images.to(self.device))
             break
 
-        # Initialize activation_container
         for key in self.activations:
             activation_container[key] = []
 
-        # Clear self.activations for each batch
         self.activations.clear()
 
         for batch_idx, (images, labels) in enumerate(loader, start=1):
@@ -358,12 +351,13 @@ class TED(BackdoorDefense):
                 break
             pred_set.append(torch.argmax(output, -1).to(self.device))
 
+            # Collect activations from hooks
             for key in self.activations:
                 h_batch[key] = self.activations[key].view(images.shape[0], -1)
                 for h in h_batch[key]:
                     activation_container[key].append(h.to(self.device))
 
-            # Lưu ori_label
+            # Save original labels
             for label_ in labels:
                 all_h_label.append(label_.to(self.device))
 
@@ -372,6 +366,7 @@ class TED(BackdoorDefense):
             if batch_idx % 10 == 0:
                 print(f"Processed {batch_idx} batches")
 
+        # Stack everything
         for key in activation_container:
             activation_container[key] = torch.stack(activation_container[key])
         all_h_label = torch.stack(all_h_label)
@@ -380,8 +375,10 @@ class TED(BackdoorDefense):
         print("Finished fetch_activation")
         return all_h_label, activation_container, pred_set
 
-
     def calculate_accuracy(self, ori_labels, preds):
+        """
+        Compute classification accuracy given original labels and predictions.
+        """
         if len(ori_labels) == 0:
             return 0.0
         correct = torch.sum(ori_labels == preds).item()
@@ -390,6 +387,9 @@ class TED(BackdoorDefense):
         return accuracy
 
     def display_images_grid(self, images, predictions, title_prefix):
+        """
+        Display a small grid of images with their predictions. Saves the figure to self.save_dir.
+        """
         num_images = len(images)
         if num_images == 0:
             return
@@ -415,8 +415,10 @@ class TED(BackdoorDefense):
         plt.savefig(save_path, dpi=300)
         plt.show()
 
-
     def gather_activation_into_class(self, target, h):
+        """
+        Group activations by class index and store them for further analysis.
+        """
         h_c_c = [0 for _ in range(self.Test_C)]
         for c in range(self.Test_C):
             idxs = (target == c).nonzero(as_tuple=True)[0]
@@ -427,6 +429,9 @@ class TED(BackdoorDefense):
         return h_c_c
 
     def get_dis_sort(self, item, destinations):
+        """
+        Sort distances between a single item and all destinations, returning sorted indices.
+        """
         item_ = item.reshape(1, item.shape[0])
         dev = self.device
         new_dis = pairwise_euclidean_distance(item_.to(dev), destinations.to(dev))
@@ -435,6 +440,9 @@ class TED(BackdoorDefense):
 
     def getDefenseRegion(self, final_prediction, h_defense_activation, processing_label, layer,
                          layer_test_region_individual):
+        """
+        For each sample in the specified label, compute the region by distance ranking with defense samples.
+        """
         if layer not in layer_test_region_individual:
             layer_test_region_individual[layer] = {}
         layer_test_region_individual[layer][processing_label] = []
@@ -457,6 +465,9 @@ class TED(BackdoorDefense):
     def getLayerRegionDistance(self, new_prediction, new_activation, new_temp_label,
                                h_defense_prediction, h_defense_activation,
                                layer, layer_test_region_individual):
+        """
+        Compute the distance-based region for a new label, comparing to the defense activations.
+        """
         if layer not in layer_test_region_individual:
             layer_test_region_individual[layer] = {}
         layer_test_region_individual[layer][new_temp_label] = []
@@ -474,15 +485,14 @@ class TED(BackdoorDefense):
 
         return layer_test_region_individual
 
-
     def test(self):
         """
-        Run the entire process:
-         1) generate Poison/Clean
-         2) create dataloaders
-         3) activation
-         4) topological representation
-         5) ...
+        The main testing procedure:
+          1) Generate poison/clean sets.
+          2) Create corresponding DataLoaders.
+          3) Extract activations via hooks.
+          4) Compute topological representations.
+          5) (Optional) Visualization and outlier detection steps.
         """
         print('STEP 1')
         self.generate_poison_clean_sets()
@@ -552,9 +562,12 @@ class TED(BackdoorDefense):
         print('DEBUG')
         print('STEP 4')
 
-        self.h_defense_ori_labels, self.h_defense_activations, self.h_defense_preds = self.fetch_activation(self.defense_loader)
-        self.h_poison_ori_labels, self.h_poison_activations, self.h_poison_preds = self.fetch_activation(self.poison_loader)
-        self.h_clean_ori_labels, self.h_clean_activations, self.h_clean_preds = self.fetch_activation(self.clean_loader)
+        self.h_defense_ori_labels, self.h_defense_activations, self.h_defense_preds = self.fetch_activation(
+            self.defense_loader)
+        self.h_poison_ori_labels, self.h_poison_activations, self.h_poison_preds = self.fetch_activation(
+            self.poison_loader)
+        self.h_clean_ori_labels, self.h_clean_activations, self.h_clean_preds = self.fetch_activation(
+            self.clean_loader)
 
         print('DEBUG')
 
@@ -614,7 +627,8 @@ class TED(BackdoorDefense):
                 layer_test_region_individual=self.topological_representation
             )
             topo_rep_array_poison = np.array(self.topological_representation[layer_][self.POISON_TEMP_LABEL])
-            print(f"Topological Representation Label [{self.POISON_TEMP_LABEL}] & layer [{layer_}]: {topo_rep_array_poison}")
+            print(
+                f"Topological Representation Label [{self.POISON_TEMP_LABEL}] & layer [{layer_}]: {topo_rep_array_poison}")
             print(f"Mean: {np.mean(topo_rep_array_poison)}\n")
 
         for layer_ in self.h_clean_activations:
@@ -628,14 +642,17 @@ class TED(BackdoorDefense):
                 layer_test_region_individual=self.topological_representation
             )
             topo_rep_array_clean = np.array(self.topological_representation[layer_][self.CLEAN_TEMP_LABEL])
-            print(f"Topological Representation Label [{self.CLEAN_TEMP_LABEL}] - layer [{layer_}]: {topo_rep_array_clean}")
+            print(
+                f"Topological Representation Label [{self.CLEAN_TEMP_LABEL}] - layer [{layer_}]: {topo_rep_array_clean}")
             print(f"Mean: {np.mean(topo_rep_array_clean)}\n")
 
         print('STEP 8')
+
         def aggregate_by_all_layers(output_label):
             inputs_container = []
             first_key = list(self.topological_representation.keys())[0]
-            labels_container = np.repeat(output_label, len(self.topological_representation[first_key][output_label]))
+            labels_container = np.repeat(output_label,
+                                         len(self.topological_representation[first_key][output_label]))
             for l in self.topological_representation.keys():
                 temp = []
                 for j in range(len(self.topological_representation[l][output_label])):
@@ -715,8 +732,10 @@ class TED(BackdoorDefense):
 
         print("\n[INFO] TED run completed.")
 
-
     def detect(self):
+        """
+        Entry point for the detection procedure.
+        """
         self.test()
 
     def __del__(self):
