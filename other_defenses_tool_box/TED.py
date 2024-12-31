@@ -84,7 +84,8 @@ class TED(BackdoorDefense):
 
         # 7) Define NUM_SAMPLES: we take 500 for clean + 500 for poison => total 1000
         self.NUM_SAMPLES = 500
-
+        # self.NUM_SAMPLES = len(self.testset)
+        
         # 8) Create defense_loader from the training set rather than the test set
         #    Instead of using 10% of the test set, we use 10% of the trainset for defense data
         trainset = self.train_loader.dataset
@@ -375,6 +376,56 @@ class TED(BackdoorDefense):
         print("Finished fetch_activation")
         return all_h_label, activation_container, pred_set
 
+    # def fetch_activation(self, loader):
+    #     print("Starting fetch_activation")
+    #     self.model.eval()
+
+    #     all_h_label = []
+    #     pred_set = []
+    #     h_batch = {}
+    #     activation_container = {}
+
+    #     # Khởi tạo hook (nếu cần)
+    #     with torch.no_grad():
+    #         for (images, labels) in loader:
+    #             _ = self.model(images.to(self.device))
+    #             break
+
+    #         for key in self.activations:
+    #             activation_container[key] = []
+    #         self.activations.clear()
+
+    #         for batch_idx, (images, labels) in enumerate(loader, start=1):
+    #             images = images.to(self.device)
+
+    #             output = self.model(images)
+    #             pred_set.append(torch.argmax(output, dim=1).cpu())
+
+    #             # Thu thập activation
+    #             for key in self.activations:
+    #                 h_batch[key] = self.activations[key].view(images.shape[0], -1).cpu()
+    #                 activation_container[key].append(h_batch[key])
+
+    #             # Lưu labels về CPU
+    #             all_h_label.append(labels.cpu())
+
+    #             # Clear
+    #             self.activations.clear()
+    #             del images, labels, output
+    #             torch.cuda.empty_cache()
+
+    #             if batch_idx % 10 == 0:
+    #                 print(f"Processed {batch_idx} batches")
+
+    #     # Gộp tất cả batch
+    #     for key in activation_container:
+    #         activation_container[key] = torch.cat(activation_container[key], dim=0)
+    #     all_h_label = torch.cat(all_h_label, dim=0)
+    #     pred_set = torch.cat(pred_set, dim=0)
+
+    #     print("Finished fetch_activation")
+    #     return all_h_label, activation_container, pred_set
+        
     def calculate_accuracy(self, ori_labels, preds):
         """
         Compute classification accuracy given original labels and predictions.
