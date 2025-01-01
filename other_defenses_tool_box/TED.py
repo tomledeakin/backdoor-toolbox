@@ -144,11 +144,11 @@ class TED(BackdoorDefense):
         }
 
         # Classes that are not self.target become victim classes
-        self.VICTIM = [cls for cls in unique_classes if cls != self.target]
-        print(f'Victim Class: {self.VICTIM}')
+        # self.VICTIM = [cls for cls in unique_classes if cls != self.target]
+        # print(f'Victim Class: {self.VICTIM}')
 
-        self.UNKNOWN_SIZE_POISON = 400
-        self.UNKNOWN_SIZE_CLEAN = 200
+        # self.UNKNOWN_SIZE_POISON = 400
+        # self.UNKNOWN_SIZE_CLEAN = 200
 
         # Poison and Clean sample counters
         self.poison_count = 0
