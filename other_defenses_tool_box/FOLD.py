@@ -1,5 +1,5 @@
 # This is the test code of TED defense.  
-# Robust Backdoor Detection for Deep Learning via Distance Topological Clustering
+# Robust Backdoor Detection for Deep Learning via Feature-Oriented Layerwise Distances
 import os
 from collections import Counter, defaultdict
 from tqdm import tqdm
