@@ -1,387 +1,690 @@
+# This is the test code of TED defense.   
+# Robust Backdoor Detection for Deep Learning via Topological Evolution Dynamics [IEEE, 2024]
+# (https://arxiv.org/abs/2312.02673)
+
 import os
-import torch
-import config
+from collections import Counter, defaultdict
+from tqdm import tqdm
 import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import pickle
+from sklearn import metrics
+from sklearn.decomposition import PCA as sklearn_PCA
+from sklearn.metrics import confusion_matrix
+from sklearn.model_selection import train_test_split
+from pyod.models.pca import PCA
+from umap import UMAP
+from numpy.random import choice
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from tqdm import tqdm
-from sklearn import metrics
-from sklearn.metrics import confusion_matrix
-from sklearn.decomposition import PCA as SKPCA
-from other_defenses_tool_box.backdoor_defense import BackdoorDefense
-from other_defenses_tool_box.tools import generate_dataloader
-from utils.supervisor import get_transforms
+import torch.utils.data as data
+from torchmetrics.functional import pairwise_euclidean_distance
+import plotly.express as px
+import config
+
+# Thêm thư viện StandardScaler
+from sklearn.preprocessing import StandardScaler
+
 from utils import supervisor, tools
+from utils.supervisor import get_transforms
+from other_defenses_tool_box.tools import generate_dataloader
+from other_defenses_tool_box.backdoor_defense import BackdoorDefense
 
 class TED(BackdoorDefense):
-    """
-    TED Defense Method Implementation
-<<<<<<< HEAD
-    
-    Updated logic based on ScaleUp and IBD_PSC:
-    - If poison_type == 'TaCT': malicious samples have labels == config.source_class
-    - Otherwise: malicious samples are those whose labels != poison_labels (after poison_transform)
-    
-    Additionally, uses poison_transform similar to IBD_PSC/ScaleUp to determine which samples are malicious.
-    According to the original paper:
-=======
-
-    According to the paper:
->>>>>>> 0fb4361dfcb5cda17f3453d38460cdf384bbe008
-    - m = 20 for datasets like MNIST and CIFAR-10.
-    - alpha (α) = 0.05.
-    The threshold τ is computed dynamically from PCA scores.
-    """
-
-    name = 'TED'
-
     def __init__(self, args):
-        super().__init__(args)
-        self.model.eval()
+        super().__init__(args)  # Gọi constructor của BackdoorDefense
         self.args = args
 
-        # From the paper:
-        # For MNIST and CIFAR-10 (10 classes), m=20 per class.
-        # alpha = 0.05
-        self.m = 20
-        self.alpha = 0.05
-
-        # From the paper:
-        # For MNIST and CIFAR-10 (10 classes), m=20 per class.
-        # alpha = 0.05
-        self.m = 20
-        self.alpha = 0.05
-
-        # Set device
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.model.eval()
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model.to(self.device)
 
-<<<<<<< HEAD
-        # Assume poison_transform is provided by BackdoorDefense or args
-        # self.poison_transform = self.args.poison_transform (if defined)
-        # If not defined, ensure it's defined similarly to IBD_PSC or ScaleUp before proceeding.
+        # Backdoor target class
+        self.target = self.target_class
+        print(f"Target Class: {self.target}")
 
-=======
->>>>>>> 0fb4361dfcb5cda17f3453d38460cdf384bbe008
-        # Dataloaders
+        # (1) Dataloader
         self.train_loader = generate_dataloader(
             dataset=self.dataset,
             dataset_path=config.data_dir,
             batch_size=50,
-            split='train',
+            split="train",
             data_transform=self.data_transform,
             shuffle=True,
             drop_last=False,
             noisy_test=False
         )
 
-        self.val_loader = generate_dataloader(
-            dataset=self.dataset,
-            dataset_path=config.data_dir,
-            batch_size=50,
-            split='val',
-            data_transform=self.data_transform,
-            shuffle=True,
-            drop_last=False,
-            noisy_test=False
-        )
+        # Scan unique classes
+        all_labels = []
+        for _, labels in self.train_loader:
+            all_labels.extend(labels.tolist())
+        unique_classes = set(all_labels)
+        num_classes = len(unique_classes)
+        self.num_classes = num_classes
 
+        print(f"Number of unique classes (train_loader scan): {num_classes}")
+        print(f"Number of classes from args: {self.num_classes}")
+
+        self.DEFENSE_TRAIN_SIZE = num_classes * 40
+
+        # (2) test_loader
         self.test_loader = generate_dataloader(
             dataset=self.dataset,
             dataset_path=config.data_dir,
             batch_size=50,
-            split='test',
+            split="test",
             data_transform=self.data_transform,
             shuffle=False,
             drop_last=False,
             noisy_test=False
         )
+        self.testset = self.test_loader.dataset
 
-        # According to the paper, we pick m=20 benign samples from each class.
-<<<<<<< HEAD
-=======
-        # We need to gather them from the dataset. We assume we have at least m samples per class.
->>>>>>> 0fb4361dfcb5cda17f3453d38460cdf384bbe008
-        train_data, train_labels = self._collect_data_from_loader(self.train_loader)
-        defense_data, defense_labels = self._sample_m_per_class(train_data, train_labels, self.m)
-        self.defense_loader = self._create_loader_from_numpy(defense_data, defense_labels)
+        # (3) number sample
+        self.NUM_SAMPLES = 500
 
-        # Register hooks to get layer activations
-        self._register_hooks()
-        self._test_labels = None
-        self._poison_test_labels = None  # Will store poison labels for test data after transform
+        # (4) create defense_loader
+        trainset = self.train_loader.dataset
+        indices = np.arange(len(trainset))
+        _, defense_subset_indices = train_test_split(indices, test_size=0.1, random_state=42)
+        defense_subset = data.Subset(trainset, defense_subset_indices)
+        self.defense_loader = data.DataLoader(
+            defense_subset,
+            batch_size=50,
+            num_workers=2,
+            shuffle=True
+        )
 
-    def _collect_data_from_loader(self, loader):
-        all_data = []
-        all_labels = []
-        for x, y in loader:
-            all_data.append(x.cpu().numpy())
-            all_labels.append(y.cpu().numpy())
-        if len(all_data) == 0:
-            return np.array([]), np.array([])
-        all_data = np.concatenate(all_data, axis=0)
-        all_labels = np.concatenate(all_labels, axis=0)
-        return all_data, all_labels
+        # (5) filter defense => keep correct predicted
+        h_benign_preds = []
+        h_benign_ori_labels = []
+        with torch.no_grad():
+            for inputs, labels in self.defense_loader:
+                inputs, labels = inputs.to(self.device), labels.to(self.device)
+                outputs = self.model(inputs)
+                preds = torch.argmax(outputs, dim=1)
+                h_benign_preds.extend(preds.cpu().numpy())
+                h_benign_ori_labels.extend(labels.cpu().numpy())
 
-    def _sample_m_per_class(self, data, labels, m):
-        classes = np.unique(labels)
-        selected_data = []
-        selected_labels = []
-        for c in classes:
-            c_indices = np.where(labels == c)[0]
-            # Ensure we have at least m samples per class.
-<<<<<<< HEAD
-=======
-            # If fewer than m are available, take all available. 
-            # (The paper assumes enough samples are available.)
->>>>>>> 0fb4361dfcb5cda17f3453d38460cdf384bbe008
-            if len(c_indices) < m:
-                chosen_indices = c_indices
-            else:
-                chosen_indices = np.random.choice(c_indices, m, replace=False)
-            selected_data.append(data[chosen_indices])
-            selected_labels.append(labels[chosen_indices])
+        h_benign_preds = np.array(h_benign_preds)
+        h_benign_ori_labels = np.array(h_benign_ori_labels)
+        benign_mask = h_benign_ori_labels == h_benign_preds
+        benign_indices = defense_subset_indices[benign_mask]
+        if len(benign_indices) > self.DEFENSE_TRAIN_SIZE:
+            benign_indices = np.random.choice(benign_indices, self.DEFENSE_TRAIN_SIZE, replace=False)
 
-        selected_data = np.concatenate(selected_data, axis=0)
-        selected_labels = np.concatenate(selected_labels, axis=0)
-        return selected_data, selected_labels
+        # Rebuild
+        defense_subset = data.Subset(trainset, benign_indices)
+        self.defense_loader = data.DataLoader(
+            defense_subset,
+            batch_size=50,
+            num_workers=2,
+            shuffle=True
+        )
 
-    def _create_loader_from_numpy(self, data, labels, batch_size=50):
-        tensor_data = torch.from_numpy(data)
-        tensor_labels = torch.from_numpy(labels)
-        dataset = torch.utils.data.TensorDataset(tensor_data, tensor_labels)
-        loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True)
-        return loader
+        # (6) define label mapping
+        self.POISON_TEMP_LABEL = "Poison"
+        self.CLEAN_TEMP_LABEL = "Clean"
+        self.label_mapping = {"Poison": 101, "Clean": 102}
 
-    def _register_hooks(self):
+        # counters
+        self.poison_count = 0
+        self.clean_count = 0
+
+        # Temp containers
+        self.temp_poison_inputs_set = []
+        self.temp_poison_labels_set = []
+        self.temp_poison_pred_set = []
+
+        self.temp_clean_inputs_set = []
+        self.temp_clean_labels_set = []
+        self.temp_clean_pred_set = []
+
+        # Hooks
         self.hook_handles = []
         self.activations = {}
+        self.register_hooks()
 
+        self.Test_C = num_classes + 2  # Extra for "Poison" & "Clean"
+        self.topological_representation = {}
+        self.candidate_ = {}
+
+        self.save_dir = f"TED/{self.dataset}/{self.poison_type}"
+        os.makedirs(self.save_dir, exist_ok=True)
+
+    def register_hooks(self):
         def get_activation(name):
             def hook(model, input, output):
                 self.activations[name] = output.detach()
             return hook
 
+        for handle in self.hook_handles:
+            handle.remove()
+        self.hook_handles = []
+
+        net_children = self.model.modules()
         index = 0
-        for name, module in self.model.named_modules():
-            if isinstance(module, (nn.Conv2d, nn.BatchNorm2d, nn.ReLU, nn.Linear)):
-                handle = module.register_forward_hook(get_activation(f"{module.__class__.__name__}_{index}"))
-                self.hook_handles.append(handle)
+        for child in net_children:
+            if isinstance(child, nn.Conv2d) and child.kernel_size != (1, 1):
+                self.hook_handles.append(
+                    child.register_forward_hook(get_activation("Conv2d_" + str(index)))
+                )
+                index += 1
+            if isinstance(child, nn.ReLU):
+                self.hook_handles.append(
+                    child.register_forward_hook(get_activation("Relu_" + str(index)))
+                )
+                index += 1
+            if isinstance(child, nn.Linear):
+                self.hook_handles.append(
+                    child.register_forward_hook(get_activation("Linear_" + str(index)))
+                )
                 index += 1
 
-    @torch.no_grad()
-    def _fetch_activation(self, loader):
+    def create_targets(self, targets, label):
+        new_targets = torch.ones_like(targets) * label
+        return new_targets.to(self.device)
+
+    def generate_poison_clean_sets(self):
+        all_indices = np.arange(len(self.testset))
+        if len(all_indices) < self.NUM_SAMPLES:
+            chosen = all_indices
+        else:
+            chosen = np.random.choice(all_indices, size=self.NUM_SAMPLES, replace=False)
+
+        subset = data.Subset(self.testset, chosen)
+        loader = data.DataLoader(subset, batch_size=50, shuffle=False)
+
+        # Clean
+        for inputs, labels in loader:
+            inputs, labels = inputs.to(self.device), labels.to(self.device)
+            label_value = self.label_mapping[self.CLEAN_TEMP_LABEL]
+            targets_clean = self.create_targets(labels, label_value)
+            preds = torch.argmax(self.model(inputs), dim=1)
+
+            self.temp_clean_inputs_set.append(inputs.cpu())
+            self.temp_clean_labels_set.append(targets_clean.cpu())
+            self.temp_clean_pred_set.append(preds.cpu())
+
+            self.clean_count += labels.size(0)
+
+        # Poison
+        poison_loader = data.DataLoader(subset, batch_size=50, shuffle=False)
+        for inputs, labels in poison_loader:
+            inputs, labels = inputs.to(self.device), labels.to(self.device)
+            poisoned_inputs, poisoned_labels = self.poison_transform.transform(inputs, labels)
+            preds_bd = torch.argmax(self.model(poisoned_inputs), dim=1)
+
+            label_value = self.label_mapping[self.POISON_TEMP_LABEL]
+            targets_poison = self.create_targets(labels, label_value)
+
+            self.temp_poison_inputs_set.append(poisoned_inputs.cpu())
+            self.temp_poison_labels_set.append(targets_poison.cpu())
+            self.temp_poison_pred_set.append(preds_bd.cpu())
+
+            self.poison_count += labels.size(0)
+
+        print(f"Finished generate_poison_clean_sets. Clean_count={self.clean_count}, Poison_count={self.poison_count}")
+
+    def create_poison_clean_dataloaders(self):
+        bd_inputs_set = torch.cat(self.temp_poison_inputs_set, dim=0)
+        bd_labels_set = np.hstack(self.temp_poison_labels_set)
+        bd_pred_set = np.hstack(self.temp_poison_pred_set)
+
+        clean_inputs_set = torch.cat(self.temp_clean_inputs_set, dim=0)
+        clean_labels_set = np.hstack(self.temp_clean_labels_set)
+        clean_pred_set = np.hstack(self.temp_clean_pred_set)
+
+        class CustomDataset(data.Dataset):
+            def __init__(self, data_, labels_):
+                super().__init__()
+                self.images = data_
+                self.labels = labels_
+
+            def __len__(self):
+                return len(self.images)
+
+            def __getitem__(self, index):
+                return self.images[index], self.labels[index]
+
+        poison_set = CustomDataset(bd_inputs_set, bd_labels_set)
+        self.poison_loader = data.DataLoader(poison_set, batch_size=50, num_workers=2, shuffle=True)
+        print("Poison set size:", len(self.poison_loader))
+
+        clean_set = CustomDataset(clean_inputs_set, clean_labels_set)
+        self.clean_loader = data.DataLoader(clean_set, batch_size=50, num_workers=2, shuffle=True)
+        print("Clean set size:", len(self.clean_loader))
+
+        del bd_inputs_set, bd_labels_set, bd_pred_set
+        del clean_inputs_set, clean_labels_set, clean_pred_set
+
+    def fetch_activation(self, loader):
+        print("Starting fetch_activation")
         self.model.eval()
-        all_labels = []
+
+        all_h_label = []
         pred_set = []
         activation_container = {}
+        h_batch = {}
 
-        # Clear previous activations
+        # init hook
+        for images, labels in loader:
+            _ = self.model(images.to(self.device))
+            break
+
+        for k in self.activations:
+            activation_container[k] = []
         self.activations.clear()
 
-        for images, labels in loader:
-            images = images.to(self.device)
-            labels = labels.to(self.device)
+        for batch_idx, (images, labels) in enumerate(loader, start=1):
+            try:
+                out = self.model(images.to(self.device))
+            except Exception as e:
+                print(f"Error in batch {batch_idx}, {e}")
+                break
 
-            preds = self.model(images)
-            preds_class = torch.argmax(preds, dim=1)
+            pred_set.append(torch.argmax(out, dim=1).cpu())
+            for k in self.activations:
+                h_batch[k] = self.activations[k].view(images.shape[0], -1).cpu()
+                activation_container[k].append(h_batch[k])
 
-            # Move activations to CPU
-            for key in self.activations:
-                h_batch = self.activations[key].view(images.shape[0], -1).cpu()
-                if key not in activation_container:
-                    activation_container[key] = []
-                activation_container[key].append(h_batch)
+            all_h_label.append(labels.cpu())
+            self.activations.clear()
 
-            pred_set.append(preds_class.cpu())
-            all_labels.append(labels.cpu())
-            torch.cuda.empty_cache()
-
-        if len(all_labels) == 0:
-            return None, {}, None
-
-        for key in activation_container:
-            activation_container[key] = torch.cat(activation_container[key], dim=0)
-
-        all_labels = torch.cat(all_labels, dim=0)
+        for k in activation_container:
+            activation_container[k] = torch.cat(activation_container[k], dim=0)
+        all_h_label = torch.cat(all_h_label, dim=0)
         pred_set = torch.cat(pred_set, dim=0)
-        torch.cuda.empty_cache()
-        return all_labels, activation_container, pred_set
 
-    def _get_poisoned_flags(self):
-        # According to the paper, malicious samples are those that are not original (label != 0)
-        labels = self._test_labels
-<<<<<<< HEAD
-        if self.args.poison_type == 'TaCT':
-            # If TaCT: malicious samples are those whose labels == config.source_class
-            return (labels == config.source_class).int()
-        else:
-            # Otherwise: malicious samples are those whose labels != poison_labels
-            # (Derived from ScaleUp logic: 
-            #  For non-TaCT attacks, we consider samples malicious if their label changes after poison_transform)
-            
-            print(f'labels: {labels}')
-            print('----------------------')
-            print(f'self._poison_test_labels: {self._poison_test_labels}')
-            return (labels != self._poison_test_labels).int()
-=======
-        return (labels != 0).int()
->>>>>>> 0fb4361dfcb5cda17f3453d38460cdf384bbe008
+        print("Finished fetch_activation")
+        return all_h_label, activation_container, pred_set
 
-    def _euclidean_distance(self, x, Y):
-        # x: 1D, Y: 2D
-        return np.sqrt(np.sum((Y - x)**2, axis=1))
+    def calculate_accuracy(self, ori_labels, preds):
+        if len(ori_labels) == 0:
+            return 0.0
+        correct = torch.sum(ori_labels == preds).item()
+        return 100.0 * correct / len(ori_labels)
 
-    @torch.no_grad()
-    def _build_rank_features(self, activations, preds, ref_activations, ref_labels):
-        keys = list(activations.keys())
-        features = []
-        ref_labels_np = ref_labels.numpy()
-        ref_act_np = {k: ref_activations[k].numpy() for k in ref_activations}
-        preds_np = preds.numpy()
+    def display_images_grid(self, images, predictions, title_prefix):
+        num_images = len(images)
+        if num_images == 0:
+            return
+        cols = 3
+        rows = (num_images + cols - 1) // cols
+        plt.figure(figsize=(cols*2, rows*2))
 
-        for i in range(activations[keys[0]].shape[0]):
-            x_pred = preds_np[i]
-            same_class_ref_indices = np.where(ref_labels_np == x_pred)[0]
+        for i, (img, pred_) in enumerate(zip(images, predictions)):
+            plt.subplot(rows, cols, i+1)
+            img = img.squeeze().cpu().numpy()
+            if img.ndim == 3:
+                plt.imshow(np.transpose(img, (1,2,0)))
+            else:
+                plt.imshow(img, cmap='gray')
+            plt.title(f"{title_prefix} {i+1}\nPred={pred_.item()}")
+            plt.axis("off")
 
-            # If no same-class reference samples found, skip this sample
-            if len(same_class_ref_indices) == 0:
-                continue
+        plt.tight_layout()
+        save_path = os.path.join(self.save_dir, f"{title_prefix}_grid.png")
+        plt.savefig(save_path, dpi=300)
+        plt.show()
 
-            x_features = []
-            for lkey in keys:
-                x_vec = activations[lkey][i].numpy()
-                dist_all = self._euclidean_distance(x_vec, ref_act_np[lkey])
-                sorted_indices = np.argsort(dist_all)
-                sc_dists = dist_all[same_class_ref_indices]
-                nearest_sc_idx = same_class_ref_indices[np.argmin(sc_dists)]
-                rank = np.where(sorted_indices == nearest_sc_idx)[0][0]
-                x_features.append(rank)
-            features.append(x_features)
-
-        features = np.array(features)
-        return features
-
-    def _compute_reconstruction_errors(self, features, pca):
-        # Compute reconstruction error
-        projected = pca.transform(features)
-        reconstructed = pca.inverse_transform(projected)
-        errors = np.sum((features - reconstructed)**2, axis=1)
-        return errors
+    def gather_activation_into_class(self, target, h):
+        """
+        Gom h => list [0..Test_C], h_c_c[c] = activation của class c
+        """
+        h_c_c = [None for _ in range(self.Test_C)]
+        for c in range(self.Test_C):
+            idxs = (target == c).nonzero(as_tuple=True)[0]
+            if len(idxs) > 0:
+                h_c_c[c] = h[idxs, :]
+            else:
+                h_c_c[c] = None
+        return h_c_c
 
     def test(self):
-<<<<<<< HEAD
-        # First, fetch the test data and produce poison_imgs, poison_labels for entire test set
-        clean_imgs_list = []
-        labels_list = []
-        for batch in self.test_loader:
-            clean_img, labels = batch
-            clean_imgs_list.append(clean_img)
-            labels_list.append(labels)
-        clean_imgs = torch.cat(clean_imgs_list, dim=0)
-        labels = torch.cat(labels_list, dim=0)
+        print("STEP 1")
+        self.generate_poison_clean_sets()
 
-        # Apply poison_transform to entire test set
-        poison_imgs, poison_labels = self.poison_transform.transform(clean_imgs, labels)
-        self._test_labels = labels
-        self._poison_test_labels = poison_labels
+        print("STEP 2")
+        self.create_poison_clean_dataloaders()
 
-        # Create a loader from poison_imgs to fetch activations
-        # Note: We only need activations from clean or from what is the original approach?
-        # TED uses the model activations on the original (clean) test samples to build rank features.
-        # We'll adhere to original logic: activations from clean test set.
-        test_dataset = torch.utils.data.TensorDataset(clean_imgs, labels)
-        test_loader_activations = torch.utils.data.DataLoader(test_dataset, batch_size=50, shuffle=False)
-        
-=======
->>>>>>> 0fb4361dfcb5cda17f3453d38460cdf384bbe008
-        # Fetch reference set activations
-        h_defense_labels, h_defense_activations, h_defense_preds = self._fetch_activation(self.defense_loader)
-        if h_defense_labels is None:
-            print("No defense data available.")
+        print("STEP 3")
+        # Just to visualize
+        pairs = [
+            (self.poison_loader, 3, "Poison Image"),
+            (self.clean_loader, 9, "Clean Image")
+        ]
+        for loader, limit, prefix in pairs:
+            images_disp, preds_disp = [], []
+            count = 0
+            for inputs, labels in loader:
+                inputs = inputs.to(self.device)
+                preds = torch.argmax(self.model(inputs), dim=1).cpu()
+                for im, pr in zip(inputs, preds):
+                    if count < limit:
+                        images_disp.append(im.unsqueeze(0))
+                        preds_disp.append(pr)
+                        count += 1
+                    else:
+                        break
+                if count>=limit:
+                    break
+            self.display_images_grid(images_disp, preds_disp, prefix)
+
+        # debug
+        print(f"Using device: {self.device}")
+        print(f"Model param device: {next(self.model.parameters()).device}")
+
+        print("STEP 4")
+        # get activation
+        self.h_defense_ori_labels, self.h_defense_activations, self.h_defense_preds = self.fetch_activation(self.defense_loader)
+        self.h_poison_ori_labels, self.h_poison_activations, self.h_poison_preds = self.fetch_activation(self.poison_loader)
+        self.h_clean_ori_labels, self.h_clean_activations, self.h_clean_preds = self.fetch_activation(self.clean_loader)
+
+        # union test
+        self.union_test_activations = {}
+        self.union_test_preds = torch.cat([self.h_poison_preds, self.h_clean_preds], dim=0)
+        for layer_name in self.h_poison_activations:
+            if layer_name not in self.h_clean_activations:
+                continue
+            self.union_test_activations[layer_name] = torch.cat(
+                [self.h_poison_activations[layer_name], self.h_clean_activations[layer_name]],
+                dim=0
+            )
+
+        print("STEP 5")
+        accuracy_defense = self.calculate_accuracy(self.h_defense_ori_labels, self.h_defense_preds)
+
+        poison_GT = torch.ones_like(self.h_poison_preds)*self.target
+        correct_poison = torch.sum(poison_GT == self.h_poison_preds).item()
+        total_poison = len(self.h_poison_preds)
+        accuracy_poison = 100.0 * correct_poison / total_poison
+
+        print(f"Accuracy on defense_loader: {accuracy_defense:.2f}%")
+        print(f"Attack success rate on poison_loader: {accuracy_poison:.2f}%")
+
+        print("STEP 6) Tính centroid cho defense_loader")
+        self.centroids_defense = {}
+        for layer_name, act_mat in self.h_defense_activations.items():
+            per_class = self.gather_activation_into_class(self.h_defense_preds, act_mat)
+            self.centroids_defense[layer_name] = {}
+            for c in range(self.Test_C):
+                if per_class[c] is not None:
+                    self.centroids_defense[layer_name][c] = per_class[c].mean(dim=0)  
+                else:
+                    self.centroids_defense[layer_name][c] = None
+
+        print("STEP 7) Tìm representative trong union_test (closest to centroid)")
+        self.representative_points_test = {}
+        for layer_name, centroid_dict in self.centroids_defense.items():
+            self.representative_points_test[layer_name] = {}
+            if layer_name not in self.union_test_activations:
+                continue
+            act_union = self.union_test_activations[layer_name]
+            preds_union = self.union_test_preds
+
+            for c, centroid_vec in centroid_dict.items():
+                if centroid_vec is None:
+                    self.representative_points_test[layer_name][c] = None
+                    continue
+                idxs_c = (preds_union == c).nonzero(as_tuple=True)[0]
+                if len(idxs_c)==0:
+                    self.representative_points_test[layer_name][c] = None
+                    continue
+
+                dev = self.device
+                centroid_vec_ = centroid_vec.unsqueeze(0).to(dev)
+                cand_ = act_union[idxs_c].to(dev)
+                dists = pairwise_euclidean_distance(centroid_vec_, cand_).squeeze(0)
+                min_local = torch.argmin(dists).item()
+                min_global = idxs_c[min_local]
+
+                rep_point = act_union[min_global].clone().detach()
+                self.representative_points_test[layer_name][c] = rep_point.cpu()
+
+        print("STEP 8) Tính khoảng cách topological (đo khoảng cách item->representative)")
+
+        # Hai hàm dưới ta override logic
+        def getDefenseRegion(final_prediction, h_defense_activation, processing_label, layer, layer_test_region_individual):
+            if layer not in layer_test_region_individual:
+                layer_test_region_individual[layer] = {}
+            layer_test_region_individual[layer][processing_label] = []
+
+            # Gom sample class = processing_label
+            per_class = self.gather_activation_into_class(final_prediction, h_defense_activation)
+            if per_class[processing_label] is None:
+                return layer_test_region_individual
+
+            rep_point = self.representative_points_test[layer].get(processing_label, None)
+            if rep_point is None:
+                return layer_test_region_individual
+
+            dev = self.device
+            rep_point_ = rep_point.unsqueeze(0).to(dev)
+            for item in per_class[processing_label]:
+                item_ = item.unsqueeze(0).to(dev)
+                dist_ = pairwise_euclidean_distance(item_, rep_point_).item()
+                layer_test_region_individual[layer][processing_label].append(dist_)
+
+            return layer_test_region_individual
+
+        def getLayerRegionDistance(new_prediction, new_activation, new_temp_label,
+                                   h_defense_prediction, h_defense_activation,
+                                   layer, layer_test_region_individual):
+            if layer not in layer_test_region_individual:
+                layer_test_region_individual[layer] = {}
+            layer_test_region_individual[layer][new_temp_label] = []
+
+            # Gom sample
+            per_class = self.gather_activation_into_class(new_prediction, new_activation)
+            labels_in_batch = torch.unique(new_prediction)
+
+            for c_ in labels_in_batch:
+                rep_point = self.representative_points_test[layer].get(c_.item(), None)
+                if rep_point is None:
+                    continue
+
+                dev = self.device
+                rep_point_ = rep_point.unsqueeze(0).to(dev)
+
+                if per_class[c_] is None:
+                    continue
+                for item in per_class[c_]:
+                    dist_ = pairwise_euclidean_distance(item.unsqueeze(0).to(dev), rep_point_).item()
+                    layer_test_region_individual[layer][new_temp_label].append(dist_)
+
+            return layer_test_region_individual
+
+        # Thay đổi reference
+        self.getDefenseRegion = getDefenseRegion
+        self.getLayerRegionDistance = getLayerRegionDistance
+
+        # => Tính cho defense
+        class_names_defense = np.unique(self.h_defense_ori_labels.numpy())
+        for lbl in class_names_defense:
+            for layer in self.h_defense_activations:
+                self.topological_representation = self.getDefenseRegion(
+                    final_prediction=self.h_defense_preds,
+                    h_defense_activation=self.h_defense_activations[layer],
+                    processing_label=lbl,
+                    layer=layer,
+                    layer_test_region_individual=self.topological_representation
+                )
+                arr_ = self.topological_representation[layer][lbl]
+                print(f"Topological Representation Label [{lbl}] & layer [{layer}]: {arr_}")
+                if len(arr_)>0:
+                    print(f"Mean: {np.mean(arr_)}\n")
+                else:
+                    print("Mean: None\n")
+
+        # => Tính cho poison
+        self.topological_representation = self.topological_representation  # reuse
+        for layer_ in self.h_poison_activations:
+            self.topological_representation = self.getLayerRegionDistance(
+                new_prediction=self.h_poison_preds,
+                new_activation=self.h_poison_activations[layer_],
+                new_temp_label=self.POISON_TEMP_LABEL,
+                h_defense_prediction=self.h_defense_preds,
+                h_defense_activation=self.h_defense_activations[layer_],
+                layer=layer_,
+                layer_test_region_individual=self.topological_representation
+            )
+            arr_poison = self.topological_representation[layer_][self.POISON_TEMP_LABEL]
+            print(f"Topological Representation Label [{self.POISON_TEMP_LABEL}] & layer [{layer_}]: {arr_poison}")
+            if len(arr_poison)>0:
+                print(f"Mean: {np.mean(arr_poison)}\n")
+            else:
+                print("Mean: None\n")
+
+        # => Tính cho clean
+        for layer_ in self.h_clean_activations:
+            self.topological_representation = self.getLayerRegionDistance(
+                new_prediction=self.h_clean_preds,
+                new_activation=self.h_clean_activations[layer_],
+                new_temp_label=self.CLEAN_TEMP_LABEL,
+                h_defense_prediction=self.h_defense_preds,
+                h_defense_activation=self.h_defense_activations[layer_],
+                layer=layer_,
+                layer_test_region_individual=self.topological_representation
+            )
+            arr_clean = self.topological_representation[layer_][self.CLEAN_TEMP_LABEL]
+            print(f"Topological Representation Label [{self.CLEAN_TEMP_LABEL}] & layer [{layer_}]: {arr_clean}")
+            if len(arr_clean)>0:
+                print(f"Mean: {np.mean(arr_clean)}\n")
+            else:
+                print("Mean: None\n")
+
+        print("STEP 9) Chuẩn bị cho PCA & Scaler")
+        # Gom
+        def aggregate_by_all_layers(output_label):
+            first_key = list(self.topological_representation.keys())[0]
+            arr_size = len(self.topological_representation[first_key][output_label])
+            if arr_size==0:
+                return None, None
+            # sắp xếp shape cho PCA: 
+            # chúng ta đang có shape [layer1 => (k khoảng cách), layer2 => (k khoảng cách), ...].
+            # Mình sẽ xếp theo cột => (N, num_layers)
+            # Ở đây, "N" có thể khác nhau do 1 layer => x sample => cẩn thận. 
+            # Thông thường ta assume x sample = arr_size => fix cẩn thận:
+
+            n_layers = len(self.topological_representation.keys())
+            container = []
+            for layer_ in self.topological_representation.keys():
+                arr_ = self.topological_representation[layer_][output_label]
+                if len(arr_)<arr_size:
+                    # trường hợp mismatch => fix cắt (phòng hiếm)
+                    pass
+                arr_ = arr_[:arr_size]
+                container.append(arr_)
+            # (num_layers, arr_size) => transpose
+            container = np.array(container, dtype=object)
+            # do arr_ length = arr_size => ta convert sang 2D
+            # cẩn thận python object => unify
+            mat_ = []
+            for row in container:
+                row = np.array(row, dtype=float)
+                mat_.append(row)
+            mat_ = np.array(mat_)  # shape (num_layers, arr_size)
+            mat_ = mat_.T
+            labs_ = np.repeat(output_label, arr_size)
+            return mat_, labs_
+
+        inputs_all_benign = []
+        labels_all_benign = []
+        inputs_all_unknown = []
+        labels_all_unknown = []
+
+        # Thu thập label & layers
+        first_layer = list(self.topological_representation.keys())[0]
+        all_labels = list(self.topological_representation[first_layer].keys())
+
+        for lb_ in all_labels:
+            aggregated, labs_ = aggregate_by_all_layers(lb_)
+            if aggregated is None:
+                # empty => skip
+                continue
+            if lb_ not in [self.POISON_TEMP_LABEL, self.CLEAN_TEMP_LABEL]:
+                inputs_all_benign.append(aggregated)
+                labels_all_benign.append(labs_)
+            else:
+                inputs_all_unknown.append(aggregated)
+                labels_all_unknown.append(labs_)
+
+        if len(inputs_all_benign)==0:
+            print("[WARNING] No benign data aggregated => skipping PCA.")
+            return
+        if len(inputs_all_unknown)==0:
+            print("[WARNING] No unknown data aggregated => skipping outlier detection.")
             return
 
-<<<<<<< HEAD
-        # Fetch test set activations from clean data
-        h_test_labels, h_test_activations, h_test_preds = self._fetch_activation(test_loader_activations)
-=======
-        # Fetch test set activations
-        h_test_labels, h_test_activations, h_test_preds = self._fetch_activation(self.test_loader)
-        self._test_labels = h_test_labels
->>>>>>> 0fb4361dfcb5cda17f3453d38460cdf384bbe008
-        if h_test_labels is None:
-            print("No test data available.")
+        inputs_all_benign = np.concatenate(inputs_all_benign, axis=0)
+        labels_all_benign = np.concatenate(labels_all_benign, axis=0)
+
+        inputs_all_unknown = np.concatenate(inputs_all_unknown, axis=0)
+        labels_all_unknown = np.concatenate(labels_all_unknown, axis=0)
+
+        if inputs_all_benign.size==0:
+            print("[WARNING] inputs_all_benign is empty => skip.")
+            return
+        if inputs_all_unknown.size==0:
+            print("[WARNING] inputs_all_unknown is empty => skip.")
             return
 
-        # Build rank features for defense set
-        defense_features = self._build_rank_features(h_defense_activations, h_defense_preds, h_defense_activations, h_defense_labels)
-        if defense_features.shape[0] == 0:
-            print("No valid defense samples for rank features.")
-            return
+        print("Scaling => PCA => PyOD PCA")
+        scaler = StandardScaler()
+        inputs_all_benign = scaler.fit_transform(inputs_all_benign)
+        inputs_all_unknown = scaler.transform(inputs_all_unknown)
 
-        # Fit PCA model
-        pca = SKPCA(n_components=min(defense_features.shape[1], defense_features.shape[0]))
-        pca.fit(defense_features)
-<<<<<<< HEAD
+        pca_t = sklearn_PCA(n_components=2)
+        pca_fit = pca_t.fit(inputs_all_benign)
 
-        # Compute defense scores
-        defense_scores = self._compute_reconstruction_errors(defense_features, pca)
-        # alpha = 0.05, find tau
-        tau = np.percentile(defense_scores, 100*(1 - self.alpha))
+        benign_trajectories = pca_fit.transform(inputs_all_benign)
+        trajectories = pca_fit.transform(np.concatenate((inputs_all_unknown, inputs_all_benign), axis=0))
 
-=======
+        df_classes = pd.DataFrame(np.concatenate((labels_all_unknown, labels_all_benign), axis=0))
 
-        # Compute defense scores
-        defense_scores = self._compute_reconstruction_errors(defense_features, pca)
-        # alpha = 0.05, find tau
-        tau = np.percentile(defense_scores, 100*(1 - self.alpha))
+        fig_ = px.scatter(
+            trajectories, x=0, y=1, 
+            color=df_classes[0].astype(str), 
+            labels={'color': 'digit'},
+            color_discrete_sequence=px.colors.qualitative.Dark24,
+        )
 
->>>>>>> 0fb4361dfcb5cda17f3453d38460cdf384bbe008
-        # Build rank features for test set
-        test_features = self._build_rank_features(h_test_activations, h_test_preds, h_defense_activations, h_defense_labels)
-        if test_features.shape[0] == 0:
-            print("No valid test samples for rank features.")
-            return
+        pca = PCA(contamination=0.01, n_components='mle')
+        pca.fit(inputs_all_benign)
 
-        y_test_scores = self._compute_reconstruction_errors(test_features, pca)
-        y_test_pred = (y_test_scores > tau).astype(int)
-        y_true = self._get_poisoned_flags().numpy()
+        y_train_scores = pca.decision_function(inputs_all_benign)
+        y_test_scores = pca.decision_function(inputs_all_unknown)
+        y_test_pred = pca.predict(inputs_all_unknown)
+        prediction_mask = (y_test_pred == 1)
+        prediction_labels = labels_all_unknown[prediction_mask]
+        label_counts = Counter(prediction_labels)
 
-        # Check for NaN/Inf
-        if not np.isfinite(y_test_scores).all():
-            finite_mask = np.isfinite(y_test_scores)
-            y_test_scores = y_test_scores[finite_mask]
-            y_test_pred = y_test_pred[finite_mask]
-            y_true = y_true[finite_mask]
-            print("Warning: Removed non-finite values from test scores.")
+        print("\n----------- DETECTION RESULTS -----------")
+        for label, cnt in label_counts.items():
+            print(f"Label {label}: {cnt}")
 
-        if len(y_test_scores) == 0:
-            print("No valid test scores after removing non-finite values.")
-            return
+        is_poison_mask = (labels_all_unknown == self.POISON_TEMP_LABEL).astype(int)
+        fpr, tpr, thresholds = metrics.roc_curve(is_poison_mask, y_test_scores, pos_label=1)
+        auc_val = metrics.auc(fpr, tpr)
 
-        fpr, tpr, thresholds = metrics.roc_curve(y_true, y_test_scores, pos_label=1)
-        auc = metrics.auc(fpr, tpr)
-        tn, fp, fn, tp = confusion_matrix(y_true, y_test_pred).ravel()
-        TPR = tp / (tp + fn) if (tp + fn) > 0 else 0
-        FPR = fp / (fp + tn) if (fp + tn) > 0 else 0
-        f1 = metrics.f1_score(y_true, y_test_pred)
+        tn, fp, fn, tp = confusion_matrix(is_poison_mask, y_test_pred).ravel()
+        TPR = tp/(tp+fn) if (tp+fn)>0 else 0
+        FPR = fp/(fp+tn) if (fp+tn)>0 else 0
+        f1_ = metrics.f1_score(is_poison_mask, y_test_pred)
 
-        print(f"TN: {tn}")
-        print(f"FP: {fp}")
-        print(f"FN: {fn}")
-        print(f"TP: {tp}")
-        print("TPR: {:.2f}%".format(TPR * 100))
-        print("FPR: {:.2f}%".format(FPR * 100))
-        print("AUC: {:.4f}".format(auc))
-        print(f"F1 score: {f1:.4f}")
-
-        malicious_indices = np.where(y_test_pred == 1)[0]
-        print("Number of malicious samples detected:", len(malicious_indices))
+        print(f"TPR={TPR*100:.2f}%, FPR={FPR*100:.2f}%, AUC={auc_val:.4f}, F1={f1_:.4f}")
+        print(f"TP={tp}, FP={fp}, TN={tn}, FN={fn}")
+        print("\n[INFO] TED run completed.")
 
     def detect(self):
         self.test()
 
     def __del__(self):
-        for handle in self.hook_handles:
-            handle.remove()
+        for h in self.hook_handles:
+            h.remove()
         torch.cuda.empty_cache()
+

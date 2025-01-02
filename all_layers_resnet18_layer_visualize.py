@@ -15,7 +15,7 @@ import matplotlib.colors as mcolors
 from matplotlib.lines import Line2D
 from tqdm import tqdm
 
-# Hàm để kết hợp nhiều colormap
+# Function to combine multiple colormaps
 def get_combined_colormap(num_classes, colormaps):
     colors = []
     for cmap_name in colormaps:
@@ -23,9 +23,9 @@ def get_combined_colormap(num_classes, colormaps):
         num_colors = cmap.N
         for i in range(num_colors):
             colors.append(cmap(i / num_colors))
-            if len(colors) >= num_classes:  # Đủ màu thì dừng
+            if len(colors) >= num_classes:
                 return colors
-    # Nếu chưa đủ màu, bổ sung thêm màu bằng cách lặp lại
+    # If not enough colors, repeat
     while len(colors) < num_classes:
         colors.extend(colors[:num_classes - len(colors)])
     return colors
@@ -33,8 +33,8 @@ def get_combined_colormap(num_classes, colormaps):
 # Argument Parsing
 parser = argparse.ArgumentParser()
 parser.add_argument('-method', type=str, required=False, default='umap',
-                    choices=['umap'])  # Only UMAP is allowed
-parser.add_argument('-n_neighbors', type=int, default=10, help='Number of neighbors for UMAP (reduced from 15 to 10)')
+                    choices=['umap'])  # Only UMAP is supported
+parser.add_argument('-n_neighbors', type=int, default=10, help='Number of neighbors for UMAP')
 parser.add_argument('-min_dist', type=float, default=0.1, help='Minimum distance for UMAP')
 parser.add_argument('-n_components', type=int, default=2, help='Number of components for UMAP')
 parser.add_argument('-metric', type=str, default='euclidean', help='Metric for UMAP')
@@ -50,8 +50,7 @@ parser.add_argument('-cover_rate', type=float, required=False,
                     default=default_args.parser_default['cover_rate'])
 parser.add_argument('-alpha', type=float, required=False, default=default_args.parser_default['alpha'])
 parser.add_argument('-test_alpha', type=float, required=False, default=None)
-parser.add_argument('-trigger', type=str, required=False,
-                    default=None)
+parser.add_argument('-trigger', type=str, required=False, default=None)
 parser.add_argument('-no_aug', default=False, action='store_true')
 parser.add_argument('-model', type=str, required=False, default=None)
 parser.add_argument('-model_path', required=False, default=None)
@@ -59,6 +58,9 @@ parser.add_argument('-no_normalize', default=False, action='store_true')
 parser.add_argument('-devices', type=str, default='0')
 parser.add_argument('-target_class', type=int, default=-1)
 parser.add_argument('-seed', type=int, required=False, default=default_args.seed)
+# New argument for controlling the fraction of data to visualize
+parser.add_argument('-data_ratio', type=float, default=1.0,
+                    help='Ratio of the dataset to use for visualization (0 < data_ratio <= 1.0)')
 
 args = parser.parse_args()
 
@@ -76,15 +78,9 @@ else:
 if args.trigger is None:
     args.trigger = config.trigger_default[args.dataset][args.poison_type]
 
-<<<<<<< HEAD
-# Giảm batch_size để giảm tải bộ nhớ
-batch_size = 32
-# Giảm num_workers
-kwargs = {'num_workers': 2, 'pin_memory': True}
-=======
+# Batch size and DataLoader settings
 batch_size = 64
 kwargs = {'num_workers': 4, 'pin_memory': True}
->>>>>>> 0fb4361dfcb5cda17f3453d38460cdf384bbe008
 
 # Determine number of classes based on dataset
 if args.dataset == 'cifar10':
@@ -104,9 +100,11 @@ arch = supervisor.get_arch(args)
 
 # Set up poisoned dataset
 poison_set_dir = supervisor.get_poison_set_dir(args)
-if os.path.exists(os.path.join(poison_set_dir, 'data')):  # old version
+if os.path.exists(os.path.join(poison_set_dir, 'data')):
+    # old version directory
     poisoned_set_img_dir = os.path.join(poison_set_dir, 'data')
-elif os.path.exists(os.path.join(poison_set_dir, 'imgs')):  # new version
+elif os.path.exists(os.path.join(poison_set_dir, 'imgs')):
+    # new version directory
     poisoned_set_img_dir = os.path.join(poison_set_dir, 'imgs')
 else:
     raise FileNotFoundError("Poisoned data directory not found.")
@@ -117,23 +115,24 @@ poison_indices_path = os.path.join(poison_set_dir, 'poison_indices')
 poisoned_set = tools.IMG_Dataset(data_dir=poisoned_set_img_dir,
                                  label_path=poisoned_set_label_path, transforms=data_transform)
 
-# Giới hạn số lượng mẫu để giảm sử dụng bộ nhớ (chỉ lấy 1000 mẫu nếu dữ liệu lớn hơn)
-max_samples = 1000
-if len(poisoned_set) > max_samples:
-    subset_indices = torch.arange(0, max_samples)
+# Use a fraction of the dataset based on data_ratio
+if 0 < args.data_ratio < 1.0:
+    total_samples = len(poisoned_set)
+    selected_count = int(total_samples * args.data_ratio)
+    subset_indices = torch.arange(0, selected_count)
     poisoned_set = torch.utils.data.Subset(poisoned_set, subset_indices)
 
 poisoned_set_loader = torch.utils.data.DataLoader(
     poisoned_set,
     batch_size=batch_size, shuffle=False, **kwargs)
 
-# Load poison indices
+# Load poison indices and adjust if subset is used
 if os.path.exists(poison_indices_path):
     poison_indices_full = torch.tensor(torch.load(poison_indices_path))
-    # Cần lọc poison_indices cho trường hợp đã lấy subset
-    if len(poisoned_set) == max_samples:
-        # Chỉ giữ lại những index trong subset
-        poison_indices = poison_indices_full[poison_indices_full < max_samples]
+    # If we took a subset, we only keep indices that are within the subset range
+    if 0 < args.data_ratio < 1.0:
+        selected_count = len(poisoned_set)  # after subset
+        poison_indices = poison_indices_full[poison_indices_full < selected_count]
     else:
         poison_indices = poison_indices_full
 else:
@@ -179,11 +178,9 @@ else:
     source_classes = None
 
 for vid, path in enumerate(model_list):
-    # Sử dụng weights_only để tránh load object lạ (Yêu cầu PyTorch >=2.0)
-    # Nếu dùng phiên bản cũ hơn, có thể bỏ weights_only.
+    # Load the model checkpoint. If using PyTorch < 2.0, remove 'weights_only' argument.
     ckpt = torch.load(path, weights_only=True)
 
-    # Load the model
     model = arch(num_classes=num_classes)
     model.load_state_dict(ckpt)
     model = nn.DataParallel(model)
@@ -200,10 +197,10 @@ for vid, path in enumerate(model_list):
     targets = []
     ids = torch.arange(len(poisoned_set))
 
-    # Initialize layer_outputs dictionary
+    # Dictionary to store outputs for each layer
     layer_outputs = {}
 
-    # Hook function
+    # Hook function to capture layer outputs
     def get_activation(name):
         def hook(model, input, output):
             if name not in layer_outputs:
@@ -211,14 +208,14 @@ for vid, path in enumerate(model_list):
             layer_outputs[name].append(output.detach().cpu())
         return hook
 
-    # Đăng ký hook đệ quy cho toàn bộ model
+    # Register hooks recursively for all child layers
     def register_hooks(module, prefix=""):
         for name, layer in module.named_children():
             layer_name = f"{prefix}.{name}" if prefix else name
-            # Chỉ hook các layer đặc trưng
+            # Register hook for feature layers
             if isinstance(layer, (nn.Conv2d, nn.BatchNorm2d, nn.Linear, nn.ReLU, nn.AdaptiveAvgPool2d)):
                 layer.register_forward_hook(get_activation(layer_name))
-            # Tiếp tục đệ quy xuống layer con
+            # Continue recursively
             register_hooks(layer, prefix=layer_name)
 
     try:
@@ -226,7 +223,7 @@ for vid, path in enumerate(model_list):
     except AttributeError as e:
         raise AttributeError(f"Error registering hooks: {e}. Ensure the model architecture matches the expected layers.")
 
-    # Use tqdm to show progress in data loading loop
+    # Processing poisoned data to capture features
     for batch_idx, (data, target) in enumerate(tqdm(poisoned_set_loader, desc="Processing Poisoned Data")):
         data, target = data.cuda(), target.cuda()
         targets.append(target.cpu())
@@ -249,7 +246,7 @@ for vid, path in enumerate(model_list):
         if len(layer_features.size()) > 2:
             layer_features = layer_features.view(layer_features.size(0), -1)
 
-        # Only UMAP visualizer is needed
+        # Only UMAP is used here
         visualizer = UMAP(
             n_components=args.n_components,
             n_neighbors=args.n_neighbors,
@@ -258,7 +255,7 @@ for vid, path in enumerate(model_list):
             random_state=args.seed
         )
 
-        # Initialize labels for visualization
+        # Prepare labels
         all_labels = targets.clone()
         all_features = layer_features
         ids = torch.arange(len(all_features))
@@ -269,9 +266,8 @@ for vid, path in enumerate(model_list):
             labels = all_labels.numpy()
             feats_np = all_features.numpy()
         else:
-            # There are poisoned samples
+            # Mark poisoned samples with a new class index
             poisoned_label = num_classes
-            # Update labels for poisoned samples
             all_labels[poison_indices] = poisoned_label
             labels = all_labels.numpy()
             feats_np = all_features.numpy()
@@ -281,22 +277,22 @@ for vid, path in enumerate(model_list):
         colormap_list = ['Set2', 'Set3', 'Accent', 'tab20b']
         colors = get_combined_colormap(num_total_classes, colormap_list)
 
-        # Update color for the target class
-        target_color = (0.0, 0.0, 0.0, 1.0)  # Black
+        # Update color for the target class (black)
+        target_color = (0.0, 0.0, 0.0, 1.0)
         colors[target_class] = target_color
 
         # Add red for poisoned samples if any
         if len(poison_indices) > 0:
-            poisoned_color = (1.0, 0.0, 0.0, 1.0)  # Red
+            poisoned_color = (1.0, 0.0, 0.0, 1.0)
             colors[num_classes] = poisoned_color
 
         custom_cmap = mcolors.ListedColormap(colors)
         norm = mcolors.Normalize(vmin=0, vmax=num_total_classes - 1)
 
-        # Apply UMAP
+        # Apply UMAP for dimensionality reduction
         reduced_features = visualizer.fit_transform(feats_np)
 
-        # Prepare markers and colors per class
+        # Assign markers and colors per class
         class_markers = {}
         class_colors = {}
         unique_labels = np.unique(labels)
@@ -323,7 +319,7 @@ for vid, path in enumerate(model_list):
                 c=[class_colors[label]],
                 marker=class_markers[label],
                 s=10,
-                alpha=0.7,
+                alpha=0.4,
                 label=f'Class {int(label)}' if label not in [target_class, poisoned_label] else ''
             )
 
@@ -334,7 +330,7 @@ for vid, path in enumerate(model_list):
             Line2D([], [], marker='o', color='grey', linestyle='None', markersize=6, label='Other Classes')
         ]
 
-        plt.legend(handles=handles, title='Classes', bbox_to_anchor=(1.05, 1), loc='upper left')
+        # plt.legend(handles=handles, title='Classes', bbox_to_anchor=(1.05, 1), loc='upper left')
         plt.title(f'UMAP Visualization for Layer {layer_name}')
         plt.xlabel('UMAP Dimension 1')
         plt.ylabel('UMAP Dimension 2')
