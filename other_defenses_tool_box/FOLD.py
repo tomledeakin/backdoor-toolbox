@@ -31,7 +31,7 @@ from other_defenses_tool_box.tools import generate_dataloader
 from other_defenses_tool_box.backdoor_defense import BackdoorDefense
 
 
-class TED(BackdoorDefense):
+class FOLD(BackdoorDefense):
     def __init__(self, args):
         """
         Initialize the TED Defense, load the model and data, and set up necessary variables.
