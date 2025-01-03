@@ -264,7 +264,7 @@ elif args.defense == 'TED':
     defense.detect()
 elif args.defense == 'FOLD':
     from other_defenses_tool_box.FOLD import FOLD
-    defense = TED(args)
+    defense = FOLD(args)
     defense.detect()
 else:
     raise NotImplementedError()
