@@ -266,6 +266,10 @@ elif args.defense == 'FOLD':
     from other_defenses_tool_box.FOLD import FOLD
     defense = FOLD(args)
     defense.detect()
+elif args.defense == 'EXP':
+    from other_defenses_tool_box.EXP import EXP
+    defense = EXP(args)
+    defense.detect()
 else:
     raise NotImplementedError()
 
