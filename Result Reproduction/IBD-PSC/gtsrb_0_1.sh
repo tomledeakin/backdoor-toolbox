@@ -48,37 +48,37 @@ echo "cifar10 - adaptive_blend | START"
 python other_defense.py -defense=TED -dataset=cifar10 -poison_type=adaptive_blend -poison_rate=0.1 -cover_rate=0.05
 echo "cifar10 - adaptive_blend | COMPLETE"
 
-echo "gtsrb - badnet | START"
-# python create_poisoned_set.py -dataset=gtsrb -poison_type=badnet -poison_rate=0.1
-# python train_on_poisoned_set.py -dataset=gtsrb -poison_type=badnet -poison_rate=0.1
-# python test_model.py -dataset=gtsrb -poison_type=badnet -poison_rate=0.1
-# python other_defense.py -defense=IBD_PSC -dataset=gtsrb -poison_type=badnet -poison_rate=0.1
-python other_defense.py -defense=TED -dataset=gtsrb -poison_type=badnet -poison_rate=0.1
-echo "gtsrb - badnet | COMPLETE"
+# echo "cifar10 - WaNet | START"
+# python create_poisoned_set.py -dataset=cifar10 -poison_type=WaNet -poison_rate=0.1 -cover_rate=0.05
+# python train_on_poisoned_set.py -dataset=cifar10 -poison_type=WaNet -poison_rate=0.1 -cover_rate=0.05
+# python test_model.py -dataset=cifar10 -poison_type=WaNet -poison_rate=0.1 -cover_rate=0.05
+# python all_layers_resnet18_layer_visualize.py -dataset=cifar10 -poison_type=WaNet -poison_rate=0.1 -cover_rate=0.05 -data_ratio=0.4
+# # python other_defense.py -defense=TED -dataset=cifar10 -poison_type=badnet -poison_rate=0.1
+# echo "cifar10 - WaNet | COMPLETE"
 
-echo "gtsrb - blend | START"
-# python create_poisoned_set.py -dataset=gtsrb -poison_type=blend -poison_rate=0.1
-# python train_on_poisoned_set.py -dataset=gtsrb -poison_type=blend -poison_rate=0.1
-# python test_model.py -dataset=gtsrb -poison_type=blend -poison_rate=0.1
-# python other_defense.py -defense=IBD_PSC -dataset=gtsrb -poison_type=blend -poison_rate=0.1
-python other_defense.py -defense=TED -dataset=gtsrb -poison_type=blend -poison_rate=0.1
-echo "gtsrb - blend | COMPLETE"
+# echo "cifar10 - ISSBA | START"
+# python create_poisoned_set.py -dataset=cifar10 -poison_type=ISSBA -poison_rate=0.1
+# python train_on_poisoned_set.py -dataset=cifar10 -poison_type=ISSBA -poison_rate=0.1
+# python test_model.py -dataset=cifar10 -poison_type=ISSBA -poison_rate=0.1
+# python all_layers_resnet18_layer_visualize.py -dataset=cifar10 -poison_type=ISSBA -poison_rate=0.1 -data_ratio=0.4
+# # python other_defense.py -defense=TED -dataset=cifar10 -poison_type=blend -poison_rate=0.1
+# echo "cifar10 - ISSBA | COMPLETE"
 
-echo "gtsrb - adaptive_patch | START"
-# python create_poisoned_set.py -dataset=gtsrb -poison_type=adaptive_patch -poison_rate=0.1 -cover_rate=0.05
-# python train_on_poisoned_set.py -dataset=gtsrb -poison_type=adaptive_patch -poison_rate=0.1 -cover_rate=0.05
-# python test_model.py -dataset=gtsrb -poison_type=adaptive_patch -poison_rate=0.1 -cover_rate=0.05
-# python other_defense.py -defense=IBD_PSC -dataset=gtsrb -poison_type=adaptive_patch -poison_rate=0.1 -cover_rate=0.05
-python other_defense.py -defense=TED -dataset=gtsrb -poison_type=adaptive_patch -poison_rate=0.1 -cover_rate=0.05
-echo "gtsrb - adaptive_patch | COMPLETE"
+# echo "cifar10 - trojan | START"
+# python create_poisoned_set.py -dataset=cifar10 -poison_type=trojan -poison_rate=0.1
+# python train_on_poisoned_set.py -dataset=cifar10 -poison_type=trojan -poison_rate=0.1
+# python test_model.py -dataset=cifar10 -poison_type=trojan -poison_rate=0.1
+# python all_layers_resnet18_layer_visualize.py -dataset=cifar10 -poison_type=trojan -poison_rate=0.1 -data_ratio=0.4
+# # python other_defense.py -defense=TED -dataset=cifar10 -poison_type=adaptive_patch -poison_rate=0.1 -cover_rate=0.05
+# echo "cifar10 - trojan | COMPLETE"
 
-echo "gtsrb - adaptive_blend | START"
-# python create_poisoned_set.py -dataset=gtsrb -poison_type=adaptive_blend -poison_rate=0.1 -cover_rate=0.05
-# python train_on_poisoned_set.py -dataset=gtsrb -poison_type=adaptive_blend -poison_rate=0.1 -cover_rate=0.05
-# python test_model.py -dataset=gtsrb -poison_type=adaptive_blend -poison_rate=0.1 -cover_rate=0.05
-# python other_defense.py -defense=IBD_PSC -dataset=gtsrb -poison_type=adaptive_blend -poison_rate=0.1 -cover_rate=0.05
-python other_defense.py -defense=TED -dataset=gtsrb -poison_type=adaptive_blend -poison_rate=0.1 -cover_rate=0.05
-echo "gtsrb - adaptive_blend | COMPLETE"
+# echo "cifar10 - SIG | START"
+# python create_poisoned_set.py -dataset=cifar10 -poison_type=SIG -poison_rate=0.1
+# python train_on_poisoned_set.py -dataset=cifar10 -poison_type=SIG -poison_rate=0.1
+# python test_model.py -dataset=cifar10 -poison_type=SIG -poison_rate=0.1
+# python all_layers_resnet18_layer_visualize.py -dataset=cifar10 -poison_type=SIG -poison_rate=0.1 -data_ratio=0.4
+# # python other_defense.py -defense=TED -dataset=cifar10 -poison_type=adaptive_blend -poison_rate=0.1 -cover_rate=0.05
+# echo "cifar10 - SIG | COMPLETE"
 
 echo "All tasks completed successfully."
 
