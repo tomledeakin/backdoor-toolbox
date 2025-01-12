@@ -12,23 +12,22 @@ parser = argparse.ArgumentParser()
 parser.add_argument('-dataset', type=str, required=False,
                     default=default_args.parser_default['dataset'],
                     choices=default_args.parser_choices['dataset'])
-parser.add_argument('-poison_type', type=str,  required=False,
+parser.add_argument('-poison_type', type=str, required=False,
                     choices=default_args.parser_choices['poison_type'],
                     default=default_args.parser_default['poison_type'])
-parser.add_argument('-poison_rate', type=float,  required=False,
+parser.add_argument('-poison_rate', type=float, required=False,
                     choices=default_args.parser_choices['poison_rate'],
                     default=default_args.parser_default['poison_rate'])
-parser.add_argument('-cover_rate', type=float,  required=False,
+parser.add_argument('-cover_rate', type=float, required=False,
                     choices=default_args.parser_choices['cover_rate'],
                     default=default_args.parser_default['cover_rate'])
-parser.add_argument('-alpha', type=float,  required=False,
+parser.add_argument('-alpha', type=float, required=False,
                     default=default_args.parser_default['alpha'])
-parser.add_argument('-trigger', type=str,  required=False,
+parser.add_argument('-trigger', type=str, required=False,
                     default=None)
 args = parser.parse_args()
 
 tools.setup_seed(0)
-
 
 print('[target class : %d]' % config.target_class[args.dataset])
 
@@ -55,7 +54,7 @@ if args.poison_type == 'dynamic':
         steps = 3
         input_channel = 3
 
-        ckpt_path = './models/all2one_cifar10_ckpt.pth.tar'
+        ckpt_path = './models/all2one_cifar10_ckpt.pth'
 
         normalizer = transforms.Compose([
             transforms.Normalize([0.4914, 0.4822, 0.4465], [0.247, 0.243, 0.261])
@@ -80,15 +79,15 @@ if args.poison_type == 'dynamic':
         steps = 3
         input_channel = 3
 
-        ckpt_path = './models/all2one_gtsrb_ckpt.pth.tar'
+        ckpt_path = './models/all2one_gtsrb_ckpt.pth'
 
         normalizer = None
         denormalizer = None
 
     elif args.dataset == 'imagenette':
-        raise  NotImplementedError('imagenette unsupported for dynamic!')
+        raise NotImplementedError('imagenette unsupported for dynamic!')
     else:
-        raise  NotImplementedError('Undefined Dataset')
+        raise NotImplementedError('Undefined Dataset')
 
 elif args.poison_type == 'ISSBA':
 
@@ -121,9 +120,9 @@ elif args.poison_type == 'ISSBA':
         ckpt_path = './models/ISSBA_gtsrb.pth'
 
     elif args.dataset == 'imagenette':
-        raise  NotImplementedError('imagenette unsupported!')
+        raise NotImplementedError('imagenette unsupported!')
     else:
-        raise  NotImplementedError('Undefined Dataset')
+        raise NotImplementedError('Undefined Dataset')
 
 else:
 
@@ -133,8 +132,8 @@ else:
             transforms.Resize((32, 32)),
             transforms.ToTensor(),
         ])
-        train_set = datasets.GTSRB(os.path.join(data_dir, 'gtsrb'), split = 'train',
-                                   transform = data_transform, download=True)
+        train_set = datasets.GTSRB(os.path.join(data_dir, 'gtsrb'), split='train',
+                                   transform=data_transform, download=True)
         img_size = 32
         num_classes = 43
 
@@ -160,7 +159,7 @@ else:
         num_classes = 10
 
     else:
-        raise  NotImplementedError('Undefined Dataset')
+        raise NotImplementedError('Undefined Dataset')
 
 trigger_transform = transforms.Compose([
     transforms.ToTensor()
@@ -177,7 +176,6 @@ if not os.path.exists(poison_set_dir):
     os.mkdir(poison_set_dir)
 # if not os.path.exists(poison_set_img_dir):
 #     os.mkdir(poison_set_img_dir)
-
 
 
 if args.poison_type in ['basic', 'badnet', 'blend', 'clean_label', 'refool',
@@ -201,11 +199,11 @@ if args.poison_type in ['basic', 'badnet', 'blend', 'clean_label', 'refool',
 
         trigger_mask_path = os.path.join(config.triggers_dir, 'mask_%s' % trigger_name)
         if os.path.exists(trigger_mask_path):  # if there explicitly exists a trigger mask (with the same name)
-            #print('trigger_mask_path:', trigger_mask_path)
+            # print('trigger_mask_path:', trigger_mask_path)
             trigger_mask = Image.open(trigger_mask_path).convert("RGB")
             trigger_mask = transforms.ToTensor()(trigger_mask)[0]  # only use 1 channel
         else:  # by default, all black pixels are masked with 0's
-            #print('No trigger mask found! By default masking all black pixels...')
+            # print('No trigger mask found! By default masking all black pixels...')
             trigger_mask = torch.logical_or(torch.logical_or(trigger[0] > 0, trigger[1] > 0), trigger[2] > 0).float()
 
     alpha = args.alpha
@@ -214,50 +212,60 @@ if args.poison_type in ['basic', 'badnet', 'blend', 'clean_label', 'refool',
     if args.poison_type == 'basic':
 
         from poison_tool_box import basic
+
         poison_generator = basic.poison_generator(img_size=img_size, dataset=train_set,
                                                   poison_rate=args.poison_rate,
                                                   path=poison_set_dir,
                                                   trigger_mark=trigger, trigger_mask=trigger_mask,
                                                   target_class=config.target_class[args.dataset], alpha=alpha)
-        
+
     elif args.poison_type == 'badnet':
 
         from poison_tool_box import badnet
+
         poison_generator = badnet.poison_generator(img_size=img_size, dataset=train_set,
-                                                   poison_rate=args.poison_rate, trigger_mark=trigger, trigger_mask=trigger_mask,
+                                                   poison_rate=args.poison_rate, trigger_mark=trigger,
+                                                   trigger_mask=trigger_mask,
                                                    path=poison_set_dir, target_class=config.target_class[args.dataset])
 
     elif args.poison_type == 'badnet_all_to_all':
 
         from poison_tool_box import badnet_all_to_all
+
         poison_generator = badnet_all_to_all.poison_generator(img_size=img_size, dataset=train_set,
-                                                   poison_rate=args.poison_rate, trigger_mark=trigger, trigger_mask=trigger_mask,
-                                                   path=poison_set_dir, num_classes=num_classes)
+                                                              poison_rate=args.poison_rate, trigger_mark=trigger,
+                                                              trigger_mask=trigger_mask,
+                                                              path=poison_set_dir, num_classes=num_classes)
 
     elif args.poison_type == 'trojan':
 
         from poison_tool_box import trojan
+
         poison_generator = trojan.poison_generator(img_size=img_size, dataset=train_set,
-                                                 poison_rate=args.poison_rate, trigger_mark=trigger, trigger_mask=trigger_mask,
-                                                 path=poison_set_dir, target_class=config.target_class[args.dataset])
+                                                   poison_rate=args.poison_rate, trigger_mark=trigger,
+                                                   trigger_mask=trigger_mask,
+                                                   path=poison_set_dir, target_class=config.target_class[args.dataset])
 
     elif args.poison_type == 'blend':
 
         from poison_tool_box import blend
+
         poison_generator = blend.poison_generator(img_size=img_size, dataset=train_set,
                                                   poison_rate=args.poison_rate, trigger=trigger,
                                                   path=poison_set_dir, target_class=config.target_class[args.dataset],
                                                   alpha=alpha)
     elif args.poison_type == 'refool':
         from poison_tool_box import refool
+
         poison_generator = refool.poison_generator(img_size=img_size, dataset=train_set,
-                                                  poison_rate=args.poison_rate,
-                                                  path=poison_set_dir, target_class=config.target_class[args.dataset],
-                                                  max_image_size=32)
+                                                   poison_rate=args.poison_rate,
+                                                   path=poison_set_dir, target_class=config.target_class[args.dataset],
+                                                   max_image_size=32)
 
     elif args.poison_type == 'TaCT':
 
         from poison_tool_box import TaCT
+
         poison_generator = TaCT.poison_generator(img_size=img_size, dataset=train_set,
                                                  poison_rate=args.poison_rate, cover_rate=args.cover_rate,
                                                  trigger=trigger, mask=trigger_mask,
@@ -279,55 +287,61 @@ if args.poison_type in ['basic', 'badnet', 'blend', 'clean_label', 'refool',
         array1d = torch.linspace(-1, 1, steps=img_size)
         x, y = torch.meshgrid(array1d, array1d)
         identity_grid = torch.stack((y, x), 2)[None, ...]
-        
+
         path = os.path.join(poison_set_dir, 'identity_grid')
         torch.save(identity_grid, path)
         path = os.path.join(poison_set_dir, 'noise_grid')
         torch.save(noise_grid, path)
 
         from poison_tool_box import WaNet
+
         poison_generator = WaNet.poison_generator(img_size=img_size, dataset=train_set,
-                                                 poison_rate=args.poison_rate, cover_rate=args.cover_rate,
-                                                 path=poison_set_dir,
-                                                 identity_grid=identity_grid, noise_grid=noise_grid,
-                                                 s=s, k=k, grid_rescale=grid_rescale, 
-                                                 target_class=config.target_class[args.dataset])
+                                                  poison_rate=args.poison_rate, cover_rate=args.cover_rate,
+                                                  path=poison_set_dir,
+                                                  identity_grid=identity_grid, noise_grid=noise_grid,
+                                                  s=s, k=k, grid_rescale=grid_rescale,
+                                                  target_class=config.target_class[args.dataset])
 
     elif args.poison_type == 'adaptive':
 
         from poison_tool_box import adaptive
+
         poison_generator = adaptive.poison_generator(img_size=img_size, dataset=train_set,
                                                      poison_rate=args.poison_rate,
                                                      path=poison_set_dir,
                                                      trigger_mark=trigger, trigger_mask=trigger_mask,
                                                      target_class=config.target_class[args.dataset], alpha=alpha,
                                                      cover_rate=args.cover_rate)
-    
+
     elif args.poison_type == 'adaptive_blend':
 
         from poison_tool_box import adaptive_blend
+
         poison_generator = adaptive_blend.poison_generator(img_size=img_size, dataset=train_set,
-                                                          poison_rate=args.poison_rate,
-                                                          path=poison_set_dir, trigger=trigger,
-                                                          pieces=16, mask_rate=0.5,
-                                                          target_class=config.target_class[args.dataset], alpha=alpha,
-                                                          cover_rate=args.cover_rate)
-    
+                                                           poison_rate=args.poison_rate,
+                                                           path=poison_set_dir, trigger=trigger,
+                                                           pieces=16, mask_rate=0.5,
+                                                           target_class=config.target_class[args.dataset], alpha=alpha,
+                                                           cover_rate=args.cover_rate)
+
     elif args.poison_type == 'adaptive_patch':
 
-
         from poison_tool_box import adaptive_patch
+
         poison_generator = adaptive_patch.poison_generator(img_size=img_size, dataset=train_set,
                                                            poison_rate=args.poison_rate,
                                                            path=poison_set_dir,
-                                                           trigger_names=config.adaptive_patch_train_trigger_names[args.dataset],
-                                                           alphas=config.adaptive_patch_train_trigger_alphas[args.dataset],
+                                                           trigger_names=config.adaptive_patch_train_trigger_names[
+                                                               args.dataset],
+                                                           alphas=config.adaptive_patch_train_trigger_alphas[
+                                                               args.dataset],
                                                            target_class=config.target_class[args.dataset],
                                                            cover_rate=args.cover_rate)
 
     elif args.poison_type == 'adaptive_k_way':
 
         from poison_tool_box import adaptive_k_way
+
         poison_generator = adaptive_k_way.poison_generator(img_size=img_size, dataset=train_set,
                                                            poison_rate=args.poison_rate,
                                                            path=poison_set_dir,
@@ -337,10 +351,11 @@ if args.poison_type in ['basic', 'badnet', 'blend', 'clean_label', 'refool',
     elif args.poison_type == 'SIG':
 
         from poison_tool_box import SIG
+
         poison_generator = SIG.poison_generator(img_size=img_size, dataset=train_set,
                                                 poison_rate=args.poison_rate,
                                                 path=poison_set_dir, target_class=config.target_class[args.dataset],
-                                                delta=30/255, f=6)
+                                                delta=30 / 255, f=6)
 
     elif args.poison_type == 'clean_label':
 
@@ -360,34 +375,38 @@ if args.poison_type in ['basic', 'badnet', 'blend', 'clean_label', 'refool',
 
         # Init Attacker
         from poison_tool_box import clean_label
+
         poison_generator = clean_label.poison_generator(img_size=img_size, dataset=train_set, adv_imgs=adv_imgs,
                                                         poison_rate=args.poison_rate,
-                                                        trigger_mark = trigger, trigger_mask=trigger_mask,
-                                                        path=poison_set_dir, target_class=config.target_class[args.dataset])
+                                                        trigger_mark=trigger, trigger_mask=trigger_mask,
+                                                        path=poison_set_dir,
+                                                        target_class=config.target_class[args.dataset])
 
     elif args.poison_type == 'SleeperAgent':
         from poison_tool_box import SleeperAgent
-        
+
         if args.dataset == 'cifar10':
             normalizer = transforms.Compose([
                 transforms.Normalize([0.4914, 0.4822, 0.4465], [0.247, 0.243, 0.261])
             ])
 
             denormalizer = transforms.Compose([
-                transforms.Normalize([-0.4914 / 0.247, -0.4822 / 0.243, -0.4465 / 0.261], [1 / 0.247, 1 / 0.243, 1 / 0.261])
+                transforms.Normalize([-0.4914 / 0.247, -0.4822 / 0.243, -0.4465 / 0.261],
+                                     [1 / 0.247, 1 / 0.243, 1 / 0.261])
             ])
-            
+
             data_transform = transforms.Compose([
                 transforms.Resize((32, 32)),
                 transforms.ToTensor(),
                 # transforms.Normalize([0.4914, 0.4822, 0.4465], [0.247, 0.243, 0.261]),
             ])
-            
+
             trainset = datasets.CIFAR10(os.path.join(data_dir, 'cifar10'), train=True,
                                         download=True, transform=data_transform)
             testset = datasets.CIFAR10(os.path.join(data_dir, 'cifar10'), train=False,
                                        download=True, transform=data_transform)
-        else: raise(NotImplementedError)
+        else:
+            raise (NotImplementedError)
         poison_generator = SleeperAgent.poison_generator(img_size=img_size, model_arch=supervisor.get_arch(args),
                                                          random_patch=False,
                                                          dataset=trainset, testset=testset,
@@ -395,13 +414,12 @@ if args.poison_type in ['basic', 'badnet', 'blend', 'clean_label', 'refool',
                                                          normalizer=normalizer, denormalizer=denormalizer,
                                                          source_class=config.source_class,
                                                          target_class=config.target_class[args.dataset])
-    
-    else: # 'none'
+
+    else:  # 'none'
         from poison_tool_box import none
+
         poison_generator = none.poison_generator(img_size=img_size, dataset=train_set,
-                                                path=poison_set_dir)
-
-
+                                                 path=poison_set_dir)
 
     if args.poison_type not in ['TaCT', 'WaNet', 'adaptive_blend', 'adaptive_patch', 'adaptive_k_way']:
         img_set, poison_indices, label_set = poison_generator.generate_poisoned_training_set()
@@ -415,7 +433,6 @@ if args.poison_type in ['basic', 'badnet', 'blend', 'clean_label', 'refool',
         torch.save(cover_indices, cover_indices_path)
         print('[Generate Poisoned Set] Save %s' % cover_indices_path)
 
-
     img_path = os.path.join(poison_set_dir, 'imgs')
     torch.save(img_set, img_path)
     print('[Generate Poisoned Set] Save %s' % img_path)
@@ -428,7 +445,7 @@ if args.poison_type in ['basic', 'badnet', 'blend', 'clean_label', 'refool',
     torch.save(poison_indices, poison_indices_path)
     print('[Generate Poisoned Set] Save %s' % poison_indices_path)
 
-    #print('poison_indices : ', poison_indices)
+    # print('poison_indices : ', poison_indices)
 
 
 elif args.poison_type == 'dynamic':
@@ -438,13 +455,16 @@ elif args.poison_type == 'dynamic':
         Download Pretrained Generator from https://github.com/VinAIResearch/input-aware-backdoor-attack-release
     """
     if not os.path.exists(ckpt_path):
-        raise NotImplementedError('[Dynamic Attack] Download pretrained generator first : https://github.com/VinAIResearch/input-aware-backdoor-attack-release')
+        raise NotImplementedError(
+            '[Dynamic Attack] Download pretrained generator first : https://github.com/VinAIResearch/input-aware-backdoor-attack-release')
     # Init Attacker
     from poison_tool_box import dynamic
+
     poison_generator = dynamic.poison_generator(ckpt_path=ckpt_path, channel_init=channel_init, steps=steps,
                                                 input_channel=input_channel, normalizer=normalizer,
                                                 denormalizer=denormalizer, dataset=train_set,
-                                                poison_rate=args.poison_rate, path=poison_set_dir, target_class=config.target_class[args.dataset])
+                                                poison_rate=args.poison_rate, path=poison_set_dir,
+                                                target_class=config.target_class[args.dataset])
 
     # Generate Poison Data
     img_set, poison_indices, label_set = poison_generator.generate_poisoned_training_set()
@@ -453,7 +473,7 @@ elif args.poison_type == 'dynamic':
     img_path = os.path.join(poison_set_dir, 'imgs')
     torch.save(img_set, img_path)
     print('[Generate Poisoned Set] Save %s' % img_path)
-    
+
     label_path = os.path.join(poison_set_dir, 'labels')
     torch.save(label_set, label_path)
     print('[Generate Poisoned Set] Save %s' % label_path)
@@ -465,18 +485,21 @@ elif args.poison_type == 'dynamic':
 elif args.poison_type == 'ISSBA':
     # if not os.path.exists(ckpt_path):
     #     raise NotImplementedError('[ISSBA Attack] Download pretrained encoder and decoder first: https://github.com/')
-    
+
     # Init Secret
     secret_size = 20
     secret = torch.FloatTensor(np.random.binomial(1, .5, secret_size).tolist())
     secret_path = os.path.join(poison_set_dir, 'secret')
     torch.save(secret, secret_path)
     print('[Generate Poisoned Set] Save %s' % secret_path)
-    
+
     # Init Attacker
     from poison_tool_box import ISSBA
-    poison_generator = ISSBA.poison_generator(ckpt_path=ckpt_path, secret=secret, dataset=train_set, enc_height=img_size, enc_width=img_size, enc_in_channel=input_channel,
-                                                poison_rate=args.poison_rate, path=poison_set_dir, target_class=config.target_class[args.dataset])
+
+    poison_generator = ISSBA.poison_generator(ckpt_path=ckpt_path, secret=secret, dataset=train_set,
+                                              enc_height=img_size, enc_width=img_size, enc_in_channel=input_channel,
+                                              poison_rate=args.poison_rate, path=poison_set_dir,
+                                              target_class=config.target_class[args.dataset])
 
     # Generate Poison Data
     img_set, poison_indices, label_set = poison_generator.generate_poisoned_training_set()
@@ -485,7 +508,7 @@ elif args.poison_type == 'ISSBA':
     img_path = os.path.join(poison_set_dir, 'imgs')
     torch.save(img_set, img_path)
     print('[Generate Poisoned Set] Save %s' % img_path)
-    
+
     label_path = os.path.join(poison_set_dir, 'labels')
     torch.save(label_set, label_path)
     print('[Generate Poisoned Set] Save %s' % label_path)

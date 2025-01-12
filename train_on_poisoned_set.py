@@ -6,6 +6,10 @@ from utils import default_args, imagenet
 from torch.cuda.amp import autocast, GradScaler
 
 parser = argparse.ArgumentParser()
+parser.add_argument('--epochs', type=int, default=None,
+                    help='Số lượng epoch huấn luyện. Nếu không cung cấp, sẽ sử dụng giá trị mặc định theo dataset.')
+parser.add_argument('--lr', type=float, default=None,
+                    help='Learning rate ban đầu. Nếu không cung cấp, sẽ sử dụng giá trị mặc định theo dataset.')
 parser.add_argument('-dataset', type=str, required=False,
                     default=default_args.parser_default['dataset'],
                     choices=default_args.parser_choices['dataset'])
@@ -65,7 +69,8 @@ if args.log:
     out_path = os.path.join(out_path, 'base')
     if not os.path.exists(out_path): os.mkdir(out_path)
     out_path = os.path.join(out_path, '%s_%s.out' % (
-    supervisor.get_dir_core(args, include_poison_seed=config.record_poison_seed), 'no_aug' if args.no_aug else 'aug'))
+        supervisor.get_dir_core(args, include_poison_seed=config.record_poison_seed),
+        'no_aug' if args.no_aug else 'aug'))
     if args.resume > 0 or args.resume_from_meta_info:
         fout = open(out_path, 'a')
     else:
@@ -82,21 +87,22 @@ if args.dataset == 'cifar10':
     arch = supervisor.get_arch(args)
     momentum = 0.9
     weight_decay = 1e-4
-    epochs = 100
+    # Sử dụng args.epochs nếu được cung cấp, nếu không dùng giá trị mặc định 100
+    epochs = args.epochs if args.epochs is not None else 100
     milestones = torch.tensor([50, 75])
-    learning_rate = 0.1
+    # Tương tự với learning_rate
+    learning_rate = args.lr if args.lr is not None else 0.1
     batch_size = 128
     print(arch)
-    
-elif args.dataset == 'gtsrb':
 
+elif args.dataset == 'gtsrb':
     num_classes = 43
     arch = supervisor.get_arch(args)
     momentum = 0.9
     weight_decay = 1e-4
-    epochs = 100
+    epochs = args.epochs if args.epochs is not None else 100
     milestones = torch.tensor([30, 60])
-    learning_rate = 0.01
+    learning_rate = args.lr if args.lr is not None else 0.01
     batch_size = 128
 
 elif args.dataset == 'imagenette':

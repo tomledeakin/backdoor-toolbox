@@ -562,7 +562,7 @@ def get_poison_transform(poison_type, dataset_name, target_class, source_class=1
 
 
     elif poison_type == 'dynamic':
-
+        print('INSIDE OR NOT')
         if dataset_name == 'cifar10':
             channel_init = 32
             steps = 3
@@ -597,7 +597,7 @@ def get_poison_transform(poison_type, dataset_name, target_class, source_class=1
         return poison_transform
 
     elif poison_type == 'ISSBA':
-
+        print('INSIDE OR NOT')
         if dataset_name == 'cifar10':
             ckpt_path = './models/ISSBA_cifar10.pth'
             input_channel = 3

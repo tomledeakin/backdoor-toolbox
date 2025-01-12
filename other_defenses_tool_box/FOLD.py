@@ -42,6 +42,8 @@ torch.manual_seed(42)
 if torch.cuda.is_available():
     torch.cuda.manual_seed(42)
     torch.cuda.manual_seed_all(42)
+
+
 # ------------------------------
 
 class FOLD(BackdoorDefense):
@@ -84,7 +86,8 @@ class FOLD(BackdoorDefense):
         print(f"Number of unique classes from args: {self.num_classes}")
 
         # 5) Defense training size (for example)
-        self.SAMPLES_PER_CLASS = 40 
+        self.SAMPLES_PER_CLASS = 15
+        self.NUM_NEIGHBORS = 1
         self.DEFENSE_TRAIN_SIZE = self.num_classes * self.SAMPLES_PER_CLASS
 
         # 6) Create a test_loader
@@ -101,8 +104,9 @@ class FOLD(BackdoorDefense):
         self.testset = self.test_loader.dataset
 
         # 7) Define NUM_SAMPLES: we take 500 for clean + 500 for poison => total 1000
-        self.NUM_SAMPLES = 500
-        # self.NUM_SAMPLES = len(self.testset)
+        self.DATA_RATIO = 0.1
+        # self.NUM_SAMPLES = 500
+        self.NUM_SAMPLES = int(len(self.testset)*self.DATA_RATIO)
 
         # 8) Create defense_loader with self.SAMPLES_PER_CLASS per class, ensuring correct predictions
         trainset = self.train_loader.dataset
@@ -116,9 +120,14 @@ class FOLD(BackdoorDefense):
             subset_indices = np.arange(len(trainset))
 
         # Organize indices by class
+        from collections import defaultdict
         label_to_indices = defaultdict(list)
-        for idx, (_, label) in enumerate(underlying_dataset):
-            label_to_indices[label].append(idx)
+        for idx in subset_indices:
+            try:
+                _, label = underlying_dataset[idx]
+                label_to_indices[label].append(idx)
+            except FileNotFoundError:
+                print(f"Warning: File {idx}.png not exist.")
 
         # Initialize a dictionary to hold correctly predicted indices per class
         correct_indices_per_class = defaultdict(list)
@@ -159,6 +168,10 @@ class FOLD(BackdoorDefense):
 
         # For each class, sample self.SAMPLES_PER_CLASS correctly predicted samples
         for label in unique_classes:
+            if self.poison_type == "TaCT" and label == config.source_class:
+                print(f"Skipping source class {label} for defense set since poison_type is TaCT.")
+                continue
+
             correct_indices = correct_indices_per_class[label]
             num_correct = len(correct_indices)
 
@@ -193,9 +206,9 @@ class FOLD(BackdoorDefense):
         # Count the number of samples per class
         label_counts = Counter(defense_labels)
 
-        print("Number of samples per class in defense_subset:")
-        for label, count in label_counts.items():
-            print(f"Class {label}: {count} samples")
+        # print("Number of samples per class in defense_subset:")
+        # for label, count in label_counts.items():
+        #     print(f"Class {label}: {count} samples")
 
         # 9) Filter the defense set to keep correctly predicted samples only (optional)
         h_benign_preds = []
@@ -215,11 +228,9 @@ class FOLD(BackdoorDefense):
         benign_mask = h_benign_ori_labels == h_benign_preds
         benign_indices = np.array(defense_indices)[benign_mask]
 
-        # Giới hạn kích thước của defense subset nếu cần
         if len(benign_indices) > self.DEFENSE_TRAIN_SIZE:
             benign_indices = np.random.choice(benign_indices, self.DEFENSE_TRAIN_SIZE, replace=False)
 
-        # Tái tạo defense_subset từ các chỉ số đã lọc
         defense_subset = data.Subset(trainset, benign_indices)
         self.defense_loader = data.DataLoader(
             defense_subset,
@@ -253,6 +264,7 @@ class FOLD(BackdoorDefense):
         self.hook_handles = []
         self.activations = {}
         self.register_hooks()
+        self.nnb_distance_dictionary = {}
 
         # Additional intermediate variables
         self.Test_C = self.num_classes + 2
@@ -302,6 +314,41 @@ class FOLD(BackdoorDefense):
                 )
                 index += 1
 
+    # def register_hooks(self):
+    #     """
+    #     Register forward hooks for the last 10 layers to extract activations.
+    #     """
+    #     def get_activation(name):
+    #         def hook(model, input, output):
+    #             self.activations[name] = output.detach()
+    #         return hook
+    # 
+    #     # Remove previous hooks if any
+    #     for handle in self.hook_handles:
+    #         handle.remove()
+    #     self.hook_handles = []
+    # 
+    #     # Collect all layers of interest (Conv2d, ReLU, Linear)
+    #     layers_of_interest = []
+    #     net_children = list(self.model.modules())
+    #     for child in net_children:
+    #         if isinstance(child, nn.Conv2d) and child.kernel_size != (1, 1):
+    #             layers_of_interest.append(child)
+    #         elif isinstance(child, nn.ReLU):
+    #             layers_of_interest.append(child)
+    #         elif isinstance(child, nn.Linear):
+    #             layers_of_interest.append(child)
+    # 
+    #     # Select the last 10 layers
+    #     last_10_layers = layers_of_interest[1:12]
+    # 
+    #     # Register hooks for the last 10 layers
+    #     for idx, layer in enumerate(last_10_layers):
+    #         layer_type = layer.__class__.__name__
+    #         layer_name = f"{layer_type}_{idx}"
+    #         self.hook_handles.append(layer.register_forward_hook(get_activation(layer_name)))
+    #         print(f"Registered hook for layer: {layer_name}")
+
     def create_targets(self, targets, label):
         """
         Assign a new label to targets (e.g., Poison=101, Clean=102).
@@ -313,49 +360,112 @@ class FOLD(BackdoorDefense):
     #   CREATE POISON & CLEAN SETS
     # ==============================
     def generate_poison_clean_sets(self):
-        """
-        Use self.NUM_SAMPLES to pick a fixed number of samples from the test set. 
-        We generate 500 clean samples and then transform the same set into 500 poisoned samples.
-        """
-        all_indices = np.arange(len(self.testset))
-        if len(all_indices) < self.NUM_SAMPLES:
-            print(f"Warning: testset size < {self.NUM_SAMPLES}, adjusting.")
-            chosen = all_indices
+        if self.poison_type == 'TaCT':
+
+            while self.poison_count < self.NUM_SAMPLES or self.clean_count < self.NUM_SAMPLES:
+                for batch_idx, (inputs, labels) in enumerate(self.test_loader):
+                    inputs, labels = inputs.to(self.device), labels.to(self.device)
+
+                    poisoned_inputs, poisoned_labels = self.poison_transform.transform(inputs, labels)
+                    preds_bd = torch.argmax(self.model(poisoned_inputs), dim=1)
+
+                    # Poison
+                    if self.poison_count < self.NUM_SAMPLES:
+                        label_value = self.label_mapping[self.POISON_TEMP_LABEL]  # 101
+                        targets_poison = self.create_targets(labels, label_value)
+
+                        victim_indices = (labels == config.source_class)
+                        correct_preds_indices = (preds_bd == self.target)
+                        final_indices = victim_indices & correct_preds_indices
+
+                        if final_indices.sum().item() > 0:
+                            self.temp_poison_inputs_set.append(poisoned_inputs[final_indices].cpu())
+                            self.temp_poison_labels_set.append(targets_poison[final_indices].cpu())
+                            self.temp_poison_pred_set.append(preds_bd[final_indices].cpu())
+                            self.poison_count += final_indices.sum().item()
+
+                    # Clean
+                    if self.clean_count < self.NUM_SAMPLES:
+                        label_value = self.label_mapping[self.CLEAN_TEMP_LABEL]  # Ví dụ: 102
+                        targets_clean = self.create_targets(labels, label_value)
+
+                        non_victim_indices = (labels != config.source_class)
+
+                        if non_victim_indices.sum().item() > 0:
+                            self.temp_clean_inputs_set.append(poisoned_inputs[non_victim_indices].cpu())
+                            self.temp_clean_labels_set.append(targets_clean[non_victim_indices].cpu())
+                            self.temp_clean_pred_set.append(preds_bd[non_victim_indices].cpu())
+                            self.clean_count += non_victim_indices.sum().item()
+
+                    if self.poison_count >= self.NUM_SAMPLES and self.clean_count >= self.NUM_SAMPLES:
+                        break
+
+                if self.poison_count >= self.NUM_SAMPLES and self.clean_count >= self.NUM_SAMPLES:
+                    break
+
+            if self.poison_count > self.NUM_SAMPLES:
+                combined_inputs = torch.cat(self.temp_poison_inputs_set, dim=0)[:self.NUM_SAMPLES]
+                combined_labels = torch.cat(self.temp_poison_labels_set, dim=0)[:self.NUM_SAMPLES]
+                combined_preds = torch.cat(self.temp_poison_pred_set, dim=0)[:self.NUM_SAMPLES]
+                self.temp_poison_inputs_set = [combined_inputs]
+                self.temp_poison_labels_set = [combined_labels]
+                self.temp_poison_pred_set = [combined_preds]
+                self.poison_count = self.NUM_SAMPLES
+
+            if self.clean_count > self.NUM_SAMPLES:
+                combined_inputs = torch.cat(self.temp_clean_inputs_set, dim=0)[:self.NUM_SAMPLES]
+                combined_labels = torch.cat(self.temp_clean_labels_set, dim=0)[:self.NUM_SAMPLES]
+                combined_preds = torch.cat(self.temp_clean_pred_set, dim=0)[:self.NUM_SAMPLES]
+                self.temp_clean_inputs_set = [combined_inputs]
+                self.temp_clean_labels_set = [combined_labels]
+                self.temp_clean_pred_set = [combined_preds]
+                self.clean_count = self.NUM_SAMPLES
         else:
-            chosen = np.random.choice(all_indices, size=self.NUM_SAMPLES, replace=False)
+            """
+            Use self.NUM_SAMPLES to pick a fixed number of samples from the test set. 
+            We generate 500 clean samples and then transform the same set into 500 poisoned samples.
+            """
+            all_indices = np.arange(len(self.testset))
+            if len(all_indices) < self.NUM_SAMPLES:
+                print(f"Warning: testset size < {self.NUM_SAMPLES}, adjusting.")
+                chosen = all_indices
+            else:
+                chosen = np.random.choice(all_indices, size=self.NUM_SAMPLES, replace=False)
 
-        subset = data.Subset(self.testset, chosen)
-        loader = data.DataLoader(subset, batch_size=50, shuffle=False)
+            clean_subset = data.Subset(self.testset, chosen)
+            clean_loader = data.DataLoader(clean_subset, batch_size=50, shuffle=False)
 
-        # Create CLEAN set
-        for (inputs, labels) in loader:
-            inputs, labels = inputs.to(self.device), labels.to(self.device)
-            label_value = self.label_mapping[self.CLEAN_TEMP_LABEL]
-            targets_clean = self.create_targets(labels, label_value)
-            preds = torch.argmax(self.model(inputs), dim=1)
+            poison_subset = data.Subset(self.testset, chosen)
+            poison_loader = data.DataLoader(poison_subset, batch_size=50, shuffle=False)
 
-            self.temp_clean_inputs_set.append(inputs.cpu())
-            self.temp_clean_labels_set.append(targets_clean.cpu())
-            self.temp_clean_pred_set.append(preds.cpu())
+            # Create CLEAN set
+            for (inputs, labels) in clean_loader:
+                inputs, labels = inputs.to(self.device), labels.to(self.device)
+                label_value = self.label_mapping[self.CLEAN_TEMP_LABEL]
+                targets_clean = self.create_targets(labels, label_value)
+                preds = torch.argmax(self.model(inputs), dim=1)
 
-            self.clean_count += labels.size(0)
+                self.temp_clean_inputs_set.append(inputs.cpu())
+                self.temp_clean_labels_set.append(targets_clean.cpu())
+                self.temp_clean_pred_set.append(preds.cpu())
 
-        # Create POISON set from the same subset
-        poison_loader = data.DataLoader(subset, batch_size=50, shuffle=False)
-        for (inputs, labels) in poison_loader:
-            inputs, labels = inputs.to(self.device), labels.to(self.device)
+                self.clean_count += labels.size(0)
 
-            poisoned_inputs, poisoned_labels = self.poison_transform.transform(inputs, labels)
-            preds_bd = torch.argmax(self.model(poisoned_inputs), dim=1)
+            # Create POISON set from the same subset
+            for (inputs, labels) in poison_loader:
+                inputs, labels = inputs.to(self.device), labels.to(self.device)
 
-            label_value = self.label_mapping[self.POISON_TEMP_LABEL]
-            targets_poison = self.create_targets(labels, label_value)
+                poisoned_inputs, poisoned_labels = self.poison_transform.transform(inputs, labels)
+                preds_bd = torch.argmax(self.model(poisoned_inputs), dim=1)
 
-            self.temp_poison_inputs_set.append(poisoned_inputs.cpu())
-            self.temp_poison_labels_set.append(targets_poison.cpu())
-            self.temp_poison_pred_set.append(preds_bd.cpu())
+                label_value = self.label_mapping[self.POISON_TEMP_LABEL]
+                targets_poison = self.create_targets(labels, label_value)
 
-            self.poison_count += labels.size(0)
+                self.temp_poison_inputs_set.append(poisoned_inputs.cpu())
+                self.temp_poison_labels_set.append(targets_poison.cpu())
+                self.temp_poison_pred_set.append(preds_bd.cpu())
+
+                self.poison_count += labels.size(0)
 
         print(
             f"Finished generate_poison_clean_sets. Clean_count = {self.clean_count}, Poison_count = {self.poison_count}"
@@ -420,7 +530,7 @@ class FOLD(BackdoorDefense):
 
         # Initialize hooks with one batch
         for (images, labels) in loader:
-            print("Running the first batch to init hooks")
+            # print("Running the first batch to init hooks")
             _ = self.model(images.to(self.device))
             break
 
@@ -430,11 +540,11 @@ class FOLD(BackdoorDefense):
         self.activations.clear()
 
         for batch_idx, (images, labels) in enumerate(loader, start=1):
-            print(f"Running batch {batch_idx} - Images shape: {images.shape}, Labels shape: {labels.shape}")
+            # print(f"Running batch {batch_idx} - Images shape: {images.shape}, Labels shape: {labels.shape}")
             try:
                 output = self.model(images.to(self.device))
             except Exception as e:
-                print(f"Error running model on batch {batch_idx}: {e}")
+                # print(f"Error running model on batch {batch_idx}: {e}")
                 break
             pred_set.append(torch.argmax(output, -1).to(self.device))
 
@@ -450,8 +560,8 @@ class FOLD(BackdoorDefense):
 
             self.activations.clear()
 
-            if batch_idx % 10 == 0:
-                print(f"Processed {batch_idx} batches")
+            # if batch_idx % 10 == 0:
+            # print(f"Processed {batch_idx} batches")
 
         # Stack everything
         for key in activation_container:
@@ -459,7 +569,7 @@ class FOLD(BackdoorDefense):
         all_h_label = torch.stack(all_h_label)
         pred_set = torch.cat(pred_set)
 
-        print("Finished fetch_activation")
+        # print("Finished fetch_activation")
         return all_h_label, activation_container, pred_set
 
     def calculate_accuracy(self, ori_labels, preds):
@@ -520,6 +630,8 @@ class FOLD(BackdoorDefense):
         Trả về (khoảng cách đã sắp xếp tăng dần, chỉ mục tương ứng).
         Chúng ta sẽ dùng khoảng cách này thay vì "thứ hạng".
         """
+        # print(f'destinations: {destinations}')
+        # print(f'destinations shape: {destinations.shape}')  # destinations shape: torch.Size([100, 10])
         item_ = item.reshape(1, item.shape[0])
         dev = self.device
         new_dis = pairwise_euclidean_distance(item_.to(dev), destinations.to(dev))  # shape: (1, destinations.size(0))
@@ -538,16 +650,32 @@ class FOLD(BackdoorDefense):
 
         self.candidate_[layer] = self.gather_activation_into_class(final_prediction, h_defense_activation)
 
+        if layer not in self.nnb_distance_dictionary:
+            self.nnb_distance_dictionary[layer] = {}
+
         if np.ndim(self.candidate_[layer][processing_label]) == 0:
             print("No sample in this class for label =", processing_label)
         else:
             for index, item in enumerate(self.candidate_[layer][processing_label]):
+                meadian_nnb_distance, _ = self.average_nearest_neighbor_distance(
+                    self.candidate_[layer][processing_label])
+                
+                self.nnb_distance_dictionary[layer][processing_label] = meadian_nnb_distance
+
                 sorted_dis, sorted_indices = self.get_dis_sort(item, h_defense_activation)
-                # Ta bỏ qua index=0 (distance = 0, chính item đó), nên duyệt từ index=1 trở đi
+                count = 0
+                result_array = np.array([])
                 for i, idx in enumerate(sorted_indices[1:], start=1):
                     if final_prediction[idx] == processing_label:
-                        layer_test_region_individual[layer][processing_label].append(sorted_dis[i].item())
-                        break
+                        if count == 0:
+                            distance_value_index = i - 1
+                            result_array = np.append(result_array, distance_value_index)
+                        distance_value = sorted_dis[i].item()/meadian_nnb_distance
+                        result_array = np.append(result_array, distance_value)
+                        count += 1
+                        if count == self.NUM_NEIGHBORS:
+                            layer_test_region_individual[layer][processing_label].append(result_array)
+                            break
 
         return layer_test_region_individual
 
@@ -566,14 +694,61 @@ class FOLD(BackdoorDefense):
 
         for processing_label in labels:
             for index, item in enumerate(candidate__[processing_label]):
+
+                meadian_nnb_distance = self.nnb_distance_dictionary[layer][processing_label.item()]
+
                 sorted_dis, sorted_indices = self.get_dis_sort(item, h_defense_activation)
                 # Tìm khoảng cách đầu tiên tới sample trong defense có nhãn = processing_label
-                for i, idx in enumerate(sorted_indices[1:], start=1):
+                count = 0
+                result_array = np.array([])
+                for i, idx in enumerate(sorted_indices):
                     if h_defense_prediction[idx] == processing_label:
-                        layer_test_region_individual[layer][new_temp_label].append(sorted_dis[i].item())
+                        if count == 0:
+                            distance_value_index = i
+                            result_array = np.append(result_array, distance_value_index)
+                        distance_value = sorted_dis[i].item()/meadian_nnb_distance
+                        result_array = np.append(result_array, distance_value)
+                        count += 1
+                    if count == self.NUM_NEIGHBORS:
+                        layer_test_region_individual[layer][new_temp_label].append(result_array)
                         break
 
         return layer_test_region_individual
+
+    def average_nearest_neighbor_distance(self, points):
+        """
+        Tính khoảng cách trung bình nearest neighbor và trả về thứ tự các điểm đã duyệt (path).
+        """
+        points = points if isinstance(points, torch.Tensor) else torch.tensor(points)  # Đảm bảo đầu vào là torch.Tensor
+        n = points.size(0)  # Số lượng điểm (số hàng)
+        if n < 2:
+            return 0, []  # Không thể tính toán nếu có ít hơn 2 điểm
+
+        distances = []  # Danh sách lưu các khoảng cách nearest neighbor
+        visited = set()  # Tập hợp các điểm đã được chọn
+        path = []  # Lưu thứ tự các điểm đã duyệt
+        current_index = 0  # Điểm bắt đầu (chọn ngẫu nhiên hoặc mặc định)
+        visited.add(current_index)  # Đánh dấu điểm bắt đầu
+        path.append(current_index)  # Thêm điểm bắt đầu vào path
+
+        while len(visited) < n:  # Lặp cho đến khi tất cả các điểm được chọn
+            current_point = points[current_index]  # Điểm hiện tại
+            remaining_indices = [i for i in range(n) if i not in visited]  # Chỉ số các điểm chưa chọn
+            remaining_points = points[remaining_indices]  # Các điểm chưa chọn
+
+            # Tính khoảng cách từ current_point đến các điểm còn lại
+            dists = torch.norm(remaining_points - current_point, dim=1)
+            nearest_neighbor_index = remaining_indices[torch.argmin(dists).item()]  # Chỉ số của nearest neighbor
+
+            # Thêm khoảng cách nhỏ nhất vào danh sách
+            distances.append(dists.min().item())
+
+            # Cập nhật current_index và visited
+            current_index = nearest_neighbor_index
+            visited.add(current_index)
+            path.append(current_index)
+
+        return np.median(distances), path
 
     def test(self):
         """
@@ -616,40 +791,6 @@ class FOLD(BackdoorDefense):
             images_to_display.clear()
             predictions_to_display.clear()
 
-        print('DEBUG')
-
-        def print_loader_info(loader, name):
-            print(f"{name} loader info:")
-            print(f"Total samples: {len(loader.dataset)}")
-            for batch in loader:
-                inputs, labels = batch
-                print(f"Batch - Inputs shape: {inputs.shape}, Labels shape: {labels.shape}")
-                print(f"Sample labels: {labels[:5]}")
-                for i in range(3):
-                    img = inputs[i].squeeze().cpu().numpy()
-                    plt.imshow(img.transpose(1, 2, 0) if img.ndim == 3 else img, cmap="gray")
-                    plt.title(f"{name} - Label: {labels[i]}")
-                    plt.axis("off")
-                    sample_path = os.path.join(self.save_dir, f"{name}_sample_{i}.png")
-                    plt.savefig(sample_path, dpi=300)
-                    plt.show()
-                break
-
-        print_loader_info(self.poison_loader, "Poison")
-        print_loader_info(self.clean_loader, "Clean")
-        print_loader_info(self.defense_loader, "Defense")
-
-        try:
-            for images, labels in self.defense_loader:
-                print(f"Images shape: {images.shape}, Labels shape: {labels.shape}")
-                break
-        except Exception as e:
-            print(f"Error loading data from defense_loader: {e}")
-
-        print(f"Using device: {self.device}")
-        print(f"Model is on device: {next(self.model.parameters()).device}")
-
-        print('DEBUG')
         print('STEP 4')
 
         self.h_defense_ori_labels, self.h_defense_activations, self.h_defense_preds = self.fetch_activation(
@@ -658,27 +799,6 @@ class FOLD(BackdoorDefense):
             self.poison_loader)
         self.h_clean_ori_labels, self.h_clean_activations, self.h_clean_preds = self.fetch_activation(
             self.clean_loader)
-
-        print('DEBUG')
-
-        print(f"Poison Original Labels: {self.h_poison_ori_labels.shape}")
-        print(f"Poison Predictions: {self.h_poison_preds.shape}")
-        print(f"Number of Poison Activations Layers: {len(self.h_poison_activations)}")
-        for layer, activation in self.h_poison_activations.items():
-            print(f"Layer: {layer}, Activation Shape: {activation.shape}")
-
-        print(f"Clean Original Labels: {self.h_clean_ori_labels.shape}")
-        print(f"Clean Predictions: {self.h_clean_preds.shape}")
-        print(f"Number of Clean Activations Layers: {len(self.h_clean_activations)}")
-        for layer, activation in self.h_clean_activations.items():
-            print(f"Layer: {layer}, Activation Shape: {activation.shape}")
-
-        print(f"Defense Original Labels: {self.h_defense_ori_labels.shape}")
-        print(f"Defense Predictions: {self.h_defense_preds.shape}")
-        print(f"Number of Defense Activations Layers: {len(self.h_defense_activations)}")
-        for layer, activation in self.h_defense_activations.items():
-            print(f"Layer: {layer}, Activation Shape: {activation.shape}")
-        print('DEBUG')
 
         print('STEP 5')
         accuracy_defense = self.calculate_accuracy(self.h_defense_ori_labels, self.h_defense_preds)
@@ -704,7 +824,7 @@ class FOLD(BackdoorDefense):
                 )
                 topo_rep_array = np.array(self.topological_representation[layer][label])
                 print(f"Topological Representation Label [{label}] & layer [{layer}]: {topo_rep_array}")
-                print(f"Mean: {np.mean(topo_rep_array)}\n")
+                print(f"Mean: {np.mean(topo_rep_array, axis=0)}\n")
 
         for layer_ in self.h_poison_activations:
             self.topological_representation = self.getLayerRegionDistance(
@@ -719,7 +839,7 @@ class FOLD(BackdoorDefense):
             topo_rep_array_poison = np.array(self.topological_representation[layer_][self.POISON_TEMP_LABEL])
             print(
                 f"Topological Representation Label [{self.POISON_TEMP_LABEL}] & layer [{layer_}]: {topo_rep_array_poison}")
-            print(f"Mean: {np.mean(topo_rep_array_poison)}\n")
+            print(f"Mean: {np.mean(topo_rep_array_poison, axis=0)}\n")
 
         for layer_ in self.h_clean_activations:
             self.topological_representation = self.getLayerRegionDistance(
@@ -734,21 +854,30 @@ class FOLD(BackdoorDefense):
             topo_rep_array_clean = np.array(self.topological_representation[layer_][self.CLEAN_TEMP_LABEL])
             print(
                 f"Topological Representation Label [{self.CLEAN_TEMP_LABEL}] - layer [{layer_}]: {topo_rep_array_clean}")
-            print(f"Mean: {np.mean(topo_rep_array_clean)}\n")
+            print(f"Mean: {np.mean(topo_rep_array_clean, axis=0)}\n")
 
         print('STEP 8')
 
         def aggregate_by_all_layers(output_label):
+            """
+            Tổng hợp tất cả các lớp (layers) và xử lý các phần tử trong `numpy array`
+            với số lượng phần tử không cố định.
+            """
             inputs_container = []
             first_key = list(self.topological_representation.keys())[0]
             labels_container = np.repeat(output_label,
                                          len(self.topological_representation[first_key][output_label]))
-            for l in self.topological_representation.keys():
-                temp = []
-                for j in range(len(self.topological_representation[l][output_label])):
-                    temp.append(self.topological_representation[l][output_label][j])
-                if temp:
-                    inputs_container.append(np.array(temp))
+
+            num_elements = self.topological_representation[first_key][output_label][self.target].size
+
+            for element_index in range(num_elements):
+                for l in self.topological_representation.keys():
+                    temp = []
+                    for j in range(len(self.topological_representation[l][output_label])):  # Duyệt qua từng sample
+                        if element_index < len(self.topological_representation[l][output_label][j]):
+                            temp.append(self.topological_representation[l][output_label][j][element_index])
+                    if temp:
+                        inputs_container.append(np.array(temp))
             return np.array(inputs_container).T, np.array(labels_container)
 
         inputs_all_benign = []
@@ -758,6 +887,9 @@ class FOLD(BackdoorDefense):
 
         first_key = list(self.topological_representation.keys())[0]
         class_name = list(self.topological_representation[first_key])
+
+        # print(f'first_key: {first_key}')
+        # print(f'class_name: {class_name}')
 
         for inx in class_name:
             inputs, labels = aggregate_by_all_layers(output_label=inx)
@@ -776,9 +908,9 @@ class FOLD(BackdoorDefense):
 
         print('STEP 9')
         # ============ ÁP DỤNG SCALING TRƯỚC PCA ============
-        scaler = StandardScaler()
-        inputs_all_benign = scaler.fit_transform(inputs_all_benign)
-        inputs_all_unknown = scaler.transform(inputs_all_unknown)
+        # scaler = StandardScaler()
+        # inputs_all_benign = scaler.fit_transform(inputs_all_benign)
+        # inputs_all_unknown = scaler.transform(inputs_all_unknown)
 
         # Sau khi scale xong mới đưa vào PCA
         pca_t = sklearn_PCA(n_components=2)
@@ -839,4 +971,3 @@ class FOLD(BackdoorDefense):
         for h in self.hook_handles:
             h.remove()
         torch.cuda.empty_cache()
-
