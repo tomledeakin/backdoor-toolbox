@@ -24,10 +24,12 @@ from torchmetrics.functional import pairwise_euclidean_distance
 import plotly.express as px
 import config
 from utils import supervisor, tools
+from utils.resnet import ResNet18
 from utils.supervisor import get_transforms
 from other_defenses_tool_box.tools import generate_dataloader
 from other_defenses_tool_box.backdoor_defense import BackdoorDefense
 from sklearn.preprocessing import StandardScaler
+from networks.models import Generator, NetC_MNIST
 
 # ------------------------------
 # Seed settings for reproducibility
@@ -54,14 +56,35 @@ class FOLD(BackdoorDefense):
         super().__init__(args)  # Calls the constructor of the parent class, BackdoorDefense
         self.args = args
 
-        # 1) Model Configuration
-        self.model.eval()
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.model.to(self.device)
-
         # 2) Define the backdoor target class
         self.target = self.target_class
         print(f'Target Class: {self.target}')
+
+        if self.poison_type == 'SSDT':
+            # Tạo model
+            self.model = self.load_model()
+            state_dict = self.load_model_state()
+            self.model = self.load_state(self.model, state_dict["netC"])
+
+            print(self.model)
+
+            # Tạo netG và netM
+            self.netG = Generator(self.args)
+            self.netG = self.load_state(self.netG, state_dict["netG"])
+
+            self.netM = Generator(self.args, out_channels=1)
+            self.netM = self.load_state(self.netM, state_dict["netM"])
+
+        else:
+            # 1) Model Configuration
+            self.model.eval()
+            self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+            self.model.to(self.device)
+
+        print(self.poison_type)
+        # # 2) Define the backdoor target class
+        # self.target = self.target_class
+        # print(f'Target Class: {self.target}')
 
         # 3) Create train_loader to scan the training set
         self.train_loader = generate_dataloader(
@@ -86,8 +109,9 @@ class FOLD(BackdoorDefense):
         print(f"Number of unique classes from args: {self.num_classes}")
 
         # 5) Defense training size (for example)
-        self.SAMPLES_PER_CLASS = 15
-        self.NUM_NEIGHBORS = 1
+        self.LAYER_RATIO = 0.3
+        self.NUM_LAYERS = 1
+        self.SAMPLES_PER_CLASS = 10
         self.DEFENSE_TRAIN_SIZE = self.num_classes * self.SAMPLES_PER_CLASS
 
         # 6) Create a test_loader
@@ -105,8 +129,9 @@ class FOLD(BackdoorDefense):
 
         # 7) Define NUM_SAMPLES: we take 500 for clean + 500 for poison => total 1000
         self.DATA_RATIO = 0.1
+        self.NUM_NEIGHBORS = 1
         # self.NUM_SAMPLES = 500
-        self.NUM_SAMPLES = int(len(self.testset)*self.DATA_RATIO)
+        self.NUM_SAMPLES = int(self.DATA_RATIO * len(self.testset))
 
         # 8) Create defense_loader with self.SAMPLES_PER_CLASS per class, ensuring correct predictions
         trainset = self.train_loader.dataset
@@ -136,7 +161,7 @@ class FOLD(BackdoorDefense):
         train_loader_no_shuffle = data.DataLoader(
             trainset,
             batch_size=50,
-            num_workers=2,
+            num_workers=0,
             shuffle=False
         )
 
@@ -193,7 +218,7 @@ class FOLD(BackdoorDefense):
         self.defense_loader = data.DataLoader(
             defense_subset,
             batch_size=50,
-            num_workers=2,
+            num_workers=0,
             shuffle=True
         )
 
@@ -235,7 +260,7 @@ class FOLD(BackdoorDefense):
         self.defense_loader = data.DataLoader(
             defense_subset,
             batch_size=50,
-            num_workers=2,
+            num_workers=0,
             shuffle=True
         )
 
@@ -278,6 +303,41 @@ class FOLD(BackdoorDefense):
     # ==============================
     #     HELPER FUNCTIONS
     # ==============================
+    def load_model(self):
+        """
+        Hàm tạo model theo dataset
+        """
+        # if self.opt.dataset == "mnist":
+        #     return NetC_MNIST().to(self.opt.device)
+        if self.dataset == "cifar10":
+            return ResNet18().to(self.device)
+        elif self.dataset == "gtsrb":
+            return ResNet18(num_classes=43).to(self.device)
+        # elif self.opt.dataset == "imagenet":
+        #     return VGG('VGG16').to(self.opt.device)
+        # elif self.opt.dataset == "pubfig":
+        #     return VGG('VGG16-pubfig').to(self.opt.device)
+        else:
+            raise ValueError(f"Unknown dataset: {self.dataset}")
+
+    def load_model_state(self):
+        """
+        Hàm load state_dict của model
+        """
+        base_path = './checkpoints/'
+        model_path = f"{base_path}{self.dataset}/SSDT/target_{self.target}/SSDT_{self.dataset}_ckpt.pth.tar"
+        return torch.load(model_path, map_location=self.device)
+
+    def load_state(self, model, state_dict):
+        """
+        Load trọng số model
+        """
+        model.load_state_dict(state_dict)
+        model.to(self.device)
+        model.eval()
+        model.requires_grad_(False)
+        return model
+
     def register_hooks(self):
         """
         Register forward hooks for layers to extract activations.
@@ -314,40 +374,15 @@ class FOLD(BackdoorDefense):
                 )
                 index += 1
 
-    # def register_hooks(self):
-    #     """
-    #     Register forward hooks for the last 10 layers to extract activations.
-    #     """
-    #     def get_activation(name):
-    #         def hook(model, input, output):
-    #             self.activations[name] = output.detach()
-    #         return hook
-    # 
-    #     # Remove previous hooks if any
-    #     for handle in self.hook_handles:
-    #         handle.remove()
-    #     self.hook_handles = []
-    # 
-    #     # Collect all layers of interest (Conv2d, ReLU, Linear)
-    #     layers_of_interest = []
-    #     net_children = list(self.model.modules())
-    #     for child in net_children:
-    #         if isinstance(child, nn.Conv2d) and child.kernel_size != (1, 1):
-    #             layers_of_interest.append(child)
-    #         elif isinstance(child, nn.ReLU):
-    #             layers_of_interest.append(child)
-    #         elif isinstance(child, nn.Linear):
-    #             layers_of_interest.append(child)
-    # 
-    #     # Select the last 10 layers
-    #     last_10_layers = layers_of_interest[1:12]
-    # 
-    #     # Register hooks for the last 10 layers
-    #     for idx, layer in enumerate(last_10_layers):
-    #         layer_type = layer.__class__.__name__
-    #         layer_name = f"{layer_type}_{idx}"
-    #         self.hook_handles.append(layer.register_forward_hook(get_activation(layer_name)))
-    #         print(f"Registered hook for layer: {layer_name}")
+    def create_bd(self, inputs):
+        """
+        Tạo backdoor inputs
+        """
+        patterns = self.netG(inputs)
+        patterns = self.netG.normalize_pattern(patterns)
+        masks_output = self.netM.threshold(self.netM(inputs))
+        bd_inputs = inputs + (patterns - inputs) * masks_output
+        return bd_inputs
 
     def create_targets(self, targets, label):
         """
@@ -360,13 +395,17 @@ class FOLD(BackdoorDefense):
     #   CREATE POISON & CLEAN SETS
     # ==============================
     def generate_poison_clean_sets(self):
-        if self.poison_type == 'TaCT':
+        if self.poison_type == 'TaCT' or self.poison_type == 'SSDT':
+            print(self.poison_type)
 
             while self.poison_count < self.NUM_SAMPLES or self.clean_count < self.NUM_SAMPLES:
                 for batch_idx, (inputs, labels) in enumerate(self.test_loader):
                     inputs, labels = inputs.to(self.device), labels.to(self.device)
 
-                    poisoned_inputs, poisoned_labels = self.poison_transform.transform(inputs, labels)
+                    if self.poison_type == 'SSDT':
+                        poisoned_inputs = self.create_bd(inputs)
+                    else:
+                        poisoned_inputs, poisoned_labels = self.poison_transform.transform(inputs, labels)
                     preds_bd = torch.argmax(self.model(poisoned_inputs), dim=1)
 
                     # Poison
@@ -659,7 +698,7 @@ class FOLD(BackdoorDefense):
             for index, item in enumerate(self.candidate_[layer][processing_label]):
                 meadian_nnb_distance, _ = self.average_nearest_neighbor_distance(
                     self.candidate_[layer][processing_label])
-                
+
                 self.nnb_distance_dictionary[layer][processing_label] = meadian_nnb_distance
 
                 sorted_dis, sorted_indices = self.get_dis_sort(item, h_defense_activation)
@@ -670,7 +709,7 @@ class FOLD(BackdoorDefense):
                         if count == 0:
                             distance_value_index = i - 1
                             result_array = np.append(result_array, distance_value_index)
-                        distance_value = sorted_dis[i].item()/meadian_nnb_distance
+                        distance_value = sorted_dis[i].item() / meadian_nnb_distance
                         result_array = np.append(result_array, distance_value)
                         count += 1
                         if count == self.NUM_NEIGHBORS:
@@ -683,7 +722,7 @@ class FOLD(BackdoorDefense):
                                h_defense_prediction, h_defense_activation,
                                layer, layer_test_region_individual):
         """
-        Thay vì lưu 'ranking', ta lưu 'khoảng cách' đến sample cùng class trong tập defense. 
+        Thay vì lưu 'ranking', ta lưu 'khoảng cách' đến sample cùng class trong tập defense.
         """
         if layer not in layer_test_region_individual:
             layer_test_region_individual[layer] = {}
@@ -706,7 +745,7 @@ class FOLD(BackdoorDefense):
                         if count == 0:
                             distance_value_index = i
                             result_array = np.append(result_array, distance_value_index)
-                        distance_value = sorted_dis[i].item()/meadian_nnb_distance
+                        distance_value = sorted_dis[i].item() / meadian_nnb_distance
                         result_array = np.append(result_array, distance_value)
                         count += 1
                     if count == self.NUM_NEIGHBORS:

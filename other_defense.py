@@ -34,7 +34,38 @@ parser.add_argument('-seed', type=int, required=False, default=default_args.seed
 
 args = parser.parse_args()
 
-if args.trigger is None:
+if args.dataset in ["cifar10", "gtsrb"]:
+    args.input_height = 32
+    args.input_width = 32
+    args.input_channel = 3
+elif args.dataset == "mnist":
+    args.input_height = 28
+    args.input_width = 28
+    args.input_channel = 1
+elif args.dataset in ["imagenet", "pubfig"]:
+    args.input_height = 64
+    args.input_width = 64
+    args.input_channel = 3
+
+args.class_number = {
+    "cifar10": 10,
+    "gtsrb": 43,
+    "mnist": 10,
+    "imagenet": 100,
+    "pubfig": 83
+}.get(args.dataset, 10)
+
+args.defense_train_size = {
+    "cifar10": 1000,
+    "gtsrb": 1000,
+    "mnist": 1000,
+    "imagenet": (args.class_number * 100),
+    "pubfig": (args.class_number * 100)
+}.get(args.dataset, 1000)
+
+print(args.poison_type)
+
+if args.poison_type != 'SSDT' and args.trigger is None:
     args.trigger = config.trigger_default[args.dataset][args.poison_type]
 
 # tools.setup_seed(args.seed)
@@ -266,13 +297,10 @@ elif args.defense == 'FOLD':
     from other_defenses_tool_box.FOLD import FOLD
     defense = FOLD(args)
     defense.detect()
-elif args.defense == 'EXP':
-    from other_defenses_tool_box.EXP import EXP
-    defense = EXP(args)
-    defense.detect()
 else:
     raise NotImplementedError()
 
 end_time = time.perf_counter()
 print("Elapsed time: {:.2f}s".format(end_time - start_time))
+
 

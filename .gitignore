@@ -177,3 +177,8 @@ my_env/
 TED/
 Result Reproduction/
 activations_csv/
+checkpoints/
+temps/
+wandb/
+data_ted/
+

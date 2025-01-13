@@ -24,9 +24,11 @@ from torchmetrics.functional import pairwise_euclidean_distance
 import plotly.express as px
 import config
 from utils import supervisor, tools
+from utils.resnet import ResNet18
 from utils.supervisor import get_transforms
 from other_defenses_tool_box.tools import generate_dataloader
 from other_defenses_tool_box.backdoor_defense import BackdoorDefense
+from networks.models import Generator, NetC_MNIST
 
 # ------------------------------
 # Seed settings for reproducibility
@@ -41,6 +43,8 @@ torch.manual_seed(42)
 if torch.cuda.is_available():
     torch.cuda.manual_seed(42)
     torch.cuda.manual_seed_all(42)
+
+
 # ------------------------------
 
 class TED(BackdoorDefense):
@@ -51,14 +55,35 @@ class TED(BackdoorDefense):
         super().__init__(args)  # Calls the constructor of the parent class, BackdoorDefense
         self.args = args
 
-        # 1) Model Configuration
-        self.model.eval()
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.model.to(self.device)
-
         # 2) Define the backdoor target class
         self.target = self.target_class
         print(f'Target Class: {self.target}')
+
+        if self.poison_type == 'SSDT':
+            # Tạo model
+            self.model = self.load_model()
+            state_dict = self.load_model_state()
+            self.model = self.load_state(self.model, state_dict["netC"])
+
+            print(self.model)
+
+            # Tạo netG và netM
+            self.netG = Generator(self.args)
+            self.netG = self.load_state(self.netG, state_dict["netG"])
+
+            self.netM = Generator(self.args, out_channels=1)
+            self.netM = self.load_state(self.netM, state_dict["netM"])
+
+        else:
+            # 1) Model Configuration
+            self.model.eval()
+            self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+            self.model.to(self.device)
+
+        print(self.poison_type)
+        # # 2) Define the backdoor target class
+        # self.target = self.target_class
+        # print(f'Target Class: {self.target}')
 
         # 3) Create train_loader to scan the training set
         self.train_loader = generate_dataloader(
@@ -85,7 +110,7 @@ class TED(BackdoorDefense):
         # 5) Defense training size (for example)
         self.LAYER_RATIO = 0.3
         self.NUM_LAYERS = 1
-        self.SAMPLES_PER_CLASS = 15
+        self.SAMPLES_PER_CLASS = 10
         self.DEFENSE_TRAIN_SIZE = self.num_classes * self.SAMPLES_PER_CLASS
 
         # 6) Create a test_loader
@@ -134,7 +159,7 @@ class TED(BackdoorDefense):
         train_loader_no_shuffle = data.DataLoader(
             trainset,
             batch_size=50,
-            num_workers=2,
+            num_workers=0,
             shuffle=False
         )
 
@@ -191,7 +216,7 @@ class TED(BackdoorDefense):
         self.defense_loader = data.DataLoader(
             defense_subset,
             batch_size=50,
-            num_workers=2,
+            num_workers=0,
             shuffle=True
         )
 
@@ -233,7 +258,7 @@ class TED(BackdoorDefense):
         self.defense_loader = data.DataLoader(
             defense_subset,
             batch_size=50,
-            num_workers=2,
+            num_workers=0,
             shuffle=True
         )
 
@@ -276,6 +301,41 @@ class TED(BackdoorDefense):
     # ==============================
     #     HELPER FUNCTIONS
     # ==============================
+    def load_model(self):
+        """
+        Hàm tạo model theo dataset
+        """
+        # if self.opt.dataset == "mnist":
+        #     return NetC_MNIST().to(self.opt.device)
+        if self.dataset == "cifar10":
+            return ResNet18().to(self.device)
+        elif self.dataset == "gtsrb":
+            return ResNet18(num_classes=43).to(self.device)
+        # elif self.opt.dataset == "imagenet":
+        #     return VGG('VGG16').to(self.opt.device)
+        # elif self.opt.dataset == "pubfig":
+        #     return VGG('VGG16-pubfig').to(self.opt.device)
+        else:
+            raise ValueError(f"Unknown dataset: {self.dataset}")
+
+    def load_model_state(self):
+        """
+        Hàm load state_dict của model
+        """
+        base_path = './checkpoints/'
+        model_path = f"{base_path}{self.dataset}/SSDT/target_{self.target}/SSDT_{self.dataset}_ckpt.pth.tar"
+        return torch.load(model_path, map_location=self.device)
+
+    def load_state(self, model, state_dict):
+        """
+        Load trọng số model
+        """
+        model.load_state_dict(state_dict)
+        model.to(self.device)
+        model.eval()
+        model.requires_grad_(False)
+        return model
+
     def register_hooks(self):
         """
         Register forward hooks for layers to extract activations.
@@ -312,6 +372,16 @@ class TED(BackdoorDefense):
                 )
                 index += 1
 
+    def create_bd(self, inputs):
+        """
+        Tạo backdoor inputs
+        """
+        patterns = self.netG(inputs)
+        patterns = self.netG.normalize_pattern(patterns)
+        masks_output = self.netM.threshold(self.netM(inputs))
+        bd_inputs = inputs + (patterns - inputs) * masks_output
+        return bd_inputs
+
     def create_targets(self, targets, label):
         """
         Assign a new label to targets (e.g., Poison=101, Clean=102).
@@ -323,13 +393,17 @@ class TED(BackdoorDefense):
     #   CREATE POISON & CLEAN SETS
     # ==============================
     def generate_poison_clean_sets(self):
-        if self.poison_type == 'TaCT':
+        if self.poison_type == 'TaCT' or self.poison_type == 'SSDT':
+            print(self.poison_type)
 
             while self.poison_count < self.NUM_SAMPLES or self.clean_count < self.NUM_SAMPLES:
                 for batch_idx, (inputs, labels) in enumerate(self.test_loader):
                     inputs, labels = inputs.to(self.device), labels.to(self.device)
 
-                    poisoned_inputs, poisoned_labels = self.poison_transform.transform(inputs, labels)
+                    if self.poison_type == 'SSDT':
+                        poisoned_inputs = self.create_bd(inputs)
+                    else:
+                        poisoned_inputs, poisoned_labels = self.poison_transform.transform(inputs, labels)
                     preds_bd = torch.argmax(self.model(poisoned_inputs), dim=1)
 
                     # Poison
@@ -433,7 +507,7 @@ class TED(BackdoorDefense):
         print(
             f"Finished generate_poison_clean_sets. Clean_count = {self.clean_count}, Poison_count = {self.poison_count}"
         )
-    
+
     def create_poison_clean_dataloaders(self):
         """
         Build DataLoaders for both Poison and Clean sets.
@@ -465,12 +539,12 @@ class TED(BackdoorDefense):
 
         # Create poison_loader
         poison_set = CustomDataset(bd_inputs_set, bd_labels_set)
-        self.poison_loader = data.DataLoader(poison_set, batch_size=50, num_workers=2, shuffle=True)
+        self.poison_loader = data.DataLoader(poison_set, batch_size=50, num_workers=0, shuffle=True)
         print("Poison set size:", len(self.poison_loader))
 
         # Create clean_loader
         clean_set = CustomDataset(clean_inputs_set, clean_labels_set)
-        self.clean_loader = data.DataLoader(clean_set, batch_size=50, num_workers=2, shuffle=True)
+        self.clean_loader = data.DataLoader(clean_set, batch_size=50, num_workers=0, shuffle=True)
         print("Clean set size:", len(self.clean_loader))
 
         # Remove temporary variables
