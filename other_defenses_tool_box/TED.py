@@ -310,7 +310,7 @@ class TED(BackdoorDefense):
         if self.dataset == "cifar10":
             return ResNet18().to(self.device)
         elif self.dataset == "gtsrb":
-            return ResNet18(num_classes=43).to(self.device)
+            return ResNet34(num_classes=43).to(self.device)
         # elif self.opt.dataset == "imagenet":
         #     return VGG('VGG16').to(self.opt.device)
         # elif self.opt.dataset == "pubfig":
