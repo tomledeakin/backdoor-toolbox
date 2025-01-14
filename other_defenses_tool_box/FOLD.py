@@ -24,7 +24,7 @@ from torchmetrics.functional import pairwise_euclidean_distance
 import plotly.express as px
 import config
 from utils import supervisor, tools
-from utils.resnet import ResNet18
+from utils.resnet import ResNet18, ResNet34
 from utils.supervisor import get_transforms
 from other_defenses_tool_box.tools import generate_dataloader
 from other_defenses_tool_box.backdoor_defense import BackdoorDefense
