@@ -6,7 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torchvision
 # from classifier_models import PreActResNet18, ResNet18, PreActResNet34, VGG
-from utils.resnet import ResNet18
+from utils.resnet import ResNet18, ResNet34
 from attack_dataloader import get_dataloader
 from networks.models import Generator, NetC_MNIST
 from torch.utils.tensorboard import SummaryWriter
@@ -455,8 +455,8 @@ def train(opt):
         netC = ResNet18().to(opt.device)
     elif opt.dataset == "gtsrb":
         netC = ResNet18(num_classes=43).to(opt.device)
-    # elif opt.dataset == "mnist":
-    #     netC = NetC_MNIST().to(opt.device)
+    elif opt.dataset == "mnist":
+        netC = ResNet18().to(opt.device)
     # elif opt.dataset == "imagenet":
     #     netC = VGG("VGG16").to(opt.device)
     else:
@@ -609,11 +609,24 @@ def main(k):
     else:
         raise Exception("Invalid Dataset")
 
-    opt.target_label = k
-    if k == opt.num_classes - 1:
-        opt.victim_label = 0
-    else:
-        opt.victim_label = k + 1
+    # opt.target_label = k
+    # if k == opt.num_classes - 1:
+    #     opt.victim_label = 0
+    # else:
+    #     opt.victim_label = k + 1
+
+    target_class = {
+        'cifar10': 0,
+        'gtsrb': 2,  # hoặc 12 nếu sử dụng BadEncoder
+        'imagenette': 0,
+        'imagenet': 0,
+        'mnist': 0
+    }
+
+    source_class = 1
+
+    opt.target_label = target_class[opt.dataset]
+    opt.victim_label = source_class
 
     if opt.dataset == "cifar10":
         opt.input_height = 32
@@ -658,4 +671,8 @@ if __name__ == "__main__":
                     wandb.finish()
                 else:
                     break
+
+
+
+
 

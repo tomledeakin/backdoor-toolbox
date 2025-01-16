@@ -129,7 +129,7 @@ class IBD_PSC(BackdoorDefense):
 
             # Depending on poison_type, determine correct counting method
             if self.args.poison_type == 'TaCT':
-                mask = torch.eq(labels, config.source_class)
+                mask = torch.eq(labels[target_flag], config.source_class)
                 plabels = poison_labels[mask.clone()]
                 ppred = poison_pred[mask.clone()]
                 bd_correct += torch.sum(plabels == ppred)
@@ -195,7 +195,8 @@ class IBD_PSC(BackdoorDefense):
         # If no break condition met, return full length
         return layer_num
 
-    def test(self, inspect_correct_predition_only=False):
+    def test(self, inspect_correct_predition_only=True):
+        print(f'inspect_correct_predition_only: {inspect_correct_predition_only}')
         # This method calculates PSC scores and evaluates detection performance
         args = self.args
         print(f'start_index: {self.start_index}')
@@ -290,6 +291,7 @@ class IBD_PSC(BackdoorDefense):
         print(f"f1 score: {myf1:.4f}")
 
         if inspect_correct_predition_only:
+            print(f'inspect_correct_predition_only: {inspect_correct_predition_only}')
             # Only consider correct-clean and successfully attacked-poison samples
             clean_pred_correct_mask = []
             poison_source_mask = []
@@ -328,6 +330,7 @@ class IBD_PSC(BackdoorDefense):
                 clean_pred_correct_mask[torch.sum(poison_attack_success_mask).item():] = False
 
             mask = torch.cat((clean_pred_correct_mask, poison_attack_success_mask), dim=0)
+            mask = mask.cpu()  # Đảm bảo mask ở CPU
             y_true = y_true[mask]
             y_pred = y_pred[mask]
             y_score = y_score[mask]

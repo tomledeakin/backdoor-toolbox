@@ -65,6 +65,11 @@ args.defense_train_size = {
 
 print(args.poison_type)
 
+# if args.poison_type == 'SSDT':
+args.data_root = "./data_ted/"
+args.bs = 50
+args.num_workers = 2
+
 if args.poison_type != 'SSDT' and args.trigger is None:
     args.trigger = config.trigger_default[args.dataset][args.poison_type]
 

@@ -3,6 +3,8 @@ from utils import supervisor
 import torch
 from torchvision import datasets, transforms
 from PIL import Image
+from networks.models import Generator, NetC_MNIST
+from utils.resnet import ResNet18, ResNet34
 
 class BackdoorDefense():
     def __init__(self, args):
@@ -94,38 +96,82 @@ class BackdoorDefense():
 
         self.poison_set_dir = supervisor.get_poison_set_dir(args)
 
-        # Xác định đường dẫn model dựa trên loại độc hại
-        if args.poison_type == 'SSDT':
-            # Sử dụng dấu gạch chéo xuôi để tránh lỗi escape characters
-            model_path = 'checkpoints/cifar10/SSDT/target_0/SSDT_cifar10_ckpt.pth.tar'
+        # Xác định và tải mô hình
+        if self.poison_type == 'SSDT':
+            print(f"Loading SSDT model for dataset '{self.dataset}' targeting '{self.target_class}'...")
+            # Tạo model và tải trạng thái SSDT
+            self.model = self.load_model()
+            state_dict = self.load_model_state()
+            self.model = self.load_state(self.model, state_dict["netC"])
+            print("SSDT model loaded successfully:")
+            print(self.model)
+
+            # Tạo và tải trọng số cho netG
+            self.netG = Generator(args)
+            self.netG = self.load_state(self.netG, state_dict["netG"])
+
+            # Tạo và tải trọng số cho netM
+            self.netM = Generator(args, out_channels=1)
+            self.netM = self.load_state(self.netM, state_dict["netM"])
         else:
-            model_path = supervisor.get_model_dir(args)
-
-        arch = supervisor.get_arch(args)
-        self.model = arch(num_classes=self.num_classes)
-
-        if os.path.exists(model_path):
-            print(f"Loading model '{model_path}'...")
-            # Tải checkpoint với thiết bị tương ứng
-            checkpoint = torch.load(model_path, map_location=self.device)
-
-            if args.poison_type == 'SSDT':
-                # Kiểm tra xem checkpoint có chứa key 'netC' hay không
-                if 'netC' in checkpoint:
-                    self.model.load_state_dict(checkpoint['netC'], strict=False)
-                    print("SSDT model loaded successfully using 'netC' weights.")
-                else:
-                    print("Warning: SSDT checkpoint does not contain 'netC'. Attempting full load.")
-                    self.model.load_state_dict(checkpoint, strict=False)
+            # Đối với các poison_type khác, sử dụng logic tải mô hình hiện tại
+            if self.poison_type == 'SSDT':
+                model_path = f'checkpoints/{args.dataset}/SSDT/target_{config.target_class[args.dataset]}/SSDT_{args.dataset}_ckpt.pth.tar'
             else:
-                self.model.load_state_dict(checkpoint)
+                model_path = supervisor.get_model_dir(args)
 
-            print("Model loaded.")
-        else:
-            print(f"Model '{model_path}' not found.")
+            arch = supervisor.get_arch(args)
+            self.model = arch(num_classes=self.num_classes)
+
+            if os.path.exists(model_path):
+                print(f"Loading model '{model_path}'...")
+                checkpoint = torch.load(model_path, map_location=self.device)
+                if args.poison_type == 'SSDT':
+                    if 'netC' in checkpoint:
+                        self.model.load_state_dict(checkpoint['netC'], strict=False)
+                        print("SSDT model loaded successfully using 'netC' weights.")
+                    else:
+                        print("Warning: SSDT checkpoint does not contain 'netC'. Attempting full load.")
+                        self.model.load_state_dict(checkpoint, strict=False)
+                else:
+                    self.model.load_state_dict(checkpoint)
+                print("Model loaded.")
+            else:
+                print(f"Model '{model_path}' not found.")
 
         self.model = torch.nn.DataParallel(self.model)
         self.model = self.model.cuda()
         self.model.eval()
 
+    def load_model(self):
+        """
+        Hàm tạo model theo dataset
+        """
+        if self.dataset == "cifar10":
+            return ResNet18().to(self.device)
+        elif self.dataset == "gtsrb":
+            return ResNet18(num_classes=43).to(self.device)
+        else:
+            raise ValueError(f"Unknown dataset: {self.dataset}")
+
+    def load_model_state(self):
+        """
+        Hàm load state_dict của model
+        """
+        base_path = './checkpoints/'
+        model_path = f"{base_path}{self.dataset}/SSDT/target_{self.target_class}/SSDT_{self.dataset}_ckpt.pth.tar"
+        return torch.load(model_path, map_location=self.device)
+
+    def load_state(self, model, state_dict):
+        """
+        Load trọng số model
+        """
+        model.load_state_dict(state_dict, strict=False)
+        model.to(self.device)
+        model.eval()
+        model.requires_grad_(False)
+        return model
+
         
+
+

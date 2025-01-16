@@ -1,6 +1,7 @@
 # This is the test code of TED defense.
 # Robust Backdoor Detection for Deep Learning via Topological Evolution Dynamics [IEEE, 2024] (https://arxiv.org/abs/2312.02673)
 
+from torchvision.utils import save_image
 import os
 import random
 from collections import Counter, defaultdict
@@ -24,11 +25,12 @@ from torchmetrics.functional import pairwise_euclidean_distance
 import plotly.express as px
 import config
 from utils import supervisor, tools
-from utils.resnet import ResNet18
+from utils.resnet import ResNet18, ResNet34
 from utils.supervisor import get_transforms
 from other_defenses_tool_box.tools import generate_dataloader
 from other_defenses_tool_box.backdoor_defense import BackdoorDefense
 from networks.models import Generator, NetC_MNIST
+from defense_dataloader import get_dataset, get_dataloader
 
 # ------------------------------
 # Seed settings for reproducibility
@@ -55,48 +57,34 @@ class TED(BackdoorDefense):
         super().__init__(args)  # Calls the constructor of the parent class, BackdoorDefense
         self.args = args
 
+
+        # 1) Model Configuration
+        self.model.eval()
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.model.to(self.device)
+
+        print(self.poison_type)
+
         # 2) Define the backdoor target class
         self.target = self.target_class
         print(f'Target Class: {self.target}')
 
-        if self.poison_type == 'SSDT':
-            # Tạo model
-            self.model = self.load_model()
-            state_dict = self.load_model_state()
-            self.model = self.load_state(self.model, state_dict["netC"])
-
-            print(self.model)
-
-            # Tạo netG và netM
-            self.netG = Generator(self.args)
-            self.netG = self.load_state(self.netG, state_dict["netG"])
-
-            self.netM = Generator(self.args, out_channels=1)
-            self.netM = self.load_state(self.netM, state_dict["netM"])
-
-        else:
-            # 1) Model Configuration
-            self.model.eval()
-            self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-            self.model.to(self.device)
-
-        print(self.poison_type)
-        # # 2) Define the backdoor target class
-        # self.target = self.target_class
-        # print(f'Target Class: {self.target}')
-
         # 3) Create train_loader to scan the training set
-        self.train_loader = generate_dataloader(
-            dataset=self.dataset,
-            dataset_path=config.data_dir,
-            batch_size=50,
-            split='train',
-            data_transform=self.data_transform,
-            shuffle=True,
-            drop_last=False,
-            noisy_test=False
-        )
+        if self.poison_type == 'SSDT':
+            self.train_loader = get_dataloader(args, train=True)
+        else:
+            self.train_loader = generate_dataloader(
+                dataset=self.dataset,
+                dataset_path=config.data_dir,
+                batch_size=50,
+                split='train',
+                data_transform=self.data_transform,
+                shuffle=True,
+                drop_last=False,
+                noisy_test=False
+            )
 
+        print(f'Number samples of train set: {len(self.train_loader.dataset)}')
         # 4) Determine unique classes by scanning the training set
         all_labels = []
         for _, labels in self.train_loader:
@@ -110,24 +98,30 @@ class TED(BackdoorDefense):
         # 5) Defense training size (for example)
         self.LAYER_RATIO = 0.3
         self.NUM_LAYERS = 1
-        self.SAMPLES_PER_CLASS = 10
+        self.SAMPLES_PER_CLASS = 20
         self.DEFENSE_TRAIN_SIZE = self.num_classes * self.SAMPLES_PER_CLASS
 
         # 6) Create a test_loader
-        self.test_loader = generate_dataloader(
-            dataset=self.dataset,
-            dataset_path=config.data_dir,
-            batch_size=50,
-            split='test',
-            data_transform=self.data_transform,
-            shuffle=False,
-            drop_last=False,
-            noisy_test=False
-        )
-        self.testset = self.test_loader.dataset
+        if self.poison_type == 'SSDT':
+            self.test_loader = get_dataloader(args, train=False)
+            self.testset = get_dataset(args, train=False)
+        else:
+            self.test_loader = generate_dataloader(
+                dataset=self.dataset,
+                dataset_path=config.data_dir,
+                batch_size=50,
+                split='test',
+                data_transform=self.data_transform,
+                shuffle=False,
+                drop_last=False,
+                noisy_test=False
+            )
+            self.testset = self.test_loader.dataset
+
+        print(f'Number samples of test set: {len(self.testset)}')
 
         # 7) Define NUM_SAMPLES: we take 500 for clean + 500 for poison => total 1000
-        self.DATA_RATIO = 0.1
+        self.DATA_RATIO = 0.005
         # self.NUM_SAMPLES = 500
         self.NUM_SAMPLES = int(self.DATA_RATIO * len(self.testset))
 
@@ -191,9 +185,6 @@ class TED(BackdoorDefense):
 
         # For each class, sample self.SAMPLES_PER_CLASS correctly predicted samples
         for label in unique_classes:
-            if self.poison_type == "TaCT" and label == config.source_class:
-                print(f"Skipping source class {label} for defense set since poison_type is TaCT.")
-                continue
 
             correct_indices = correct_indices_per_class[label]
             num_correct = len(correct_indices)
@@ -301,41 +292,6 @@ class TED(BackdoorDefense):
     # ==============================
     #     HELPER FUNCTIONS
     # ==============================
-    def load_model(self):
-        """
-        Hàm tạo model theo dataset
-        """
-        # if self.opt.dataset == "mnist":
-        #     return NetC_MNIST().to(self.opt.device)
-        if self.dataset == "cifar10":
-            return ResNet18().to(self.device)
-        elif self.dataset == "gtsrb":
-            return ResNet18(num_classes=43).to(self.device)
-        # elif self.opt.dataset == "imagenet":
-        #     return VGG('VGG16').to(self.opt.device)
-        # elif self.opt.dataset == "pubfig":
-        #     return VGG('VGG16-pubfig').to(self.opt.device)
-        else:
-            raise ValueError(f"Unknown dataset: {self.dataset}")
-
-    def load_model_state(self):
-        """
-        Hàm load state_dict của model
-        """
-        base_path = './checkpoints/'
-        model_path = f"{base_path}{self.dataset}/SSDT/target_{self.target}/SSDT_{self.dataset}_ckpt.pth.tar"
-        return torch.load(model_path, map_location=self.device)
-
-    def load_state(self, model, state_dict):
-        """
-        Load trọng số model
-        """
-        model.load_state_dict(state_dict)
-        model.to(self.device)
-        model.eval()
-        model.requires_grad_(False)
-        return model
-
     def register_hooks(self):
         """
         Register forward hooks for layers to extract activations.
@@ -400,46 +356,80 @@ class TED(BackdoorDefense):
                 for batch_idx, (inputs, labels) in enumerate(self.test_loader):
                     inputs, labels = inputs.to(self.device), labels.to(self.device)
 
-                    if self.poison_type == 'SSDT':
-                        poisoned_inputs = self.create_bd(inputs)
-                    else:
-                        poisoned_inputs, poisoned_labels = self.poison_transform.transform(inputs, labels)
-                    preds_bd = torch.argmax(self.model(poisoned_inputs), dim=1)
-
-                    # Poison
+                    # ---------------------------------------------------------
+                    # 1) Tạo POISON (chỉ áp dụng trigger cho victim_indices)
+                    # ---------------------------------------------------------
                     if self.poison_count < self.NUM_SAMPLES:
-                        label_value = self.label_mapping[self.POISON_TEMP_LABEL]  # 101
-                        targets_poison = self.create_targets(labels, label_value)
-
                         victim_indices = (labels == config.source_class)
-                        correct_preds_indices = (preds_bd == self.target)
-                        final_indices = victim_indices & correct_preds_indices
+                        if victim_indices.sum().item() > 0:
+                            # Tách victim_inputs và victim_labels
+                            victim_inputs = inputs[victim_indices]
+                            victim_labels = labels[victim_indices]
 
-                        if final_indices.sum().item() > 0:
-                            self.temp_poison_inputs_set.append(poisoned_inputs[final_indices].cpu())
-                            self.temp_poison_labels_set.append(targets_poison[final_indices].cpu())
-                            self.temp_poison_pred_set.append(preds_bd[final_indices].cpu())
-                            self.poison_count += final_indices.sum().item()
+                            # Tạo trigger
+                            if self.poison_type == 'SSDT':
+                                bd_inputs = self.create_bd(victim_inputs)  # Tạo backdoor
+                            else:
+                                bd_inputs, _ = self.poison_transform.transform(
+                                    victim_inputs, victim_labels
+                                )
 
-                    # Clean
+                            # Dự đoán
+                            preds_bd = torch.argmax(self.model(bd_inputs), dim=1)
+
+                            # Kiểm tra mẫu nào predict == self.target
+                            correct_pred_indices = (preds_bd == self.target)
+                            if correct_pred_indices.sum().item() > 0:
+                                final_poison = bd_inputs[correct_pred_indices]
+                                # Tạo label tạm "Poison"=101
+                                label_value = self.label_mapping[self.POISON_TEMP_LABEL]
+                                final_poison_targets = self.create_targets(
+                                    victim_labels[correct_pred_indices],
+                                    label_value
+                                )
+                                final_poison_preds = preds_bd[correct_pred_indices]
+
+                                # Thêm vào list
+                                self.temp_poison_inputs_set.append(final_poison.cpu())
+                                self.temp_poison_labels_set.append(final_poison_targets.cpu())
+                                self.temp_poison_pred_set.append(final_poison_preds.cpu())
+
+                                self.poison_count += final_poison.shape[0]
+
+                    # ---------------------------------------------------------
+                    # 2) Tạo CLEAN (các mẫu không phải victim class)
+                    # ---------------------------------------------------------
                     if self.clean_count < self.NUM_SAMPLES:
-                        label_value = self.label_mapping[self.CLEAN_TEMP_LABEL]  # Ví dụ: 102
-                        targets_clean = self.create_targets(labels, label_value)
-
                         non_victim_indices = (labels != config.source_class)
-
                         if non_victim_indices.sum().item() > 0:
-                            self.temp_clean_inputs_set.append(poisoned_inputs[non_victim_indices].cpu())
-                            self.temp_clean_labels_set.append(targets_clean[non_victim_indices].cpu())
-                            self.temp_clean_pred_set.append(preds_bd[non_victim_indices].cpu())
-                            self.clean_count += non_victim_indices.sum().item()
+                            clean_inputs = inputs[non_victim_indices]
+                            clean_labels_ori = labels[non_victim_indices]
 
+                            # Dùng ảnh gốc => KHÔNG gắn trigger
+                            preds_clean = torch.argmax(self.model(clean_inputs), dim=1)
+
+                            # Tạo label tạm "Clean"=102
+                            label_value = self.label_mapping[self.CLEAN_TEMP_LABEL]
+                            clean_targets = self.create_targets(
+                                clean_labels_ori, label_value
+                            )
+
+                            self.temp_clean_inputs_set.append(clean_inputs.cpu())
+                            self.temp_clean_labels_set.append(clean_targets.cpu())
+                            self.temp_clean_pred_set.append(preds_clean.cpu())
+
+                            self.clean_count += clean_inputs.shape[0]
+
+                    # ---------------------------------------------------------
+                    # 3) Kiểm tra đã đủ số lượng chưa
+                    # ---------------------------------------------------------
                     if self.poison_count >= self.NUM_SAMPLES and self.clean_count >= self.NUM_SAMPLES:
                         break
 
                 if self.poison_count >= self.NUM_SAMPLES and self.clean_count >= self.NUM_SAMPLES:
                     break
 
+            # Giới hạn lại nếu thừa
             if self.poison_count > self.NUM_SAMPLES:
                 combined_inputs = torch.cat(self.temp_poison_inputs_set, dim=0)[:self.NUM_SAMPLES]
                 combined_labels = torch.cat(self.temp_poison_labels_set, dim=0)[:self.NUM_SAMPLES]
@@ -457,10 +447,10 @@ class TED(BackdoorDefense):
                 self.temp_clean_labels_set = [combined_labels]
                 self.temp_clean_pred_set = [combined_preds]
                 self.clean_count = self.NUM_SAMPLES
+
         else:
             """
-            Use self.NUM_SAMPLES to pick a fixed number of samples from the test set. 
-            We generate 500 clean samples and then transform the same set into 500 poisoned samples.
+            Sử dụng cùng một subset test để tạo ra Clean set và Poison set (VD: 500 mẫu).
             """
             all_indices = np.arange(len(self.testset))
             if len(all_indices) < self.NUM_SAMPLES:
@@ -475,7 +465,7 @@ class TED(BackdoorDefense):
             poison_subset = data.Subset(self.testset, chosen)
             poison_loader = data.DataLoader(poison_subset, batch_size=50, shuffle=False)
 
-            # Create CLEAN set
+            # Tạo CLEAN set
             for (inputs, labels) in clean_loader:
                 inputs, labels = inputs.to(self.device), labels.to(self.device)
                 label_value = self.label_mapping[self.CLEAN_TEMP_LABEL]
@@ -488,10 +478,9 @@ class TED(BackdoorDefense):
 
                 self.clean_count += labels.size(0)
 
-            # Create POISON set from the same subset
+            # Tạo POISON set từ cùng subset
             for (inputs, labels) in poison_loader:
                 inputs, labels = inputs.to(self.device), labels.to(self.device)
-
                 poisoned_inputs, poisoned_labels = self.poison_transform.transform(inputs, labels)
                 preds_bd = torch.argmax(self.model(poisoned_inputs), dim=1)
 
@@ -503,6 +492,40 @@ class TED(BackdoorDefense):
                 self.temp_poison_pred_set.append(preds_bd.cpu())
 
                 self.poison_count += labels.size(0)
+
+        ############################################
+        # TÍCH HỢP ĐOẠN CODE LƯU ẢNH (POISON/CLEAN)
+        ############################################
+        # Tạo thư mục lưu
+        poison_save_dir = os.path.join(self.save_dir, "poison_images")
+        clean_save_dir = os.path.join(self.save_dir, "clean_images")
+        os.makedirs(poison_save_dir, exist_ok=True)
+        os.makedirs(clean_save_dir, exist_ok=True)
+
+        # Gom các tensor lại
+        poison_images = torch.cat(self.temp_poison_inputs_set, dim=0)
+        poison_labels = torch.cat(self.temp_poison_labels_set, dim=0)
+
+        clean_images = torch.cat(self.temp_clean_inputs_set, dim=0)
+        clean_labels = torch.cat(self.temp_clean_labels_set, dim=0)
+
+        # Lưu poison
+        for idx in range(poison_images.shape[0]):
+            image_tensor = poison_images[idx]
+            label_val = int(poison_labels[idx].item())
+            # Lưu với tên file: poison_{idx}_label_{label_val}.png
+            filename = f"poison_{idx}_label_{label_val}.png"
+            save_path = os.path.join(poison_save_dir, filename)
+            save_image(image_tensor, save_path)
+
+        # Lưu clean
+        for idx in range(clean_images.shape[0]):
+            image_tensor = clean_images[idx]
+            label_val = int(clean_labels[idx].item())
+            # Lưu với tên file: clean_{idx}_label_{label_val}.png
+            filename = f"clean_{idx}_label_{label_val}.png"
+            save_path = os.path.join(clean_save_dir, filename)
+            save_image(image_tensor, save_path)
 
         print(
             f"Finished generate_poison_clean_sets. Clean_count = {self.clean_count}, Poison_count = {self.poison_count}"
@@ -976,3 +999,5 @@ class TED(BackdoorDefense):
         for h in self.hook_handles:
             h.remove()
         torch.cuda.empty_cache()
+
+
