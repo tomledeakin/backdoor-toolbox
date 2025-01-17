@@ -295,44 +295,6 @@ class FOLD(BackdoorDefense):
     # ==============================
     #     HELPER FUNCTIONS
     # ==============================
-<<<<<<< HEAD
-=======
-    def load_model(self):
-        """
-        Hàm tạo model theo dataset
-        """
-        # if self.opt.dataset == "mnist":
-        #     return NetC_MNIST().to(self.opt.device)
-        if self.dataset == "cifar10":
-            return ResNet18().to(self.device)
-        elif self.dataset == "gtsrb":
-            return ResNet34(num_classes=43).to(self.device)
-        # elif self.opt.dataset == "imagenet":
-        #     return VGG('VGG16').to(self.opt.device)
-        # elif self.opt.dataset == "pubfig":
-        #     return VGG('VGG16-pubfig').to(self.opt.device)
-        else:
-            raise ValueError(f"Unknown dataset: {self.dataset}")
-
-    def load_model_state(self):
-        """
-        Hàm load state_dict của model
-        """
-        base_path = './checkpoints/'
-        model_path = f"{base_path}{self.dataset}/SSDT/target_{self.target}/SSDT_{self.dataset}_ckpt.pth.tar"
-        return torch.load(model_path, map_location=self.device)
-
-    def load_state(self, model, state_dict):
-        """
-        Load trọng số model
-        """
-        model.load_state_dict(state_dict)
-        model.to(self.device)
-        model.eval()
-        model.requires_grad_(False)
-        return model
-
->>>>>>> ffe5d049ba93c46b0d16b839879d50bf1cfd05bc
     def register_hooks(self):
         """
         Register forward hooks for layers to extract activations.
