@@ -181,4 +181,5 @@ checkpoints/
 temps/
 wandb/
 data_ted/
+.idea
 
