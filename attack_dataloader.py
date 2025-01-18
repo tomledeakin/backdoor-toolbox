@@ -1,6 +1,5 @@
 import csv
 import os
-import config_ted
 import cv2
 import numpy as np
 import torch
