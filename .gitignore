@@ -183,9 +183,10 @@ checkpoints/
 temps/
 wandb/
 data_ted/
-assets/**/*.png
+!assets/backdoor-toolbox.gif
+assets/.dummy
+assets/resnet18_layer_visualization/
 .idea
-assets/
 clean_set/imagenet50/
 data/imagenet50.zip
 data/imagenette2.tgz
