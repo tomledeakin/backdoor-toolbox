@@ -155,7 +155,10 @@ def get_arch(args):
         from other_defenses_tool_box.none.resnet import resnet18
         return resnet18
     else:
+        if args.dataset == 'imagenet50':
+            return config.arch['imagenet50']
         return config.arch[args.dataset]
+
 
 
 def get_transforms(args):
@@ -282,7 +285,118 @@ def get_transforms(args):
                 transforms.Normalize([-0.485 / 0.229, -0.456 / 0.224, -0.406 / 0.225],
                                      [1 / 0.229, 1 / 0.224, 1 / 0.225])
             ])
+    # elif args.dataset == 'imagenette':
+    #     if args.no_normalize:
+    #         data_transform_aug = transforms.Compose([
+    #             transforms.RandomCrop(224, 4),
+    #             transforms.RandomHorizontalFlip(),
+    #             transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4),
+    #             transforms.ToTensor(),
+    #         ])
+    #         data_transform = transforms.Compose([
+    #             transforms.ToTensor(),
+    #         ])
+    #         trigger_transform = transforms.Compose([
+    #             transforms.ToTensor(),
+    #         ])
+    #         normalizer = transforms.Compose([])
+    #         denormalizer = transforms.Compose([])
+    #     else:
+    #         data_transform_aug = transforms.Compose([
+    #             transforms.RandomCrop(224, 4),
+    #             transforms.RandomHorizontalFlip(),
+    #             transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4),
+    #             transforms.ToTensor(),
+    #             transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+    #         ])
+    #         data_transform = transforms.Compose([
+    #             transforms.ToTensor(),
+    #             transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+    #         ])
+    #         trigger_transform = transforms.Compose([
+    #             transforms.ToTensor(),
+    #             transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+    #         ])
+    #         normalizer = transforms.Compose([
+    #             transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+    #         ])
+    #         denormalizer = transforms.Compose([
+    #             transforms.Normalize([-0.485 / 0.229, -0.456 / 0.224, -0.406 / 0.225],
+    #                                  [1 / 0.229, 1 / 0.224, 1 / 0.225])
+    #         ])
+
     elif args.dataset == 'imagenette':
+        if args.no_normalize:
+            data_transform_aug = transforms.Compose([
+                transforms.Resize((32, 32)),  # Resize về 32x32
+                transforms.RandomCrop(32, padding=4),
+                transforms.RandomHorizontalFlip(),
+                transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4),
+                transforms.ToTensor(),
+            ])
+            data_transform = transforms.Compose([
+                transforms.Resize((32, 32)),  # Resize về 32x32
+                transforms.ToTensor(),
+            ])
+            trigger_transform = transforms.Compose([
+                transforms.Resize((32, 32)),  # Resize về 32x32
+                transforms.ToTensor(),
+            ])
+            normalizer = transforms.Compose([])
+            denormalizer = transforms.Compose([])
+        else:
+            data_transform_aug = transforms.Compose([
+                transforms.Resize((32, 32)),  # Resize về 32x32
+                transforms.RandomCrop(32, padding=4),
+                transforms.RandomHorizontalFlip(),
+                transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4),
+                transforms.ToTensor(),
+                transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+            ])
+            data_transform = transforms.Compose([
+                transforms.Resize((32, 32)),  # Resize về 32x32
+                transforms.ToTensor(),
+                transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+            ])
+            trigger_transform = transforms.Compose([
+                transforms.Resize((32, 32)),  # Resize về 32x32
+                transforms.ToTensor(),
+                transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+            ])
+            normalizer = transforms.Compose([
+                transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+            ])
+            denormalizer = transforms.Compose([
+                transforms.Normalize([-0.485 / 0.229, -0.456 / 0.224, -0.406 / 0.225],
+                                     [1 / 0.229, 1 / 0.224, 1 / 0.225])
+            ])
+
+
+    elif args.dataset == 'imagenet':
+        data_transform_aug = transforms.Compose([
+            transforms.Resize((256, 256)),
+            transforms.ToTensor(),
+            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+            transforms.RandomResizedCrop(224),
+            transforms.RandomHorizontalFlip()
+        ])
+        data_transform = transforms.Compose([
+            transforms.Resize((256, 256)),
+            transforms.ToTensor(),
+            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+            transforms.CenterCrop(224),
+        ])
+        trigger_transform = transforms.Compose([
+            transforms.Resize((256, 256)),
+            transforms.ToTensor(),
+            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+            transforms.CenterCrop(224),
+        ])
+        normalizer = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        denormalizer = transforms.Compose([
+            transforms.Normalize([-0.485 / 0.229, -0.456 / 0.224, -0.406 / 0.225], [1 / 0.229, 1 / 0.224, 1 / 0.225])
+        ])
+    elif args.dataset == 'imagenet50':
         if args.no_normalize:
             data_transform_aug = transforms.Compose([
                 transforms.RandomCrop(224, 4),
@@ -321,30 +435,6 @@ def get_transforms(args):
                 transforms.Normalize([-0.485 / 0.229, -0.456 / 0.224, -0.406 / 0.225],
                                      [1 / 0.229, 1 / 0.224, 1 / 0.225])
             ])
-    elif args.dataset == 'imagenet':
-        data_transform_aug = transforms.Compose([
-            transforms.Resize((256, 256)),
-            transforms.ToTensor(),
-            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
-            transforms.RandomResizedCrop(224),
-            transforms.RandomHorizontalFlip()
-        ])
-        data_transform = transforms.Compose([
-            transforms.Resize((256, 256)),
-            transforms.ToTensor(),
-            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
-            transforms.CenterCrop(224),
-        ])
-        trigger_transform = transforms.Compose([
-            transforms.Resize((256, 256)),
-            transforms.ToTensor(),
-            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
-            transforms.CenterCrop(224),
-        ])
-        normalizer = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-        denormalizer = transforms.Compose([
-            transforms.Normalize([-0.485 / 0.229, -0.456 / 0.224, -0.406 / 0.225], [1 / 0.229, 1 / 0.224, 1 / 0.225])
-        ])
 
     elif args.dataset == 'ember':
         data_transform_aug = data_transform = trigger_transform = normalizer = denormalizer = None
@@ -370,7 +460,7 @@ def get_poison_transform(poison_type, dataset_name, target_class, source_class=1
 
     if dataset_name in ['gtsrb', 'cifar10', 'cifar100']:
         img_size = 32
-    elif dataset_name == 'imagenette' or dataset_name == 'imagenet':
+    elif dataset_name in ['imagenette', 'imagenet', 'imagenet50']:
         img_size = 224
     else:
         raise NotImplementedError('<Undefined> Dataset = %s' % dataset_name)
@@ -402,6 +492,15 @@ def get_poison_transform(poison_type, dataset_name, target_class, source_class=1
                                  (1.0 / 0.229, 1.0 / 0.224, 1.0 / 0.225)),
         ])
         num_classes = 10
+    elif dataset_name == 'imagenet50':
+        normalizer = transforms.Compose([
+            transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
+        ])
+        denormalizer = transforms.Compose([
+            transforms.Normalize((-0.485 / 0.229, -0.456 / 0.224, -0.406 / 0.225),
+                                 (1.0 / 0.229, 1.0 / 0.224, 1.0 / 0.225)),
+        ])
+        num_classes = 50
     else:
         raise Exception("Invalid Dataset")
 
@@ -692,3 +791,4 @@ def get_poison_transform(poison_type, dataset_name, target_class, source_class=1
 
     else:
         raise NotImplementedError('<Undefined> Poison_Type = %s' % poison_type)
+

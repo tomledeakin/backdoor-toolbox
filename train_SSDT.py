@@ -12,6 +12,8 @@ from networks.models import Generator, NetC_MNIST
 from torch.utils.tensorboard import SummaryWriter
 from utils_ted import progress_bar
 import wandb
+import config
+
 wandb.login(key="e09f73bb0df882dd4606253c95e1bc68801828a0")
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "1"
@@ -450,17 +452,19 @@ def eval_mask(netM, optimizerM, schedulerM, test_dl1, test_dl2, epoch, opt):
 
 
 def train(opt):
-    # Prepare model related things
-    if opt.dataset == "cifar10":
-        netC = ResNet18().to(opt.device)
-    elif opt.dataset == "gtsrb":
-        netC = ResNet18(num_classes=43).to(opt.device)
-    elif opt.dataset == "mnist":
-        netC = ResNet18().to(opt.device)
-    # elif opt.dataset == "imagenet":
-    #     netC = VGG("VGG16").to(opt.device)
-    else:
-        raise Exception("Invalid dataset")
+    # # Prepare model related things
+    # if opt.dataset == "cifar10":
+    #     netC = ResNet18().to(opt.device)
+    # elif opt.dataset == "gtsrb":
+    #     netC = ResNet18(num_classes=43).to(opt.device)
+    # elif opt.dataset == "mnist":
+    #     netC = ResNet18().to(opt.device)
+    # # elif opt.dataset == "imagenet":
+    # #     netC = VGG("VGG16").to(opt.device)
+    # else:
+    #     raise Exception("Invalid dataset")
+
+    netC = config.arch[opt.dataset](num_classes=opt.num_classes).to(opt.device)
 
     netG = Generator(opt).to(opt.device)
     optimizerC = torch.optim.SGD(
@@ -671,6 +675,7 @@ if __name__ == "__main__":
                     wandb.finish()
                 else:
                     break
+
 
 
 

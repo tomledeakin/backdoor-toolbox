@@ -34,7 +34,8 @@ parser.add_argument('-seed', type=int, required=False, default=default_args.seed
 
 args = parser.parse_args()
 
-if args.dataset in ["cifar10", "gtsrb"]:
+# Cập nhật thông tin kích thước input dựa trên dataset
+if args.dataset in ["cifar10", "gtsrb", "imagenette"]:
     args.input_height = 32
     args.input_width = 32
     args.input_channel = 3
@@ -47,25 +48,29 @@ elif args.dataset in ["imagenet", "pubfig"]:
     args.input_width = 64
     args.input_channel = 3
 
+# Cập nhật số lớp cho từng dataset; thêm imagenette với 10 lớp
 args.class_number = {
     "cifar10": 10,
     "gtsrb": 43,
     "mnist": 10,
     "imagenet": 100,
-    "pubfig": 83
+    "pubfig": 83,
+    "imagenette": 10,
 }.get(args.dataset, 10)
 
+# Cập nhật kích thước training của defense; đối với imagenette cũng dùng 1000 mẫu
 args.defense_train_size = {
     "cifar10": 1000,
     "gtsrb": 1000,
     "mnist": 1000,
     "imagenet": (args.class_number * 100),
-    "pubfig": (args.class_number * 100)
+    "pubfig": (args.class_number * 100),
+    "imagenette": 1000,
 }.get(args.dataset, 1000)
 
 print(args.poison_type)
 
-# if args.poison_type == 'SSDT':
+# Thiết lập các tham số dữ liệu
 args.data_root = "./data_ted/"
 args.bs = 50
 args.num_workers = 2
@@ -75,22 +80,17 @@ if args.poison_type != 'SSDT' and args.trigger is None:
 
 # tools.setup_seed(args.seed)
 os.environ["CUDA_VISIBLE_DEVICES"] = "%s" % args.devices
+
 if args.log:
-    # out_path = 'other_defenses_tool_box/logs'
-    # if not os.path.exists(out_path): os.mkdir(out_path)
-    # out_path = os.path.join(out_path, '%s_seed=%s' % (args.dataset, args.seed))
-    # if not os.path.exists(out_path): os.mkdir(out_path)
-    # if args.defense == 'ABL':
-    #     out_path = os.path.join(out_path, '%s_%s_seed=%s.out' % (args.defense, supervisor.get_dir_core(args, include_model_name=False, include_poison_seed=config.record_poison_seed), args.seed))
-    #     # out_path = os.path.join(out_path, '%s_%s.out' % (args.defense, supervisor.get_dir_core(args, include_model_name=False, include_poison_seed=config.record_poison_seed)))
-    # else:
-    #     out_path = os.path.join(out_path, '%s_%s.out' % (args.defense, supervisor.get_dir_core(args, include_model_name=True, include_poison_seed=config.record_poison_seed)))
     out_path = 'logs'
-    if not os.path.exists(out_path): os.mkdir(out_path)
+    if not os.path.exists(out_path):
+        os.mkdir(out_path)
     out_path = os.path.join(out_path, '%s_seed=%s' % (args.dataset, args.seed))
-    if not os.path.exists(out_path): os.mkdir(out_path)
+    if not os.path.exists(out_path):
+        os.mkdir(out_path)
     out_path = os.path.join(out_path, 'other_defense')
-    if not os.path.exists(out_path): os.mkdir(out_path)
+    if not os.path.exists(out_path):
+        os.mkdir(out_path)
     if args.noisy_test:
         out_path = os.path.join(out_path, '%s_noisy_test_%s.out' % (args.defense,
                                                      supervisor.get_dir_core(args, include_model_name=True,
@@ -99,7 +99,6 @@ if args.log:
         out_path = os.path.join(out_path, '%s_%s.out' % (args.defense,
                                                      supervisor.get_dir_core(args, include_model_name=True,
                                                                              include_poison_seed=config.record_poison_seed)))
-    # fout = open(out_path, 'w')
     fout = open(out_path, 'w')
     ferr = open('/dev/null', 'a')
     sys.stdout = fout
@@ -107,6 +106,7 @@ if args.log:
 
 start_time = time.perf_counter()
 
+# Lựa chọn defense theo tham số đầu vào
 if args.defense == 'NC':
     from other_defenses_tool_box.neural_cleanse import NC
     defense = NC(
@@ -121,9 +121,7 @@ if args.defense == 'NC':
     defense.detect()
 elif args.defense == 'AC':
     from other_defenses_tool_box.activation_clustering import AC
-    defense = AC(
-        args,
-    )
+    defense = AC(args)
     defense.detect(noisy_test=args.noisy_test)
 elif args.defense == 'STRIP':
     from other_defenses_tool_box.strip import STRIP
@@ -161,7 +159,6 @@ elif args.defense == 'ABL':
             args,
             isolation_epochs=15,
             isolation_ratio=0.001,
-            # gradient_ascent_type='LGA',
             gradient_ascent_type='Flooding',
             gamma=0.01,
             flooding=0.3,
@@ -178,28 +175,15 @@ elif args.defense == 'ABL':
             args,
             isolation_epochs=5,
             isolation_ratio=0.005,
-            # gradient_ascent_type='LGA',
             gradient_ascent_type='Flooding',
             gamma=0.1,
             flooding=0.03,
             do_isolate=True,
             finetuning_ascent_model=True,
             finetuning_epochs=10,
-
-            # # For 0.001 isolation rate
-            # unlearning_epochs=10,
-            # lr_unlearning=1e-3,
-            # do_unlearn=True,
-
-            # For 0.003 isolation rate
             unlearning_epochs=5,
             lr_unlearning=5e-4,
             do_unlearn=True,
-
-            # # For 0.005 isolation rate
-            # unlearning_epochs=5,
-            # lr_unlearning=1e-3,
-            # do_unlearn=True,
         )
         defense.detect()
 elif args.defense == 'NAD':
@@ -222,12 +206,10 @@ elif args.defense == 'ScaleUp':
     from other_defenses_tool_box.scale_up import ScaleUp
     defense = ScaleUp(args, with_clean_data=False)
     defense.detect(noisy_test=args.noisy_test)
-elif  args.defense == 'IBD_PSC':
+elif args.defense == 'IBD_PSC':
     from other_defenses_tool_box.IBD_PSC import IBD_PSC
     defense = IBD_PSC(args)
-    # defense.detect()
     defense.test()
-
 elif args.defense == "SEAM":
     from other_defenses_tool_box.SEAM import SEAM
     defense = SEAM(args)
@@ -241,7 +223,6 @@ elif args.defense == "SFT":
     defense.detect()
 elif args.defense == 'NONE':
     from other_defenses_tool_box.NONE import NONE
-    # if args.dataset == 'cifar10':
     defense = NONE(args, none_lr=1e-2, max_reset_fraction=0.03, epoch_num_1=200, epoch_num_2=40)
     defense.detect()
 elif args.defense == 'Frequency':
@@ -254,33 +235,37 @@ elif args.defense == 'moth':
         defense = moth(args, lr=0.0001)
     elif args.dataset == 'gtsrb':
         defense = moth(args, lr=0.00001)
-    else: defense = moth(args, lr=0.001)
+    else:
+        defense = moth(args, lr=0.001)
     defense.detect()
 elif args.defense == 'IBAU':
     from other_defenses_tool_box.IBAU import IBAU
     if args.dataset == 'cifar10':
-        # defense = IBAU(args, optim='SGD', lr=0.07, n_rounds=3, K=5)
         defense = IBAU(args, optim='Adam', lr=0.0005, n_rounds=3, K=5)
-    else: raise NotImplementedError()
+    else:
+        raise NotImplementedError()
     defense.detect()
 elif args.defense == 'ANP':
     from other_defenses_tool_box.ANP import ANP
     if args.dataset == 'cifar10':
         defense = ANP(args, lr=0.2, anp_eps=0.4, anp_steps=1, anp_alpha=0.2, nb_iter=2000, print_every=500,
                       pruning_by='threshold', pruning_max=0.90, pruning_step=0.05, max_CA_drop=0.1)
-    else: raise NotImplementedError()
+    else:
+        raise NotImplementedError()
     defense.detect()
 elif args.defense == 'AWM':
     from other_defenses_tool_box.AWM import AWM
     if args.dataset == 'cifar10':
         defense = AWM(args, lr1=1e-3, lr2=1e-2, outer=20, inner=5, shrink_steps=0, batch_size=128, trigger_norm=1000, alpha=0.9, gamma=1e-8, lr_decay=False)
-    else: raise NotImplementedError()
+    else:
+        raise NotImplementedError()
     defense.detect()
 elif args.defense == 'RNP':
     from other_defenses_tool_box.RNP import RNP
     if args.dataset == 'cifar10':
         defense = RNP(args, schedule=[10, 20], batch_size=128, momentum=0.9, weight_decay=5e-4, alpha=0.2, clean_threshold=0.20, unlearning_lr=0.01, recovering_lr=0.2, unlearning_epochs=20, recovering_epochs=20, pruning_by='number', pruning_max=0.90, pruning_step=0.01, max_CA_drop=0.5)
-    else: raise NotImplementedError()
+    else:
+        raise NotImplementedError()
     defense.detect()
 elif args.defense == "FeatureRE":
     from other_defenses_tool_box.feature_re import FeatureRE
@@ -307,5 +292,4 @@ else:
 
 end_time = time.perf_counter()
 print("Elapsed time: {:.2f}s".format(end_time - start_time))
-
 

@@ -115,6 +115,17 @@ elif args.dataset == 'imagenette':
     milestones = torch.tensor([40, 80])
     learning_rate = 0.1
     batch_size = 128
+    
+elif args.dataset == 'imagenet50':
+
+    num_classes = 50
+    arch = supervisor.get_arch(args)
+    momentum = 0.9
+    weight_decay = 1e-4
+    epochs = 100
+    milestones = torch.tensor([40, 80])
+    learning_rate = 0.1
+    batch_size = 128
 
 elif args.dataset == 'imagenet':
 
@@ -435,3 +446,4 @@ for epoch in range(1, epochs + 1):  # train backdoored base model
     torch.save(meta_info, os.path.join(poison_set_dir, "meta_info_{}".format(supervisor.get_model_name(args))))
 
 torch.save(model.module.state_dict(), model_path)
+

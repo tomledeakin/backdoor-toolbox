@@ -147,12 +147,14 @@ class BackdoorDefense():
         """
         Hàm tạo model theo dataset
         """
-        if self.dataset == "cifar10":
-            return ResNet18().to(self.device)
-        elif self.dataset == "gtsrb":
-            return ResNet18(num_classes=43).to(self.device)
-        else:
-            raise ValueError(f"Unknown dataset: {self.dataset}")
+        # if self.dataset == "cifar10":
+        #     return ResNet18().to(self.device)
+        # elif self.dataset == "gtsrb":
+        #     return ResNet18(num_classes=43).to(self.device)
+        # else:
+        #     raise ValueError(f"Unknown dataset: {self.dataset}")
+
+        return config.arch[self.dataset](num_classes=self.num_classes).to(self.device)
 
     def load_model_state(self):
         """
@@ -173,5 +175,6 @@ class BackdoorDefense():
         return model
 
         
+
 
 

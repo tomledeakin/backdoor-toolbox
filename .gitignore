@@ -25,6 +25,8 @@ clean_set/gtsrb/*
 !clean_set/gtsrb/.dummy
 clean_set/imagenette/*
 !clean_set/imagenette/.dummy
+clean_set/imagenet/*
+!clean_set/imagenet/.dummy
 
 logs/*
 !logs/.dummy
@@ -181,4 +183,6 @@ checkpoints/
 temps/
 wandb/
 data_ted/
+assets/**/*.png
 .idea
+

@@ -8,12 +8,13 @@ import os
 
 data_dir = './data' # defaul clean dataset directory
 triggers_dir = './triggers' # default triggers directory
-imagenet_dir = '/scratch/gpfs/DATASETS/imagenet/ilsvrc_2012_classification_localization' # ImageNet dataset directory (USE YOUR OWN!)
+imagenet_dir = './data/imagenet50' # ImageNet dataset directory (USE YOUR OWN!)
 target_class = {
     'cifar10' : 0,
     'gtsrb' : 2,
     # 'gtsrb' : 12, # BadEncoder
     'imagenette': 0,
+    'imagenet50': 0,
     'imagenet' : 0,
 }
 
@@ -77,7 +78,49 @@ trigger_default = {
         'blend' : 'hellokitty_224.png',
         'trojan' : 'trojan_watermark_224.png',
         'SRA': 'phoenix_corner_256.png',
+    },
+    'imagenet50': {
+        'none': 'none',
+        'badnet': 'badnet_patch_224.png',
+        'blend' : 'hellokitty_224.png',
+        'adaptive_blend': 'hellokitty_224.png',
+        'adaptive_patch': 'none',
+        'trojan' : 'trojan_watermark_224.png',
+        'SRA': 'phoenix_corner_224.png',
+    },
+    'imagenette': {
+        'none' : 'none',
+        'adaptive_blend': 'hellokitty_32.png',
+        'adaptive_patch': 'none',
+        'adaptive_k_way': 'none',
+        'clean_label' : 'badnet_patch4_dup_32.png',
+        'basic' : 'badnet_patch_32.png',
+        'badnet' : 'badnet_patch_32.png',
+        'blend' : 'hellokitty_32.png',
+        'refool': 'none',
+        'TaCT' : 'trojan_square_32.png',
+        'SIG' : 'none',
+        'WaNet': 'none',
+        'dynamic' : 'none',
+        'ISSBA': 'none',
+        'SleeperAgent': 'none',
+        'badnet_all_to_all' : 'badnet_patch_32.png',
+        'trojannn': 'none',
+        'BadEncoder': 'none',
+        'SRA': 'phoenix_corner_32.png',
+        'trojan': 'trojan_square_32.png',
+        'bpp': 'none',
+        'WB': 'none',
     }
+    # 'imagenette': {
+    #     'none': 'none',
+    #     'badnet': 'badnet_patch_224.png',
+    #     'blend' : 'hellokitty_224.png',
+    #     'adaptive_blend': 'hellokitty_224.png',
+    #     'adaptive_patch': 'none',
+    #     'trojan' : 'trojan_watermark_224.png',
+    #     'SRA': 'phoenix_corner_224.png',
+    # }
 }
 
 arch = {
@@ -88,6 +131,7 @@ arch = {
     'gtsrb' : resnet.ResNet18,
     #resnet.ResNet18,
     'imagenette': resnet.ResNet18,
+    'imagenet50': resnet.ResNet18,
     'ember': ember_nn.EmberNN,
     # 'imagenet' : resnet.ResNet18,
     'imagenet' : torchvision.models.resnet18,
@@ -217,6 +261,27 @@ def get_params(args):
         lrs = [0.001, 0.001, 0.001, 0.01, 0.01, 0.01]
         batch_factors = [2, 2, 2, 2, 2, 2]
 
+    elif args.dataset == 'imagenet50':
+
+        num_classes = 50
+
+        data_transform_normalize = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+        ])
+
+        data_transform_aug = transforms.Compose([
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+        ])
+
+        distillation_ratio = [1/2, 1/5, 1/25, 1/50, 1/100]
+        momentums = [0.7, 0.7, 0.7, 0.7, 0.7, 0.7]
+        lambs = [20, 20, 20, 40, 30, 5]
+        lrs = [0.001, 0.001, 0.001, 0.01, 0.01, 0.01]
+        batch_factors = [2, 2, 2, 2, 2, 2]
+
     else:
         raise NotImplementedError('<Unimplemented Dataset> %s' % args.dataset)
 
@@ -306,3 +371,5 @@ def get_packet_for_debug(poison_set_dir, data_transform, batch_size, args):
     }
 
     return debug_packet
+
+

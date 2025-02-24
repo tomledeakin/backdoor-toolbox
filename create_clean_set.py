@@ -46,19 +46,39 @@ elif args.dataset == 'cifar10':
                                  download=True, transform=data_transform)
     img_size = 32
     num_classes = 10
+
 elif args.dataset == 'imagenette':
+
+    data_transform = transforms.Compose([
+        # transforms.Resize((224, 224)),
+        transforms.Resize((32, 32)),
+        transforms.ToTensor(),
+    ])
+    clean_set = datasets.ImageFolder(os.path.join(os.path.join(data_dir, 'imagenette2'), 'val'), data_transform)
+
+    # img_size = 224
+    img_size = 32
+    num_classes = 10
+
+elif args.dataset == 'imagenet50':
 
     data_transform = transforms.Compose([
         transforms.Resize((224, 224)),
         transforms.ToTensor(),
     ])
-    clean_set = datasets.ImageFolder(os.path.join(os.path.join(data_dir, 'imagenette2'), 'val'), data_transform)
+    clean_set = datasets.ImageFolder(os.path.join(os.path.join(data_dir, 'imagenet50'), 'val'), data_transform)
 
     img_size = 224
-    num_classes = 10
-
+    num_classes = 50
+    
 elif args.dataset == 'imagenet':
-    pass
+    data_transform = transforms.Compose([
+        transforms.Resize((224, 224)),
+        transforms.ToTensor(),
+    ])
+    clean_set = datasets.ImageFolder(os.path.join(data_dir, 'imagenet50', 'val'), data_transform)
+    img_size = 224
+    num_classes = len(clean_set.classes)
 
 elif args.dataset == 'ember':
 
@@ -209,3 +229,5 @@ else:
     np.save(os.path.join(test_split_dir, 'X'), x_test_split)
     np.save(os.path.join(test_split_dir, 'Y'), y_test_split)
     print('[Generate Test Set] %s, %s' % (os.path.join(test_split_dir, 'X'), os.path.join(test_split_dir, 'Y')))
+
+
