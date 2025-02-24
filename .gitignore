@@ -185,4 +185,8 @@ wandb/
 data_ted/
 assets/**/*.png
 .idea
-
+assets/
+clean_set/imagenet50/
+data/imagenet50.zip
+data/imagenette2.tgz
+data/imagenet50/
