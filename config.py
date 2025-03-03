@@ -89,38 +89,14 @@ trigger_default = {
         'SRA': 'phoenix_corner_224.png',
     },
     'imagenette': {
-        'none' : 'none',
-        'adaptive_blend': 'hellokitty_32.png',
+        'none': 'none',
+        'badnet': 'badnet_patch_224.png',
+        'blend' : 'hellokitty_224.png',
+        'adaptive_blend': 'hellokitty_224.png',
         'adaptive_patch': 'none',
-        'adaptive_k_way': 'none',
-        'clean_label' : 'badnet_patch4_dup_32.png',
-        'basic' : 'badnet_patch_32.png',
-        'badnet' : 'badnet_patch_32.png',
-        'blend' : 'hellokitty_32.png',
-        'refool': 'none',
-        'TaCT' : 'trojan_square_32.png',
-        'SIG' : 'none',
-        'WaNet': 'none',
-        'dynamic' : 'none',
-        'ISSBA': 'none',
-        'SleeperAgent': 'none',
-        'badnet_all_to_all' : 'badnet_patch_32.png',
-        'trojannn': 'none',
-        'BadEncoder': 'none',
-        'SRA': 'phoenix_corner_32.png',
-        'trojan': 'trojan_square_32.png',
-        'bpp': 'none',
-        'WB': 'none',
+        'trojan' : 'trojan_watermark_224.png',
+        'SRA': 'phoenix_corner_224.png',
     }
-    # 'imagenette': {
-    #     'none': 'none',
-    #     'badnet': 'badnet_patch_224.png',
-    #     'blend' : 'hellokitty_224.png',
-    #     'adaptive_blend': 'hellokitty_224.png',
-    #     'adaptive_patch': 'none',
-    #     'trojan' : 'trojan_watermark_224.png',
-    #     'SRA': 'phoenix_corner_224.png',
-    # }
 }
 
 arch = {
@@ -130,7 +106,7 @@ arch = {
     # 'cifar10': mobilenetv2.mobilenetv2,
     'gtsrb' : resnet.ResNet18,
     #resnet.ResNet18,
-    'imagenette': resnet.ResNet18,
+    'imagenette': resnet.ResNet34,
     'imagenet50': resnet.ResNet18,
     'ember': ember_nn.EmberNN,
     # 'imagenet' : resnet.ResNet18,
@@ -371,5 +347,7 @@ def get_packet_for_debug(poison_set_dir, data_transform, batch_size, args):
     }
 
     return debug_packet
+
+
 
 

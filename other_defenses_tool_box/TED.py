@@ -87,7 +87,7 @@ class TED(BackdoorDefense):
         # 4) Split the full test set into 10% (defense/validation) and 90% (final test)
         all_indices = np.arange(len(self.testset))
         from sklearn.model_selection import train_test_split
-        defense_indices, test_indices = train_test_split(all_indices, test_size=0.6, random_state=42)
+        defense_indices, test_indices = train_test_split(all_indices, test_size=0.1, random_state=42)
 
         # Create subsets for defense and test sets
         defense_subset = data.Subset(self.testset, defense_indices)
@@ -97,8 +97,8 @@ class TED(BackdoorDefense):
         self.defense_loader = data.DataLoader(defense_subset, batch_size=50, shuffle=True, num_workers=0)
         self.test_loader = data.DataLoader(test_subset, batch_size=50, shuffle=False, num_workers=0)
 
-        print(f"Number of samples in defense set (40% of test): {len(defense_subset)}")
-        print(f"Number of samples in final test set (60% of test): {len(test_subset)}")
+        print(f"Number of samples in defense set (90% of test): {len(defense_subset)}")
+        print(f"Number of samples in final test set (10% of test): {len(test_subset)}")
 
         # 5) Determine unique classes by scanning the defense set
         all_labels = []
@@ -110,11 +110,11 @@ class TED(BackdoorDefense):
         print(f"Expected number of classes from args: {self.num_classes}")
 
         # 6) Set defense training parameters
-        self.SAMPLES_PER_CLASS = 5
+        self.SAMPLES_PER_CLASS = args.validation_per_class
         self.DEFENSE_TRAIN_SIZE = self.num_classes * self.SAMPLES_PER_CLASS
 
         # 7) Define number of neighbors and samples for constructing poison/clean sets
-        self.NUM_SAMPLES = 40
+        self.NUM_SAMPLES = args.num_test_samples
 
         # 8) Create defense subset from the defense set using only correctly predicted samples
         # Use the defense_subset (10% of test) instead of the training set
@@ -878,64 +878,6 @@ class TED(BackdoorDefense):
         inputs_all_unknown = np.concatenate(inputs_all_unknown)
         labels_all_unknown = np.concatenate(labels_all_unknown)
 
-        # Get the number of samples and columns
-        n_samples, n_columns = inputs_all_unknown.shape
-
-        # Determine the half point to distinguish red (first half) vs green (second half)
-        half_samples = n_samples // 2
-
-        # Create a DataFrame where each record corresponds to:
-        # - 'Layer': layer number (1 to n_columns)
-        # - 'Ranking': the corresponding ranking value
-        # - 'Type': 'Poison' for first half samples, 'Clean' for second half
-        data_records = []
-        for i in range(n_samples):
-            sample_type = 'Poison' if i < half_samples else 'Clean'
-            for j in range(n_columns):
-                data_records.append({
-                    'Layer': j + 1,  # Layer numbering starts at 1
-                    'Ranking': inputs_all_unknown[i, j],
-                    'Type': sample_type
-                })
-
-        df = pd.DataFrame(data_records)
-
-        # Set the style using seaborn with a context appropriate for papers
-        sns.set(style="whitegrid", context="paper", font_scale=1)
-
-        # Create a figure for the box plot; adjust size as needed
-        plt.figure(figsize=(30, 6))
-
-        # Draw box plot: x is Layer, y is Ranking, hue is Type (distinguishing Poison vs Clean)
-        ax = sns.boxplot(
-            x="Layer",
-            y="Ranking",
-            hue="Type",
-            data=df,
-            palette={'Poison': '#ff006b', 'Clean': '#00ff94'},
-            dodge=True
-        )
-
-        # Set title and axis labels with larger fonts
-        # plt.title("Box Plot across 35 Layers: Poison vs Clean", fontsize=30, fontweight='bold')
-        plt.xlabel("Layer", fontsize=30)
-        plt.ylabel("Ranking", fontsize=30)
-
-        # Increase tick label sizes for both axes
-        plt.xticks(fontsize=30)
-        plt.yticks(fontsize=30)
-
-        # Customize the legend with a larger font size
-        legend = plt.legend(title="Type", fontsize=30, title_fontsize=30)
-        # Optionally, adjust legend marker sizes if needed (depends on your style)
-
-        plt.tight_layout()
-
-        # Save the box plot in PDF format for publication
-        save_path = os.path.join(self.save_dir, "boxplot_ted.pdf")
-        plt.savefig(save_path, bbox_inches='tight', format='pdf', dpi=300)
-        plt.close()
-
         print('STEP 9')
         pca_t = sklearn_PCA(n_components=2)
         pca_fit = pca_t.fit(inputs_all_benign)
@@ -994,3 +936,5 @@ class TED(BackdoorDefense):
         for h in self.hook_handles:
             h.remove()
         torch.cuda.empty_cache()
+
+

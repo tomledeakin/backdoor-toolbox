@@ -31,11 +31,17 @@ parser.add_argument('-defense', type=str, required=True,
 parser.add_argument('-devices', type=str, default='0')
 parser.add_argument('-log', default=False, action='store_true')
 parser.add_argument('-seed', type=int, required=False, default=default_args.seed)
+parser.add_argument('-validation_per_class', type=int, required=False,
+                    default=default_args.parser_default.get('validation_per_class', 20))
+parser.add_argument('-num_test_samples', type=int, required=False,
+                    default=default_args.parser_default.get('num_test_samples', 50))
+parser.add_argument('-num_neighbors', type=int, required=False,
+                    default=default_args.parser_default.get('num_neighbors', 1))
 
 args = parser.parse_args()
 
 # Cập nhật thông tin kích thước input dựa trên dataset
-if args.dataset in ["cifar10", "gtsrb", "imagenette"]:
+if args.dataset in ["cifar10", "gtsrb"]:
     args.input_height = 32
     args.input_width = 32
     args.input_channel = 3
@@ -43,7 +49,7 @@ elif args.dataset == "mnist":
     args.input_height = 28
     args.input_width = 28
     args.input_channel = 1
-elif args.dataset in ["imagenet", "pubfig"]:
+elif args.dataset in ["imagenet", "pubfig", "imagenette"]:
     args.input_height = 64
     args.input_width = 64
     args.input_channel = 3
@@ -292,4 +298,5 @@ else:
 
 end_time = time.perf_counter()
 print("Elapsed time: {:.2f}s".format(end_time - start_time))
+
 

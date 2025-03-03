@@ -129,11 +129,12 @@ def generate_dataloader(dataset='cifar10', dataset_path='./data/', batch_size=12
     elif dataset == 'imagenette':
         if data_transform is None:
             data_transform = transforms.Compose([
-                transforms.Resize((32, 32)),  # Resize tất cả ảnh về 32x32
+                transforms.Resize(256),
+                transforms.CenterCrop(224),
                 transforms.ToTensor(),
                 transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
             ])
-        # dataset_path được nối với 'imagenette2'
+
         dataset_path = os.path.join(dataset_path, 'imagenette2')
 
         if split == 'train':
@@ -359,3 +360,4 @@ class Cutout(object):
         img = img * mask
 
         return img
+

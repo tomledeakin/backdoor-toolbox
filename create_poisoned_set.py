@@ -150,13 +150,14 @@ else:
     elif args.dataset == 'imagenette':
 
         data_transform = transforms.Compose([
-            # transforms.Resize((224, 224)),
-            transforms.Resize((32, 32)),
+            transforms.Resize(256),
+            transforms.CenterCrop(224),
             transforms.ToTensor(),
         ])
+        
         train_set = datasets.ImageFolder(os.path.join(os.path.join(data_dir, 'imagenette2'), 'train'),
                                          data_transform)
-        img_size = 32
+        img_size = 224
         num_classes = 10
     
     elif args.dataset == 'imagenet50':
@@ -531,5 +532,6 @@ elif args.poison_type == 'ISSBA':
 
 else:
     raise NotImplementedError('%s not defined' % args.poison_type)
+
 
 
