@@ -14,7 +14,7 @@ target_class = {
     'gtsrb' : 2,
     # 'gtsrb' : 12, # BadEncoder
     'imagenette': 0,
-    'imagenet50': 0,
+    'imagenet50': 2,
     'imagenet' : 0,
 }
 
