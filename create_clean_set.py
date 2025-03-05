@@ -63,9 +63,11 @@ elif args.dataset == 'imagenette':
 elif args.dataset == 'imagenet50':
 
     data_transform = transforms.Compose([
-        transforms.Resize((224, 224)),
+        transforms.Resize(256),
+        transforms.CenterCrop(224),
         transforms.ToTensor(),
     ])
+
     clean_set = datasets.ImageFolder(os.path.join(os.path.join(data_dir, 'imagenet50'), 'val'), data_transform)
 
     img_size = 224

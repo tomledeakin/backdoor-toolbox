@@ -410,32 +410,42 @@ def get_transforms(args):
     elif args.dataset == 'imagenet50':
         if args.no_normalize:
             data_transform_aug = transforms.Compose([
-                transforms.RandomCrop(224, 4),
+                transforms.Resize(256),
+                transforms.RandomCrop(224, padding=4),  # Thêm padding nếu cần
                 transforms.RandomHorizontalFlip(),
                 transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4),
                 transforms.ToTensor(),
             ])
             data_transform = transforms.Compose([
+                transforms.Resize(256),
+                transforms.CenterCrop(224),
                 transforms.ToTensor(),
             ])
             trigger_transform = transforms.Compose([
+                transforms.Resize(256),
+                transforms.CenterCrop(224),
                 transforms.ToTensor(),
             ])
             normalizer = transforms.Compose([])
             denormalizer = transforms.Compose([])
         else:
             data_transform_aug = transforms.Compose([
-                transforms.RandomCrop(224, 4),
+                transforms.Resize(256),
+                transforms.RandomCrop(224, padding=4),
                 transforms.RandomHorizontalFlip(),
                 transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4),
                 transforms.ToTensor(),
                 transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
             ])
             data_transform = transforms.Compose([
+                transforms.Resize(256),
+                transforms.CenterCrop(224),
                 transforms.ToTensor(),
                 transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
             ])
             trigger_transform = transforms.Compose([
+                transforms.Resize(256),
+                transforms.CenterCrop(224),
                 transforms.ToTensor(),
                 transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
             ])
@@ -494,7 +504,7 @@ def get_poison_transform(poison_type, dataset_name, target_class, source_class=1
                                  (1.0 / 0.2672, 1.0 / 0.2564, 1.0 / 0.2629)),
         ])
         num_classes = 43
-    elif dataset_name == 'imagenette' or dataset_name == 'imagenet':
+    elif dataset_name == 'imagenette':
         normalizer = transforms.Compose([
             transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
         ])
@@ -503,6 +513,15 @@ def get_poison_transform(poison_type, dataset_name, target_class, source_class=1
                                  (1.0 / 0.229, 1.0 / 0.224, 1.0 / 0.225)),
         ])
         num_classes = 10
+    elif dataset_name == 'imagenet':
+        normalizer = transforms.Compose([
+            transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
+        ])
+        denormalizer = transforms.Compose([
+            transforms.Normalize((-0.485 / 0.229, -0.456 / 0.224, -0.406 / 0.225),
+                                 (1.0 / 0.229, 1.0 / 0.224, 1.0 / 0.225)),
+        ])
+        num_classes = 1000
     elif dataset_name == 'imagenet50':
         normalizer = transforms.Compose([
             transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
