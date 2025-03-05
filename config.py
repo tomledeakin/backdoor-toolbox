@@ -14,7 +14,8 @@ target_class = {
     'gtsrb' : 2,
     # 'gtsrb' : 12, # BadEncoder
     'imagenette': 0,
-    'imagenet50': 2,
+    'imagenet50': 0,
+    'imagenet100': 0,
     'imagenet' : 0,
 }
 
@@ -88,6 +89,15 @@ trigger_default = {
         'trojan' : 'trojan_watermark_224.png',
         'SRA': 'phoenix_corner_224.png',
     },
+    'imagenet100': {
+        'none': 'none',
+        'badnet': 'badnet_patch_224.png',
+        'blend' : 'hellokitty_224.png',
+        'adaptive_blend': 'hellokitty_224.png',
+        'adaptive_patch': 'none',
+        'trojan' : 'trojan_watermark_224.png',
+        'SRA': 'phoenix_corner_224.png',
+    },
     'imagenette': {
         'none': 'none',
         'badnet': 'badnet_patch_224.png',
@@ -108,6 +118,7 @@ arch = {
     #resnet.ResNet18,
     'imagenette': resnet.ResNet18,
     'imagenet50': resnet.ResNet18,
+    'imagenet100': resnet.ResNet18,
     'ember': ember_nn.EmberNN,
     # 'imagenet' : resnet.ResNet18,
     'imagenet' : torchvision.models.resnet18,
@@ -240,6 +251,27 @@ def get_params(args):
     elif args.dataset == 'imagenet50':
 
         num_classes = 50
+
+        data_transform_normalize = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+        ])
+
+        data_transform_aug = transforms.Compose([
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+        ])
+
+        distillation_ratio = [1/2, 1/5, 1/25, 1/50, 1/100]
+        momentums = [0.7, 0.7, 0.7, 0.7, 0.7, 0.7]
+        lambs = [20, 20, 20, 40, 30, 5]
+        lrs = [0.001, 0.001, 0.001, 0.01, 0.01, 0.01]
+        batch_factors = [2, 2, 2, 2, 2, 2]
+
+    elif args.dataset == 'imagenet100':
+
+        num_classes = 100
 
         data_transform_normalize = transforms.Compose([
             transforms.ToTensor(),
