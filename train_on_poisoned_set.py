@@ -124,8 +124,8 @@ elif args.dataset == 'imagenet50':
     weight_decay = 1e-4
     epochs = 100
     milestones = torch.tensor([40, 80])
-    learning_rate = 0.1
-    batch_size = 128
+    learning_rate = 0.01
+    batch_size = 16
 
 elif args.dataset == 'imagenet':
 
