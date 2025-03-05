@@ -410,7 +410,6 @@ for epoch in range(1, epochs + 1):  # train backdoored base model
     for data, target in tqdm(poisoned_set_loader):
         optimizer.zero_grad()
         data, target = data.cuda(), target.cuda()
-        print(f"Target stats: min={target.min().item()}, max={target.max().item()}, dtype={target.dtype}, shape={target.shape}")
         output = model(data)
         loss = criterion(output, target)
         loss.backward()
