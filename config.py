@@ -106,7 +106,7 @@ arch = {
     # 'cifar10': mobilenetv2.mobilenetv2,
     'gtsrb' : resnet.ResNet18,
     #resnet.ResNet18,
-    'imagenette': resnet.ResNet34,
+    'imagenette': resnet.ResNet18,
     'imagenet50': resnet.ResNet18,
     'ember': ember_nn.EmberNN,
     # 'imagenet' : resnet.ResNet18,
@@ -347,6 +347,7 @@ def get_packet_for_debug(poison_set_dir, data_transform, batch_size, args):
     }
 
     return debug_packet
+
 
 
 

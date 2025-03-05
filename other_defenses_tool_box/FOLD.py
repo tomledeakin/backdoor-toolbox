@@ -72,7 +72,7 @@ class FOLD(BackdoorDefense):
             self.test_loader = generate_dataloader(
                 dataset=self.dataset,
                 dataset_path=config.data_dir,
-                batch_size=50,
+                batch_size=16,
                 split='test',
                 data_transform=self.data_transform,
                 shuffle=False,
@@ -93,8 +93,8 @@ class FOLD(BackdoorDefense):
         test_subset = data.Subset(self.testset, test_indices)
 
         # Create DataLoaders for defense and test sets
-        self.defense_loader = data.DataLoader(defense_subset, batch_size=50, shuffle=True, num_workers=0)
-        self.test_loader = data.DataLoader(test_subset, batch_size=50, shuffle=False, num_workers=0)
+        self.defense_loader = data.DataLoader(defense_subset, batch_size=16, shuffle=True, num_workers=0)
+        self.test_loader = data.DataLoader(test_subset, batch_size=16, shuffle=False, num_workers=0)
 
         print(f"Number of samples in defense set (90% of test): {len(defense_subset)}")
         print(f"Number of samples in final test set (10% of test): {len(test_subset)}")
@@ -138,7 +138,7 @@ class FOLD(BackdoorDefense):
         # Dictionary to store correctly predicted indices per class
         correct_indices_per_class = defaultdict(list)
         # Create a DataLoader for the defense set without shuffling to maintain index order
-        defense_loader_no_shuffle = data.DataLoader(defense_set, batch_size=50, num_workers=0, shuffle=False)
+        defense_loader_no_shuffle = data.DataLoader(defense_set, batch_size=16, num_workers=0, shuffle=False)
         current_idx = 0
 
         # Evaluate the defense set to collect correctly predicted samples
@@ -175,7 +175,7 @@ class FOLD(BackdoorDefense):
 
         # Create a new defense subset using the sampled indices and update the defense_loader
         final_defense_subset = data.Subset(underlying_dataset, defense_indices_final)
-        self.defense_loader = data.DataLoader(final_defense_subset, batch_size=50, shuffle=True, num_workers=0)
+        self.defense_loader = data.DataLoader(final_defense_subset, batch_size=16, shuffle=True, num_workers=0)
 
         # 9) Optionally, filter the defense set further to retain only correctly predicted samples
         h_benign_preds = []
@@ -194,7 +194,7 @@ class FOLD(BackdoorDefense):
         if len(benign_indices) > self.DEFENSE_TRAIN_SIZE:
             benign_indices = np.random.choice(benign_indices, self.DEFENSE_TRAIN_SIZE, replace=False)
         final_defense_subset = data.Subset(underlying_dataset, benign_indices)
-        self.defense_loader = data.DataLoader(final_defense_subset, batch_size=50, shuffle=True, num_workers=0)
+        self.defense_loader = data.DataLoader(final_defense_subset, batch_size=16, shuffle=True, num_workers=0)
 
         # 10) Define temporary labels for Poison and Clean samples
         self.POISON_TEMP_LABEL = "Poison"
@@ -398,10 +398,10 @@ class FOLD(BackdoorDefense):
                 chosen = np.random.choice(all_indices, size=self.NUM_SAMPLES, replace=False)
 
             clean_subset = data.Subset(self.testset, chosen)
-            clean_loader = data.DataLoader(clean_subset, batch_size=50, shuffle=False)
+            clean_loader = data.DataLoader(clean_subset, batch_size=16, shuffle=False)
 
             poison_subset = data.Subset(self.testset, chosen)
-            poison_loader = data.DataLoader(poison_subset, batch_size=50, shuffle=False)
+            poison_loader = data.DataLoader(poison_subset, batch_size=16, shuffle=False)
 
             # Tạo CLEAN set
             for (inputs, labels) in clean_loader:
@@ -500,12 +500,12 @@ class FOLD(BackdoorDefense):
 
         # Create poison_loader
         poison_set = CustomDataset(bd_inputs_set, bd_labels_set)
-        self.poison_loader = data.DataLoader(poison_set, batch_size=50, num_workers=2, shuffle=True)
+        self.poison_loader = data.DataLoader(poison_set, batch_size=16, num_workers=2, shuffle=True)
         print("Poison set size:", len(self.poison_loader))
 
         # Create clean_loader
         clean_set = CustomDataset(clean_inputs_set, clean_labels_set)
-        self.clean_loader = data.DataLoader(clean_set, batch_size=50, num_workers=2, shuffle=True)
+        self.clean_loader = data.DataLoader(clean_set, batch_size=16, num_workers=2, shuffle=True)
         print("Clean set size:", len(self.clean_loader))
 
         # Remove temporary variables
@@ -518,6 +518,7 @@ class FOLD(BackdoorDefense):
     def fetch_activation(self, loader):
         """
         Run the model on the given loader and fetch intermediate activations based on the registered hooks.
+        Nếu self.dataset == 'imagenette' thì chuyển các tensor về CPU để tiết kiệm bộ nhớ GPU.
         """
         print("Starting fetch_activation")
         self.model.eval()
@@ -526,48 +527,76 @@ class FOLD(BackdoorDefense):
         h_batch = {}
         activation_container = {}
 
-        # Initialize hooks with one batch
-        for (images, labels) in loader:
-            # print("Running the first batch to init hooks")
+        # Khởi tạo hook với một batch đầu tiên
+        for images, labels in loader:
             _ = self.model(images.to(self.device))
             break
 
+        # Khởi tạo container cho các activation
         for key in self.activations:
             activation_container[key] = []
-
         self.activations.clear()
 
-        for batch_idx, (images, labels) in enumerate(loader, start=1):
-            # print(f"Running batch {batch_idx} - Images shape: {images.shape}, Labels shape: {labels.shape}")
-            try:
-                output = self.model(images.to(self.device))
-            except Exception as e:
-                # print(f"Error running model on batch {batch_idx}: {e}")
-                break
-            pred_set.append(torch.argmax(output, -1).to(self.device))
+        # Nếu dataset là 'imagenette' thì chuyển activation về CPU
+        if self.dataset == 'imagenette':
+            for batch_idx, (images, labels) in enumerate(loader, start=1):
+                images = images.to(self.device)
+                output = self.model(images)
+                pred_set.append(torch.argmax(output, dim=1).cpu())
 
-            # Collect activations from hooks
-            for key in self.activations:
-                h_batch[key] = self.activations[key].view(images.shape[0], -1)
-                for h in h_batch[key]:
-                    activation_container[key].append(h.to(self.device))
+                # Thu thập activation và chuyển về CPU ngay
+                for key in self.activations:
+                    h_batch[key] = self.activations[key].view(images.shape[0], -1).cpu()
+                    activation_container[key].append(h_batch[key])
 
-            # Save original labels
-            for label_ in labels:
-                all_h_label.append(label_.to(self.device))
+                # Lưu nhãn gốc về CPU
+                all_h_label.append(labels.cpu())
 
-            self.activations.clear()
+                # Clear activation và giải phóng bộ nhớ GPU
+                self.activations.clear()
+                del images, labels, output
+                torch.cuda.empty_cache()
 
-            # if batch_idx % 10 == 0:
-            # print(f"Processed {batch_idx} batches")
+                if batch_idx % 10 == 0:
+                    print(f"Processed {batch_idx} batches")
 
-        # Stack everything
-        for key in activation_container:
-            activation_container[key] = torch.stack(activation_container[key])
-        all_h_label = torch.stack(all_h_label)
-        pred_set = torch.cat(pred_set)
+            # Ghép các batch lại với nhau
+            for key in activation_container:
+                activation_container[key] = torch.cat(activation_container[key], dim=0)
+            all_h_label = torch.cat(all_h_label, dim=0)
+            pred_set = torch.cat(pred_set, dim=0)
 
-        # print("Finished fetch_activation")
+        # Trường hợp mặc định: giữ activation trên thiết bị mặc định (device)
+        else:
+            for batch_idx, (images, labels) in enumerate(loader, start=1):
+                try:
+                    images = images.to(self.device)
+                    output = self.model(images)
+                except Exception as e:
+                    print(f"Error running model on batch {batch_idx}: {e}")
+                    break
+
+                pred_set.append(torch.argmax(output, -1).to(self.device))
+
+                for key in self.activations:
+                    h_batch[key] = self.activations[key].view(images.shape[0], -1).to(self.device)
+                    activation_container[key].append(h_batch[key])
+
+                for label_ in labels:
+                    all_h_label.append(label_.to(self.device))
+
+                self.activations.clear()
+
+                if batch_idx % 10 == 0:
+                    print(f"Processed {batch_idx} batches")
+
+            # Ghép các batch lại với nhau
+            for key in activation_container:
+                activation_container[key] = torch.stack(activation_container[key])
+            all_h_label = torch.stack(all_h_label)
+            pred_set = torch.cat(pred_set)
+
+        print("Finished fetch_activation")
         return all_h_label, activation_container, pred_set
 
     def calculate_accuracy(self, ori_labels, preds):
@@ -969,5 +998,6 @@ class FOLD(BackdoorDefense):
         for h in self.hook_handles:
             h.remove()
         torch.cuda.empty_cache()
+
 
 
