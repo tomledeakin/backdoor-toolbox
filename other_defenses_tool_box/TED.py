@@ -698,7 +698,7 @@ class TED(BackdoorDefense):
 
         for processing_label in labels:
 
-            processing_label_indices = torch.where(new_prediction == processing_label)[0]
+            processing_label_indices = torch.where(h_defense_prediction == processing_label)[0]
             processing_label_h_defense_activation = h_defense_activation[processing_label_indices]
             print(f'processing_label_h_defense_activation shape: {processing_label_h_defense_activation.shape}')
             for index, item in enumerate(candidate__[processing_label]):
