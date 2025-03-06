@@ -677,7 +677,7 @@ class FOLD(BackdoorDefense):
                         """
                         mask = ~torch.all(processing_label_h_defense_activation == h_defense_activation[idx], dim=1)
                         sorted_dis_validation, sorted_indices_validation = self.get_dis_sort(h_defense_activation[idx], processing_label_h_defense_activation[mask])
-                        threshold = torch.max(sorted_dis_validation[:1])
+                        threshold = torch.max(sorted_dis_validation[:4])
                         print(f'idx: {idx}')
                         print(f'sorted_dis_validation: {sorted_dis_validation}')
                         print(f'sorted_indices_validation: {sorted_indices_validation}')
@@ -706,6 +706,7 @@ class FOLD(BackdoorDefense):
         Thay vì lưu 'ranking', ta lưu 'khoảng cách' đến sample cùng class trong tập defense.
         """
 
+
         if layer not in layer_test_region_individual:
             layer_test_region_individual[layer] = {}
         layer_test_region_individual[layer][new_temp_label] = []
@@ -720,12 +721,14 @@ class FOLD(BackdoorDefense):
 
                 sorted_dis, sorted_indices = self.get_dis_sort(item, h_defense_activation)
                 # Tìm khoảng cách đầu tiên tới sample trong defense có nhãn = processing_label
+
                 result_array = np.array([])
                 for i, idx in enumerate(sorted_indices):
                     if h_defense_prediction[idx] == processing_label:
+
                         distance_value_index = i   # this is the ranking value
                         result_array = np.append(result_array, distance_value_index)
-                        distance_value = sorted_dis[i].item()
+                        # distance_value = sorted_dis[i].item() / meadian_nnb_distance
                         # result_array = np.append(result_array, distance_value)
 
                     layer_test_region_individual[layer][new_temp_label].append(result_array)
