@@ -669,8 +669,7 @@ class TED(BackdoorDefense):
                         """
                         mask = ~torch.all(processing_label_h_defense_activation == h_defense_activation[idx], dim=1)
                         sorted_dis_validation, sorted_indices_validation = self.get_dis_sort(h_defense_activation[idx], processing_label_h_defense_activation[mask])
-                        # threshold = torch.max(sorted_dis_validation[:math.ceil(self.SAMPLES_PER_CLASS / 2)])
-                        threshold = torch.max(sorted_dis_validation[:3])
+                        threshold = torch.max(sorted_dis_validation[:math.ceil(self.SAMPLES_PER_CLASS / 2)])
                         distance_value = sorted_dis[i].item()
 
                         if distance_value > threshold:
@@ -701,7 +700,6 @@ class TED(BackdoorDefense):
 
             processing_label_indices = torch.where(h_defense_prediction == processing_label)[0]
             processing_label_h_defense_activation = h_defense_activation[processing_label_indices]
-            print(f'processing_label_h_defense_activation shape: {processing_label_h_defense_activation.shape}')
             for index, item in enumerate(candidate__[processing_label]):
 
                 sorted_dis, sorted_indices = self.get_dis_sort(item, h_defense_activation)
@@ -711,8 +709,7 @@ class TED(BackdoorDefense):
                     if h_defense_prediction[idx] == processing_label:
                         mask = ~torch.all(processing_label_h_defense_activation == h_defense_activation[idx], dim=1)
                         sorted_dis_validation, sorted_indices_validation = self.get_dis_sort(h_defense_activation[idx], processing_label_h_defense_activation[mask])
-                        # threshold = torch.max(sorted_dis_validation[:math.ceil(self.SAMPLES_PER_CLASS / 2)])
-                        threshold = torch.max(sorted_dis_validation[:3])
+                        threshold = torch.max(sorted_dis_validation[:math.ceil(self.SAMPLES_PER_CLASS / 2)])
                         distance_value = sorted_dis[i].item()
 
                         if distance_value > threshold:
