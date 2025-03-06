@@ -672,7 +672,7 @@ class TED(BackdoorDefense):
                         distance_value = sorted_dis[i].item()
 
                         if distance_value > threshold:
-                            distance_value_index = self.DEFENSE_TRAIN_SIZE - 1
+                            distance_value_index = i - 1
                         else:
                             distance_value_index = i - 1
 
@@ -713,7 +713,7 @@ class TED(BackdoorDefense):
                         distance_value = sorted_dis[i].item()
 
                         if distance_value > threshold:
-                            distance_value_index = self.DEFENSE_TRAIN_SIZE - 1
+                            distance_value_index = i
                         else:
                             distance_value_index = i
 
