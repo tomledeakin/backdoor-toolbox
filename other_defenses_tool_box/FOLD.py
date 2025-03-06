@@ -643,6 +643,10 @@ class FOLD(BackdoorDefense):
         Thay vì lưu 'ranking' (thứ hạng sample cùng class trong danh sách khoảng cách),
         ta lưu 'khoảng cách' đến sample cùng class đầu tiên trong danh sách đó.
         """
+
+        processing_label_indices = torch.where(final_prediction == processing_label)[0]
+        processing_label_h_defense_activation = h_defense_activation[processing_label_indices]
+
         if layer not in layer_test_region_individual:
             layer_test_region_individual[layer] = {}
         layer_test_region_individual[layer][processing_label] = []
@@ -678,7 +682,7 @@ class FOLD(BackdoorDefense):
                         nearest neighbor of the input" to its nearest neighbors 
                         it self in the validation dataset.
                         """
-                        sorted_dis_validation, sorted_indices_validation = self.get_dis_sort(h_defense_activation[idx], self.candidate_[layer][processing_label])
+                        sorted_dis_validation, sorted_indices_validation = self.get_dis_sort(h_defense_activation[idx], processing_label_h_defense_activation)
 
                         print(f'idx: {idx}')
                         print(f'sorted_dis_validation: {sorted_dis_validation}')
