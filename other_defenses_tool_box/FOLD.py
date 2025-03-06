@@ -677,7 +677,7 @@ class FOLD(BackdoorDefense):
                         """
                         mask = ~torch.all(processing_label_h_defense_activation == h_defense_activation[idx], dim=1)
                         sorted_dis_validation, sorted_indices_validation = self.get_dis_sort(h_defense_activation[idx], processing_label_h_defense_activation[mask])
-                        threshold = torch.max(sorted_dis_validation[:4])
+                        threshold = torch.max(sorted_dis_validation[:1])
                         print(f'idx: {idx}')
                         print(f'sorted_dis_validation: {sorted_dis_validation}')
                         print(f'sorted_indices_validation: {sorted_indices_validation}')
@@ -731,8 +731,8 @@ class FOLD(BackdoorDefense):
                         # distance_value = sorted_dis[i].item() / meadian_nnb_distance
                         # result_array = np.append(result_array, distance_value)
 
-                    layer_test_region_individual[layer][new_temp_label].append(result_array)
-                    break
+                        layer_test_region_individual[layer][new_temp_label].append(result_array)
+                        break
 
         return layer_test_region_individual
 
