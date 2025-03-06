@@ -662,12 +662,14 @@ class FOLD(BackdoorDefense):
                 self.nnb_distance_dictionary[layer][processing_label] = meadian_nnb_distance
 
                 sorted_dis, sorted_indices = self.get_dis_sort(item, h_defense_activation)
+                print(f'sorted_dis: {sorted_dis}')
+                print(f'sorted_indices: {sorted_indices}')
                 count = 0
                 result_array = np.array([])
                 for i, idx in enumerate(sorted_indices[1:], start=1):
                     if final_prediction[idx] == processing_label:
                         if count == 0:
-                            distance_value_index = i - 1
+                            distance_value_index = i - 1    # this is the ranking value
                             result_array = np.append(result_array, distance_value_index)
                         # distance_value = sorted_dis[i].item() / meadian_nnb_distance
                         # result_array = np.append(result_array, distance_value)
@@ -703,7 +705,7 @@ class FOLD(BackdoorDefense):
                 for i, idx in enumerate(sorted_indices):
                     if h_defense_prediction[idx] == processing_label:
                         if count == 0:
-                            distance_value_index = i
+                            distance_value_index = i   # this is the ranking value
                             result_array = np.append(result_array, distance_value_index)
                         # distance_value = sorted_dis[i].item() / meadian_nnb_distance
                         # result_array = np.append(result_array, distance_value)
