@@ -666,13 +666,6 @@ class FOLD(BackdoorDefense):
                 self.nnb_distance_dictionary[layer][processing_label] = meadian_nnb_distance
 
                 sorted_dis, sorted_indices = self.get_dis_sort(item, h_defense_activation)
-                # print(f'sorted_dis: {sorted_dis}')
-                # print(f'sorted_indices: {sorted_indices}')
-                # print(f'final_prediction: {final_prediction}')
-                # print(f'sorted_dis.shape: {sorted_dis.shape}')
-                # print(f'sorted_indices.shape: {sorted_indices.shape}')
-                # print(f'final_prediction.shape: {final_prediction.shape}')
-
 
                 result_array = np.array([])
                 for i, idx in enumerate(sorted_indices[1:], start=1):
@@ -684,7 +677,7 @@ class FOLD(BackdoorDefense):
                         """
                         mask = ~torch.all(processing_label_h_defense_activation == h_defense_activation[idx], dim=1)
                         sorted_dis_validation, sorted_indices_validation = self.get_dis_sort(h_defense_activation[idx], processing_label_h_defense_activation[mask])
-                        threshold = torch.max(sorted_dis_validation[:4])
+                        threshold = torch.max(sorted_dis_validation[:1])
                         print(f'idx: {idx}')
                         print(f'sorted_dis_validation: {sorted_dis_validation}')
                         print(f'sorted_indices_validation: {sorted_indices_validation}')
@@ -712,6 +705,7 @@ class FOLD(BackdoorDefense):
         """
         Thay vì lưu 'ranking', ta lưu 'khoảng cách' đến sample cùng class trong tập defense.
         """
+
         if layer not in layer_test_region_individual:
             layer_test_region_individual[layer] = {}
         layer_test_region_individual[layer][new_temp_label] = []
@@ -726,19 +720,16 @@ class FOLD(BackdoorDefense):
 
                 sorted_dis, sorted_indices = self.get_dis_sort(item, h_defense_activation)
                 # Tìm khoảng cách đầu tiên tới sample trong defense có nhãn = processing_label
-                count = 0
                 result_array = np.array([])
                 for i, idx in enumerate(sorted_indices):
                     if h_defense_prediction[idx] == processing_label:
-                        if count == 0:
-                            distance_value_index = i   # this is the ranking value
-                            result_array = np.append(result_array, distance_value_index)
-                        # distance_value = sorted_dis[i].item() / meadian_nnb_distance
+                        distance_value_index = i   # this is the ranking value
+                        result_array = np.append(result_array, distance_value_index)
+                        distance_value = sorted_dis[i].item()
                         # result_array = np.append(result_array, distance_value)
-                        count += 1
-                    if count == self.NUM_NEIGHBORS:
-                        layer_test_region_individual[layer][new_temp_label].append(result_array)
-                        break
+
+                    layer_test_region_individual[layer][new_temp_label].append(result_array)
+                    break
 
         return layer_test_region_individual
 
