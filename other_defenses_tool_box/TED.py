@@ -669,12 +669,12 @@ class TED(BackdoorDefense):
                         """
                         mask = ~torch.all(processing_label_h_defense_activation == h_defense_activation[idx], dim=1)
                         sorted_dis_validation, sorted_indices_validation = self.get_dis_sort(h_defense_activation[idx], processing_label_h_defense_activation[mask])
-                        threshold = torch.max(sorted_dis_validation[:math.ceil(self.SAMPLES_PER_CLASS / 2)])
+                        # threshold = torch.max(sorted_dis_validation[:math.ceil(self.SAMPLES_PER_CLASS / 2)])
+                        threshold = torch.max(sorted_dis_validation[:3])
                         distance_value = sorted_dis[i].item()
 
                         if distance_value > threshold:
-                            # distance_value_index = self.DEFENSE_TRAIN_SIZE - 1
-                            distance_value_index = 9999999999
+                            distance_value_index = self.DEFENSE_TRAIN_SIZE - 1
                         else:
                             distance_value_index = i - 1
 
@@ -711,12 +711,12 @@ class TED(BackdoorDefense):
                     if h_defense_prediction[idx] == processing_label:
                         mask = ~torch.all(processing_label_h_defense_activation == h_defense_activation[idx], dim=1)
                         sorted_dis_validation, sorted_indices_validation = self.get_dis_sort(h_defense_activation[idx], processing_label_h_defense_activation[mask])
-                        threshold = torch.max(sorted_dis_validation[:math.ceil(self.SAMPLES_PER_CLASS / 2)])
+                        # threshold = torch.max(sorted_dis_validation[:math.ceil(self.SAMPLES_PER_CLASS / 2)])
+                        threshold = torch.max(sorted_dis_validation[:3])
                         distance_value = sorted_dis[i].item()
 
                         if distance_value > threshold:
-                            # distance_value_index = self.DEFENSE_TRAIN_SIZE - 1
-                            distance_value_index = 9999999999
+                            distance_value_index = self.DEFENSE_TRAIN_SIZE - 1
                         else:
                             distance_value_index = i
 
