@@ -678,7 +678,7 @@ class FOLD(BackdoorDefense):
                         nearest neighbor of the input" to its nearest neighbors 
                         it self in the validation dataset.
                         """
-                        sorted_dis_validation, sorted_indices_validation = self.get_dis_sort(h_defense_activation[idx], h_defense_activation)
+                        sorted_dis_validation, sorted_indices_validation = self.get_dis_sort(h_defense_activation[idx], self.candidate_[layer][processing_label])
 
                         print(f'idx: {idx}')
                         print(f'sorted_dis_validation: {sorted_dis_validation}')
