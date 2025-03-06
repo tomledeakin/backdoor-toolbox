@@ -87,7 +87,7 @@ class TED(BackdoorDefense):
         # 4) Split the full test set into 10% (defense/validation) and 90% (final test)
         all_indices = np.arange(len(self.testset))
         from sklearn.model_selection import train_test_split
-        defense_indices, test_indices = train_test_split(all_indices, test_size=0.1, random_state=42)
+        defense_indices, test_indices = train_test_split(all_indices, test_size=0.9, random_state=42)
 
         # Create subsets for defense and test sets
         defense_subset = data.Subset(self.testset, defense_indices)
@@ -97,8 +97,8 @@ class TED(BackdoorDefense):
         self.defense_loader = data.DataLoader(defense_subset, batch_size=50, shuffle=True, num_workers=0)
         self.test_loader = data.DataLoader(test_subset, batch_size=50, shuffle=False, num_workers=0)
 
-        print(f"Number of samples in defense set (90% of test): {len(defense_subset)}")
-        print(f"Number of samples in final test set (10% of test): {len(test_subset)}")
+        print(f"Number of samples in defense set (10% of test): {len(defense_subset)}")
+        print(f"Number of samples in final test set (90% of test): {len(test_subset)}")
 
         # 5) Determine unique classes by scanning the defense set
         all_labels = []
@@ -110,11 +110,11 @@ class TED(BackdoorDefense):
         print(f"Expected number of classes from args: {self.num_classes}")
 
         # 6) Set defense training parameters
-        self.SAMPLES_PER_CLASS = args.validation_per_class
+        self.SAMPLES_PER_CLASS = 5
         self.DEFENSE_TRAIN_SIZE = self.num_classes * self.SAMPLES_PER_CLASS
 
         # 7) Define number of neighbors and samples for constructing poison/clean sets
-        self.NUM_SAMPLES = args.num_test_samples
+        self.NUM_SAMPLES = 40
 
         # 8) Create defense subset from the defense set using only correctly predicted samples
         # Use the defense_subset (10% of test) instead of the training set
@@ -517,7 +517,6 @@ class TED(BackdoorDefense):
     def fetch_activation(self, loader):
         """
         Run the model on the given loader and fetch intermediate activations based on the registered hooks.
-        Nếu self.dataset == 'imagenette' thì chuyển các tensor về CPU để tiết kiệm bộ nhớ GPU.
         """
         print("Starting fetch_activation")
         self.model.eval()
@@ -526,74 +525,46 @@ class TED(BackdoorDefense):
         h_batch = {}
         activation_container = {}
 
-        # Khởi tạo hook với một batch đầu tiên
-        for images, labels in loader:
+        # Initialize hooks with one batch
+        for (images, labels) in loader:
+            print("Running the first batch to init hooks")
             _ = self.model(images.to(self.device))
             break
 
-        # Khởi tạo container cho các activation
         for key in self.activations:
             activation_container[key] = []
+
         self.activations.clear()
 
-        # Nếu dataset là 'imagenette' thì chuyển activation về CPU
-        if self.dataset == 'imagenette':
-            for batch_idx, (images, labels) in enumerate(loader, start=1):
-                images = images.to(self.device)
-                output = self.model(images)
-                pred_set.append(torch.argmax(output, dim=1).cpu())
+        for batch_idx, (images, labels) in enumerate(loader, start=1):
+            print(f"Running batch {batch_idx} - Images shape: {images.shape}, Labels shape: {labels.shape}")
+            try:
+                output = self.model(images.to(self.device))
+            except Exception as e:
+                print(f"Error running model on batch {batch_idx}: {e}")
+                break
+            pred_set.append(torch.argmax(output, -1).to(self.device))
 
-                # Thu thập activation và chuyển về CPU ngay
-                for key in self.activations:
-                    h_batch[key] = self.activations[key].view(images.shape[0], -1).cpu()
-                    activation_container[key].append(h_batch[key])
+            # Collect activations from hooks
+            for key in self.activations:
+                h_batch[key] = self.activations[key].view(images.shape[0], -1)
+                for h in h_batch[key]:
+                    activation_container[key].append(h.to(self.device))
 
-                # Lưu nhãn gốc về CPU
-                all_h_label.append(labels.cpu())
+            # Save original labels
+            for label_ in labels:
+                all_h_label.append(label_.to(self.device))
 
-                # Clear activation và giải phóng bộ nhớ GPU
-                self.activations.clear()
-                del images, labels, output
-                torch.cuda.empty_cache()
+            self.activations.clear()
 
-                if batch_idx % 10 == 0:
-                    print(f"Processed {batch_idx} batches")
+            if batch_idx % 10 == 0:
+                print(f"Processed {batch_idx} batches")
 
-            # Ghép các batch lại với nhau
-            for key in activation_container:
-                activation_container[key] = torch.cat(activation_container[key], dim=0)
-            all_h_label = torch.cat(all_h_label, dim=0)
-            pred_set = torch.cat(pred_set, dim=0)
-
-        # Trường hợp mặc định: giữ activation trên thiết bị mặc định (device)
-        else:
-            for batch_idx, (images, labels) in enumerate(loader, start=1):
-                try:
-                    images = images.to(self.device)
-                    output = self.model(images)
-                except Exception as e:
-                    print(f"Error running model on batch {batch_idx}: {e}")
-                    break
-
-                pred_set.append(torch.argmax(output, -1).to(self.device))
-
-                for key in self.activations:
-                    h_batch[key] = self.activations[key].view(images.shape[0], -1).to(self.device)
-                    activation_container[key].append(h_batch[key])
-
-                for label_ in labels:
-                    all_h_label.append(label_.to(self.device))
-
-                self.activations.clear()
-
-                if batch_idx % 10 == 0:
-                    print(f"Processed {batch_idx} batches")
-
-            # Ghép các batch lại với nhau
-            for key in activation_container:
-                activation_container[key] = torch.stack(activation_container[key])
-            all_h_label = torch.stack(all_h_label)
-            pred_set = torch.cat(pred_set)
+        # Stack everything
+        for key in activation_container:
+            activation_container[key] = torch.stack(activation_container[key])
+        all_h_label = torch.stack(all_h_label)
+        pred_set = torch.cat(pred_set)
 
         print("Finished fetch_activation")
         return all_h_label, activation_container, pred_set
@@ -965,6 +936,3 @@ class TED(BackdoorDefense):
         for h in self.hook_handles:
             h.remove()
         torch.cuda.empty_cache()
-
-
-
