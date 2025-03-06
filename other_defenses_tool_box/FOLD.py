@@ -72,7 +72,7 @@ class FOLD(BackdoorDefense):
             self.test_loader = generate_dataloader(
                 dataset=self.dataset,
                 dataset_path=config.data_dir,
-                batch_size=16,
+                batch_size=50,
                 split='test',
                 data_transform=self.data_transform,
                 shuffle=False,
@@ -93,8 +93,8 @@ class FOLD(BackdoorDefense):
         test_subset = data.Subset(self.testset, test_indices)
 
         # Create DataLoaders for defense and test sets
-        self.defense_loader = data.DataLoader(defense_subset, batch_size=16, shuffle=True, num_workers=0)
-        self.test_loader = data.DataLoader(test_subset, batch_size=16, shuffle=False, num_workers=0)
+        self.defense_loader = data.DataLoader(defense_subset, batch_size=50, shuffle=True, num_workers=0)
+        self.test_loader = data.DataLoader(test_subset, batch_size=50, shuffle=False, num_workers=0)
 
         print(f"Number of samples in defense set (90% of test): {len(defense_subset)}")
         print(f"Number of samples in final test set (10% of test): {len(test_subset)}")
@@ -138,7 +138,7 @@ class FOLD(BackdoorDefense):
         # Dictionary to store correctly predicted indices per class
         correct_indices_per_class = defaultdict(list)
         # Create a DataLoader for the defense set without shuffling to maintain index order
-        defense_loader_no_shuffle = data.DataLoader(defense_set, batch_size=16, num_workers=0, shuffle=False)
+        defense_loader_no_shuffle = data.DataLoader(defense_set, batch_size=50, num_workers=0, shuffle=False)
         current_idx = 0
 
         # Evaluate the defense set to collect correctly predicted samples
@@ -175,7 +175,7 @@ class FOLD(BackdoorDefense):
 
         # Create a new defense subset using the sampled indices and update the defense_loader
         final_defense_subset = data.Subset(underlying_dataset, defense_indices_final)
-        self.defense_loader = data.DataLoader(final_defense_subset, batch_size=16, shuffle=True, num_workers=0)
+        self.defense_loader = data.DataLoader(final_defense_subset, batch_size=50, shuffle=True, num_workers=0)
 
         # 9) Optionally, filter the defense set further to retain only correctly predicted samples
         h_benign_preds = []
@@ -194,7 +194,7 @@ class FOLD(BackdoorDefense):
         if len(benign_indices) > self.DEFENSE_TRAIN_SIZE:
             benign_indices = np.random.choice(benign_indices, self.DEFENSE_TRAIN_SIZE, replace=False)
         final_defense_subset = data.Subset(underlying_dataset, benign_indices)
-        self.defense_loader = data.DataLoader(final_defense_subset, batch_size=16, shuffle=True, num_workers=0)
+        self.defense_loader = data.DataLoader(final_defense_subset, batch_size=50, shuffle=True, num_workers=0)
 
         # 10) Define temporary labels for Poison and Clean samples
         self.POISON_TEMP_LABEL = "Poison"
@@ -398,10 +398,10 @@ class FOLD(BackdoorDefense):
                 chosen = np.random.choice(all_indices, size=self.NUM_SAMPLES, replace=False)
 
             clean_subset = data.Subset(self.testset, chosen)
-            clean_loader = data.DataLoader(clean_subset, batch_size=16, shuffle=False)
+            clean_loader = data.DataLoader(clean_subset, batch_size=50, shuffle=False)
 
             poison_subset = data.Subset(self.testset, chosen)
-            poison_loader = data.DataLoader(poison_subset, batch_size=16, shuffle=False)
+            poison_loader = data.DataLoader(poison_subset, batch_size=50, shuffle=False)
 
             # Tạo CLEAN set
             for (inputs, labels) in clean_loader:
@@ -500,12 +500,12 @@ class FOLD(BackdoorDefense):
 
         # Create poison_loader
         poison_set = CustomDataset(bd_inputs_set, bd_labels_set)
-        self.poison_loader = data.DataLoader(poison_set, batch_size=16, num_workers=2, shuffle=True)
+        self.poison_loader = data.DataLoader(poison_set, batch_size=50, num_workers=2, shuffle=True)
         print("Poison set size:", len(self.poison_loader))
 
         # Create clean_loader
         clean_set = CustomDataset(clean_inputs_set, clean_labels_set)
-        self.clean_loader = data.DataLoader(clean_set, batch_size=16, num_workers=2, shuffle=True)
+        self.clean_loader = data.DataLoader(clean_set, batch_size=50, num_workers=2, shuffle=True)
         print("Clean set size:", len(self.clean_loader))
 
         # Remove temporary variables
