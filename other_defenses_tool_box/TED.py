@@ -651,17 +651,11 @@ class TED(BackdoorDefense):
 
         self.candidate_[layer] = self.gather_activation_into_class(final_prediction, h_defense_activation)
 
-        if layer not in self.nnb_distance_dictionary:
-            self.nnb_distance_dictionary[layer] = {}
 
         if np.ndim(self.candidate_[layer][processing_label]) == 0:
             print("No sample in this class for label =", processing_label)
         else:
             for index, item in enumerate(self.candidate_[layer][processing_label]):
-                meadian_nnb_distance, _ = self.average_nearest_neighbor_distance(
-                    self.candidate_[layer][processing_label])
-
-                self.nnb_distance_dictionary[layer][processing_label] = meadian_nnb_distance
 
                 sorted_dis, sorted_indices = self.get_dis_sort(item, h_defense_activation)
 
@@ -676,13 +670,6 @@ class TED(BackdoorDefense):
                         sorted_dis_validation, sorted_indices_validation = self.get_dis_sort(h_defense_activation[idx], processing_label_h_defense_activation[mask])
                         threshold = torch.max(sorted_dis_validation[:4])
                         distance_value = sorted_dis[i].item()
-
-                        print(f'idx: {idx}')
-                        print(f'sorted_dis_validation: {sorted_dis_validation}')
-                        print(f'sorted_indices_validation: {sorted_indices_validation}')
-                        print(f'threshold: {threshold}')
-                        print(f'distance_value: {distance_value}')
-
 
                         if distance_value > threshold:
                             distance_value_index = 999999
@@ -701,7 +688,6 @@ class TED(BackdoorDefense):
         Thay vì lưu 'ranking', ta lưu 'khoảng cách' đến sample cùng class trong tập defense.
         """
 
-
         if layer not in layer_test_region_individual:
             layer_test_region_individual[layer] = {}
         layer_test_region_individual[layer][new_temp_label] = []
@@ -716,8 +702,6 @@ class TED(BackdoorDefense):
 
             for index, item in enumerate(candidate__[processing_label]):
 
-                meadian_nnb_distance = self.nnb_distance_dictionary[layer][processing_label.item()]
-
                 sorted_dis, sorted_indices = self.get_dis_sort(item, h_defense_activation)
                 # Tìm khoảng cách đầu tiên tới sample trong defense có nhãn = processing_label
 
@@ -727,11 +711,6 @@ class TED(BackdoorDefense):
                         sorted_dis_validation, sorted_indices_validation = self.get_dis_sort(h_defense_activation[idx], processing_label_h_defense_activation[mask])
                         threshold = torch.max(sorted_dis_validation[:4])
                         distance_value = sorted_dis[i].item()
-                        print(f'idx: {idx}')
-                        print(f'sorted_dis_validation: {sorted_dis_validation}')
-                        print(f'sorted_indices_validation: {sorted_indices_validation}')
-                        print(f'threshold: {threshold}')
-                        print(f'distance_value: {distance_value}')
 
                         if distance_value > threshold:
                             distance_value_index = 999999
