@@ -682,7 +682,8 @@ class FOLD(BackdoorDefense):
                         nearest neighbor of the input" to its nearest neighbors 
                         it self in the validation dataset.
                         """
-                        sorted_dis_validation, sorted_indices_validation = self.get_dis_sort(h_defense_activation[idx], processing_label_h_defense_activation)
+                        mask = ~torch.all(processing_label_h_defense_activation == h_defense_activation[idx], dim=1)
+                        sorted_dis_validation, sorted_indices_validation = self.get_dis_sort(h_defense_activation[idx], processing_label_h_defense_activation[mask])
 
                         print(f'idx: {idx}')
                         print(f'sorted_dis_validation: {sorted_dis_validation}')
