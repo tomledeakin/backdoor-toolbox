@@ -688,13 +688,12 @@ class FOLD(BackdoorDefense):
                         print(f'idx: {idx}')
                         print(f'sorted_dis_validation: {sorted_dis_validation}')
                         print(f'sorted_indices_validation: {sorted_indices_validation}')
-                        print(f'sorted_dis_validation shape: {sorted_dis_validation.shape}')
-                        print(f'sorted_indices_validation shape: {sorted_indices_validation.shape}')
 
 
                         distance_value_index = i - 1    # this is the ranking value
                         result_array = np.append(result_array, distance_value_index)
-                        distance_value = sorted_dis[i].item() / meadian_nnb_distance
+                        distance_value = sorted_dis[i].item()
+                        print(f'distance_value: {distance_value}')
                         # result_array = np.append(result_array, distance_value)
 
                         # we compute a threshold value to comapare with distance_value to see if distance_value > threshold
