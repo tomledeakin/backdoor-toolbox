@@ -669,8 +669,8 @@ class FOLD(BackdoorDefense):
                         if count == 0:
                             distance_value_index = i - 1
                             result_array = np.append(result_array, distance_value_index)
-                        distance_value = sorted_dis[i].item() / meadian_nnb_distance
-                        result_array = np.append(result_array, distance_value)
+                        # distance_value = sorted_dis[i].item() / meadian_nnb_distance
+                        # result_array = np.append(result_array, distance_value)
                         count += 1
                         if count == self.NUM_NEIGHBORS:
                             layer_test_region_individual[layer][processing_label].append(result_array)
@@ -705,8 +705,8 @@ class FOLD(BackdoorDefense):
                         if count == 0:
                             distance_value_index = i
                             result_array = np.append(result_array, distance_value_index)
-                        distance_value = sorted_dis[i].item() / meadian_nnb_distance
-                        result_array = np.append(result_array, distance_value)
+                        # distance_value = sorted_dis[i].item() / meadian_nnb_distance
+                        # result_array = np.append(result_array, distance_value)
                         count += 1
                     if count == self.NUM_NEIGHBORS:
                         layer_test_region_individual[layer][new_temp_label].append(result_array)
