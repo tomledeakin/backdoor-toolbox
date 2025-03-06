@@ -52,57 +52,20 @@ if torch.cuda.is_available():
 
 class TED(BackdoorDefense):
     def __init__(self, args):
-        """
-        Initialize the TED Defense, load the model and data, and set up necessary variables.
-        """
-        super().__init__(args)  # Calls the constructor of the parent class, BackdoorDefense
+        super().__init__(args)  # Call the constructor of the parent class, BackdoorDefense
         self.args = args
 
-
-        # 1) Model Configuration
+        # 1) Model configuration
         self.model.eval()
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.model.to(self.device)
-
         print(self.poison_type)
 
         # 2) Define the backdoor target class
         self.target = self.target_class
-        print(f'Target Class: {self.target}')
+        print(f"Target Class: {self.target}")
 
-        # 3) Create train_loader to scan the training set
-        if self.poison_type == 'SSDT':
-            self.train_loader = get_dataloader(args, train=True)
-        else:
-            self.train_loader = generate_dataloader(
-                dataset=self.dataset,
-                dataset_path=config.data_dir,
-                batch_size=50,
-                split='train',
-                data_transform=self.data_transform,
-                shuffle=True,
-                drop_last=False,
-                noisy_test=False
-            )
-
-        print(f'Number samples of train set: {len(self.train_loader.dataset)}')
-        # 4) Determine unique classes by scanning the training set
-        all_labels = []
-        for _, labels in self.train_loader:
-            all_labels.extend(labels.tolist())
-        unique_classes = set(all_labels)
-        num_classes = len(unique_classes)
-
-        print(f"Number of unique classes in the dataset (scanned from train_loader): {num_classes}")
-        print(f"Number of unique classes from args: {self.num_classes}")
-
-        # 5) Defense training size (for example)
-        self.LAYER_RATIO = 0.3
-        self.NUM_LAYERS = 1
-        self.SAMPLES_PER_CLASS = 20
-        self.DEFENSE_TRAIN_SIZE = self.num_classes * self.SAMPLES_PER_CLASS
-
-        # 6) Create a test_loader
+        # 3) Load the full test set
         if self.poison_type == 'SSDT':
             self.test_loader = get_dataloader(args, train=False)
             self.testset = get_dataset(args, train=False)
@@ -119,25 +82,50 @@ class TED(BackdoorDefense):
             )
             self.testset = self.test_loader.dataset
 
-        print(f'Number samples of test set: {len(self.testset)}')
+        print(f"Number of samples in full test set: {len(self.testset)}")
 
-        # 7) Define NUM_SAMPLES: we take 500 for clean + 500 for poison => total 1000
-        self.DATA_RATIO = 0.005
-        # self.NUM_SAMPLES = 500
-        self.NUM_SAMPLES = int(self.DATA_RATIO * len(self.testset))
+        # 4) Split the full test set into 10% (defense/validation) and 90% (final test)
+        all_indices = np.arange(len(self.testset))
+        from sklearn.model_selection import train_test_split
+        defense_indices, test_indices = train_test_split(all_indices, test_size=0.1, random_state=42)
 
-        # 8) Create defense_loader with self.SAMPLES_PER_CLASS per class, ensuring correct predictions
-        trainset = self.train_loader.dataset
+        # Create subsets for defense and test sets
+        defense_subset = data.Subset(self.testset, defense_indices)
+        test_subset = data.Subset(self.testset, test_indices)
 
-        # Check if trainset is a Subset and get the underlying dataset and indices
-        if isinstance(trainset, data.Subset):
-            underlying_dataset = trainset.dataset
-            subset_indices = trainset.indices
+        # Create DataLoaders for defense and test sets
+        self.defense_loader = data.DataLoader(defense_subset, batch_size=50, shuffle=True, num_workers=0)
+        self.test_loader = data.DataLoader(test_subset, batch_size=50, shuffle=False, num_workers=0)
+
+        print(f"Number of samples in defense set (90% of test): {len(defense_subset)}")
+        print(f"Number of samples in final test set (10% of test): {len(test_subset)}")
+
+        # 5) Determine unique classes by scanning the defense set
+        all_labels = []
+        for _, labels in self.defense_loader:
+            all_labels.extend(labels.tolist())
+        unique_classes = set(all_labels)
+        num_classes = len(unique_classes)
+        print(f"Number of unique classes (from defense set): {num_classes}")
+        print(f"Expected number of classes from args: {self.num_classes}")
+
+        # 6) Set defense training parameters
+        self.SAMPLES_PER_CLASS = args.validation_per_class
+        self.DEFENSE_TRAIN_SIZE = self.num_classes * self.SAMPLES_PER_CLASS
+
+        # 7) Define number of neighbors and samples for constructing poison/clean sets
+        self.NUM_SAMPLES = args.num_test_samples
+
+        # 8) Create defense subset from the defense set using only correctly predicted samples
+        # Use the defense_subset (10% of test) instead of the training set
+        defense_set = defense_subset  # Alias for clarity
+        if isinstance(defense_set, data.Subset):
+            underlying_dataset = defense_set.dataset
+            subset_indices = defense_set.indices
         else:
-            underlying_dataset = trainset
-            subset_indices = np.arange(len(trainset))
+            underlying_dataset = defense_set
+            subset_indices = np.arange(len(defense_set))
 
-        # Organize indices by class
         from collections import defaultdict
         label_to_indices = defaultdict(list)
         for idx in subset_indices:
@@ -145,35 +133,27 @@ class TED(BackdoorDefense):
                 _, label = underlying_dataset[idx]
                 label_to_indices[label].append(idx)
             except FileNotFoundError:
-                print(f"Warning: File {idx}.png not exist.")
+                print(f"Warning: File {idx}.png does not exist.")
 
-        # Initialize a dictionary to hold correctly predicted indices per class
+        # Dictionary to store correctly predicted indices per class
         correct_indices_per_class = defaultdict(list)
-
-        # Create a DataLoader for the training set without shuffling to keep track of indices
-        train_loader_no_shuffle = data.DataLoader(
-            trainset,
-            batch_size=50,
-            num_workers=0,
-            shuffle=False
-        )
-
-        # Initialize a counter to keep track of the current index in the dataset
+        # Create a DataLoader for the defense set without shuffling to maintain index order
+        defense_loader_no_shuffle = data.DataLoader(defense_set, batch_size=50, num_workers=0, shuffle=False)
         current_idx = 0
 
-        # Iterate over the training set and collect correctly predicted samples
+        # Evaluate the defense set to collect correctly predicted samples
         with torch.no_grad():
-            for inputs, labels in tqdm(train_loader_no_shuffle, desc="Evaluating trainset for correct predictions"):
+            for inputs, labels in tqdm(defense_loader_no_shuffle,
+                                       desc="Evaluating defense set for correct predictions"):
                 inputs, labels = inputs.to(self.device), labels.to(self.device)
                 outputs = self.model(inputs)
                 preds = torch.argmax(outputs, dim=1)
                 correct_mask = preds == labels
 
-                # Iterate through the batch to collect correct indices
+                # Loop over batch and record correct sample indices
                 for i in range(len(labels)):
                     if correct_mask[i].item():
-                        if isinstance(trainset, data.Subset):
-                            # Get the original index from the subset
+                        if isinstance(defense_set, data.Subset):
                             sample_idx = subset_indices[current_idx]
                         else:
                             sample_idx = current_idx
@@ -181,54 +161,25 @@ class TED(BackdoorDefense):
                         correct_indices_per_class[label].append(sample_idx)
                     current_idx += 1
 
-        # Initialize a list to hold all defense indices
-        defense_indices = []
-
-        # For each class, sample self.SAMPLES_PER_CLASS correctly predicted samples
+        # For each class, sample SAMPLES_PER_CLASS correctly predicted samples
+        defense_indices_final = []
         for label in unique_classes:
-
             correct_indices = correct_indices_per_class[label]
             num_correct = len(correct_indices)
-
             if num_correct >= self.SAMPLES_PER_CLASS:
-                # If enough correct samples, randomly choose without replacement
                 sampled = np.random.choice(correct_indices, self.SAMPLES_PER_CLASS, replace=False)
             else:
-                # If not enough, sample with replacement to meet the required number
                 sampled = np.random.choice(correct_indices, self.SAMPLES_PER_CLASS, replace=True)
-                print(f"Warning: Not enough correctly predicted samples for class {label}. "
-                      f"Sampling with replacement to meet the required number.")
+                print(f"Warning: Not enough correctly predicted samples for class {label}. Sampling with replacement.")
+            defense_indices_final.extend(sampled)
 
-            defense_indices.extend(sampled)
+        # Create a new defense subset using the sampled indices and update the defense_loader
+        final_defense_subset = data.Subset(underlying_dataset, defense_indices_final)
+        self.defense_loader = data.DataLoader(final_defense_subset, batch_size=50, shuffle=True, num_workers=0)
 
-        # Create a subset of the training set for defense using the sampled indices
-        defense_subset = data.Subset(trainset, defense_indices)
-
-        # Create a DataLoader for the defense subset
-        self.defense_loader = data.DataLoader(
-            defense_subset,
-            batch_size=50,
-            num_workers=0,
-            shuffle=True
-        )
-
-        # Calculate and print the number of samples per class in the defense subset
-        from collections import Counter
-
-        # Extract labels from the defense_subset
-        defense_labels = [label for _, label in defense_subset]
-
-        # Count the number of samples per class
-        label_counts = Counter(defense_labels)
-
-        # print("Number of samples per class in defense_subset:")
-        # for label, count in label_counts.items():
-        #     print(f"Class {label}: {count} samples")
-
-        # 9) Filter the defense set to keep correctly predicted samples only (optional)
+        # 9) Optionally, filter the defense set further to retain only correctly predicted samples
         h_benign_preds = []
         h_benign_ori_labels = []
-
         with torch.no_grad():
             for inputs, labels in self.defense_loader:
                 inputs, labels = inputs.to(self.device), labels.to(self.device)
@@ -236,25 +187,16 @@ class TED(BackdoorDefense):
                 preds = torch.argmax(outputs, dim=1)
                 h_benign_preds.extend(preds.cpu().numpy())
                 h_benign_ori_labels.extend(labels.cpu().numpy())
-
         h_benign_preds = np.array(h_benign_preds)
         h_benign_ori_labels = np.array(h_benign_ori_labels)
-
         benign_mask = h_benign_ori_labels == h_benign_preds
-        benign_indices = np.array(defense_indices)[benign_mask]
-
+        benign_indices = np.array(defense_indices_final)[benign_mask]
         if len(benign_indices) > self.DEFENSE_TRAIN_SIZE:
             benign_indices = np.random.choice(benign_indices, self.DEFENSE_TRAIN_SIZE, replace=False)
+        final_defense_subset = data.Subset(underlying_dataset, benign_indices)
+        self.defense_loader = data.DataLoader(final_defense_subset, batch_size=50, shuffle=True, num_workers=0)
 
-        defense_subset = data.Subset(trainset, benign_indices)
-        self.defense_loader = data.DataLoader(
-            defense_subset,
-            batch_size=50,
-            num_workers=0,
-            shuffle=True
-        )
-
-        # 10) Define two temporary labels: Poison and Clean
+        # 10) Define temporary labels for Poison and Clean samples
         self.POISON_TEMP_LABEL = "Poison"
         self.CLEAN_TEMP_LABEL = "Clean"
         self.label_mapping = {
@@ -262,31 +204,25 @@ class TED(BackdoorDefense):
             "Clean": 102
         }
 
-        # Poison and Clean sample counters
+        # Initialize counters and temporary containers for Poison and Clean sets
         self.poison_count = 0
         self.clean_count = 0
-
-        # Temporary containers for building Poison and Clean sets
         self.temp_poison_inputs_set = []
         self.temp_poison_labels_set = []
         self.temp_poison_pred_set = []
-
         self.temp_clean_inputs_set = []
         self.temp_clean_labels_set = []
         self.temp_clean_pred_set = []
 
-        # Hooks for activation extraction
+        # 11) Set up hooks for activation extraction
         self.hook_handles = []
         self.activations = {}
         self.register_hooks()
-        self.nnb_distance_dictionary = {}
 
-        # Additional intermediate variables
+        # 12) Additional intermediate variables and directory for saving visualizations
         self.Test_C = self.num_classes + 2
         self.topological_representation = {}
         self.candidate_ = {}
-
-        # Directory to save visualizations
         self.save_dir = f"TED/{self.dataset}/{self.poison_type}"
         os.makedirs(self.save_dir, exist_ok=True)
 
