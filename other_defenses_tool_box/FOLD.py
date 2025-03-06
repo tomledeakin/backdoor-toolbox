@@ -678,13 +678,14 @@ class FOLD(BackdoorDefense):
                         mask = ~torch.all(processing_label_h_defense_activation == h_defense_activation[idx], dim=1)
                         sorted_dis_validation, sorted_indices_validation = self.get_dis_sort(h_defense_activation[idx], processing_label_h_defense_activation[mask])
                         threshold = torch.max(sorted_dis_validation[:4])
+                        distance_value = sorted_dis[i].item()
+
                         print(f'idx: {idx}')
                         print(f'sorted_dis_validation: {sorted_dis_validation}')
                         print(f'sorted_indices_validation: {sorted_indices_validation}')
                         print(f'threshold: {threshold}')
-
-                        distance_value = sorted_dis[i].item()
                         print(f'distance_value: {distance_value}')
+
 
                         if distance_value > threshold:
                             distance_value_index = 999999
@@ -715,6 +716,10 @@ class FOLD(BackdoorDefense):
         labels = torch.unique(new_prediction)
 
         for processing_label in labels:
+
+            processing_label_indices = torch.where(new_prediction == processing_label)[0]
+            processing_label_h_defense_activation = h_defense_activation[processing_label_indices]
+
             for index, item in enumerate(candidate__[processing_label]):
 
                 meadian_nnb_distance = self.nnb_distance_dictionary[layer][processing_label.item()]
@@ -725,8 +730,21 @@ class FOLD(BackdoorDefense):
                 result_array = np.array([])
                 for i, idx in enumerate(sorted_indices):
                     if h_defense_prediction[idx] == processing_label:
+                        mask = ~torch.all(processing_label_h_defense_activation == h_defense_activation[idx], dim=1)
+                        sorted_dis_validation, sorted_indices_validation = self.get_dis_sort(h_defense_activation[idx], processing_label_h_defense_activation[mask])
+                        threshold = torch.max(sorted_dis_validation[:4])
+                        distance_value = sorted_dis[i].item()
+                        print(f'idx: {idx}')
+                        print(f'sorted_dis_validation: {sorted_dis_validation}')
+                        print(f'sorted_indices_validation: {sorted_indices_validation}')
+                        print(f'threshold: {threshold}')
+                        print(f'distance_value: {distance_value}')
 
-                        distance_value_index = i   # this is the ranking value
+                        if distance_value > threshold:
+                            distance_value_index = 999999
+                        else:
+                            distance_value_index = i
+
                         result_array = np.append(result_array, distance_value_index)
                         # distance_value = sorted_dis[i].item() / meadian_nnb_distance
                         # result_array = np.append(result_array, distance_value)
