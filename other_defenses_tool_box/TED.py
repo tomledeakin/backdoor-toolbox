@@ -925,10 +925,36 @@ class TED(BackdoorDefense):
         inputs_all_unknown = np.concatenate(inputs_all_unknown)
         labels_all_unknown = np.concatenate(labels_all_unknown)
 
-        pd.DataFrame(inputs_all_benign).to_csv(os.path.join(self.save_dir, "inputs_all_benign.csv"), index=False, header=False)
-        pd.DataFrame(labels_all_benign).to_csv(os.path.join(self.save_dir, "labels_all_benign.csv"), index=False, header=False)
-        pd.DataFrame(inputs_all_unknown).to_csv(os.path.join(self.save_dir, "inputs_all_unknown.csv"), index=False, header=False)
-        pd.DataFrame(labels_all_unknown).to_csv(os.path.join(self.save_dir, "labels_all_unknown.csv"), index=False, header=False)
+        # Tạo dictionary để lưu dataset theo từng class
+        benign_datasets = {}
+
+        unique_classes = np.unique(labels_all_benign)
+
+        # Duyệt qua từng class
+        for class_label in unique_classes:
+            class_indices = np.where(labels_all_benign == class_label)[0]
+            class_data = inputs_all_benign[class_indices]
+
+            print(f'{class_label}: {class_indices}')
+
+            """
+            Chỉ giữ lại các layers có ít nhất 90% giá trị = 0
+            """
+            zero_counts = np.sum(class_data == 0, axis=0)
+            total_samples = class_data.shape[0]
+            zero_ratio_per_layer = zero_counts / total_samples
+
+            selected_layers = np.where(zero_ratio_per_layer >= self.validation_threshold)[0]
+            print(selected_layers)
+            print('------------------------')
+            benign_datasets[class_label] = {
+                "inputs": class_data[:, selected_layers],
+                "kept_layers": selected_layers
+            }
+
+        for class_label, data in benign_datasets.items():
+            print(f"Class {class_label}: {data['inputs'].shape[0]} samples, kept {data['inputs'].shape[1]} layers")
+            print(f"Kept layers indices: {data['kept_layers']}")
 
         print('STEP 9')
         pca_t = sklearn_PCA(n_components=2)
