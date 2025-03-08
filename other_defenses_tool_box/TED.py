@@ -926,11 +926,7 @@ class TED(BackdoorDefense):
 
         labels_all_poison_np = labels_all_poison.cpu().numpy()
         labels_all_clean_np = labels_all_clean.cpu().numpy()
-        test_prediction = np.concatenate((labels_all_poison_np, labels_all_clean_np))
-
-        df = pd.DataFrame(test_prediction, columns=["label"])
-        csv_path = os.path.join(self.save_dir, "test_prediction.csv")
-        df.to_csv(csv_path, index=False)
+        unknown_prediction = np.concatenate((labels_all_poison_np, labels_all_clean_np))
 
         # Tạo dictionary để lưu dataset theo từng class
         benign_datasets = {}
@@ -964,6 +960,20 @@ class TED(BackdoorDefense):
             print(f"Kept layers indices: {data['kept_layers']}")
 
         unknown_datasets = {}
+        for class_label, benign_data in benign_datasets.items():
+            class_indices_unknown = np.where(unknown_prediction == class_label)[0]
+            class_data_unknown = inputs_all_unknown[class_indices_unknown]
+
+            selected_layers = benign_data["kept_layers"]
+
+            unknown_datasets[class_label] = {
+                "inputs": class_data_unknown[:, selected_layers],
+                "kept_layers": selected_layers
+            }
+
+        for class_label, data in unknown_datasets.items():
+            print(f"Class {class_label}: {data['inputs'].shape[0]} samples, kept {data['inputs'].shape[1]} layers")
+            print(f"Kept layers indices: {data['kept_layers']}")
 
 
         print('STEP 9')
