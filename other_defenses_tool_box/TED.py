@@ -1028,42 +1028,10 @@ class TED(BackdoorDefense):
              binary_result_clean[class_label].size > 0]
         )
 
-        print("Binary result for all Poison Unknown Samples:")
-        print(binary_poison_all)
-        print("Binary result for all Clean Unknown Samples:")
-        print(binary_clean_all)
-
-        print('STEP 9')
-        pca_t = sklearn_PCA(n_components=2)
-        pca_fit = pca_t.fit(inputs_all_benign)
-
-        benign_trajectories = pca_fit.transform(inputs_all_benign)
-        trajectories = pca_fit.transform(np.concatenate((inputs_all_unknown, inputs_all_benign), axis=0))
-
-        df_classes = pd.DataFrame(np.concatenate((labels_all_unknown, labels_all_benign), axis=0))
-
-        fig_ = px.scatter(
-            trajectories, x=0, y=1, color=df_classes[0].astype(str), labels={'color': 'digit'},
-            color_discrete_sequence=px.colors.qualitative.Dark24,
-        )
-
-        pca = PCA(contamination=0.01, n_components=2)
-        pca.fit(inputs_all_benign)
-
-        y_train_scores = pca.decision_function(inputs_all_benign)
-        y_test_scores = pca.decision_function(inputs_all_unknown)
-        y_test_pred = pca.predict(inputs_all_unknown)
-        prediction_mask = (y_test_pred == 1)
-        prediction_labels = labels_all_unknown[prediction_mask]
-        label_counts = Counter(prediction_labels)
-
-        print("\n----------- DETECTION RESULTS -----------")
-        for label, count in label_counts.items():
-            print(f'Label {label}: {count}')
-
+        y_test_pred = np.concatenate((binary_poison_all, binary_clean_all))
         is_poison_mask = (labels_all_unknown == self.POISON_TEMP_LABEL).astype(int)
-        fpr, tpr, thresholds = metrics.roc_curve(is_poison_mask, y_test_scores, pos_label=1)
-        auc_val = metrics.auc(fpr, tpr)
+        print(y_test_pred)
+        print(is_poison_mask)
 
         tn, fp, fn, tp = confusion_matrix(is_poison_mask, y_test_pred).ravel()
         TPR = tp / (tp + fn) if (tp + fn) > 0 else 0
@@ -1072,14 +1040,55 @@ class TED(BackdoorDefense):
 
         print("TPR: {:.2f}%".format(TPR * 100))
         print("FPR: {:.2f}%".format(FPR * 100))
-        print("AUC: {:.4f}".format(auc_val))
         print(f"F1 score: {f1:.4f}")
-        print("True Positives (TP):", tp)
-        print("False Positives (FP):", fp)
-        print("True Negatives (TN):", tn)
-        print("False Negatives (FN):", fn)
 
-        print("\n[INFO] TED run completed.")
+        # print('STEP 9')
+        # pca_t = sklearn_PCA(n_components=2)
+        # pca_fit = pca_t.fit(inputs_all_benign)
+        #
+        # benign_trajectories = pca_fit.transform(inputs_all_benign)
+        # trajectories = pca_fit.transform(np.concatenate((inputs_all_unknown, inputs_all_benign), axis=0))
+        #
+        # df_classes = pd.DataFrame(np.concatenate((labels_all_unknown, labels_all_benign), axis=0))
+        #
+        # fig_ = px.scatter(
+        #     trajectories, x=0, y=1, color=df_classes[0].astype(str), labels={'color': 'digit'},
+        #     color_discrete_sequence=px.colors.qualitative.Dark24,
+        # )
+        #
+        # pca = PCA(contamination=0.01, n_components=2)
+        # pca.fit(inputs_all_benign)
+        #
+        # y_train_scores = pca.decision_function(inputs_all_benign)
+        # y_test_scores = pca.decision_function(inputs_all_unknown)
+        # y_test_pred = pca.predict(inputs_all_unknown)
+        # prediction_mask = (y_test_pred == 1)
+        # prediction_labels = labels_all_unknown[prediction_mask]
+        # label_counts = Counter(prediction_labels)
+
+        # print("\n----------- DETECTION RESULTS -----------")
+        # for label, count in label_counts.items():
+        #     print(f'Label {label}: {count}')
+        #
+        # is_poison_mask = (labels_all_unknown == self.POISON_TEMP_LABEL).astype(int)
+        # fpr, tpr, thresholds = metrics.roc_curve(is_poison_mask, y_test_scores, pos_label=1)
+        # auc_val = metrics.auc(fpr, tpr)
+        #
+        # tn, fp, fn, tp = confusion_matrix(is_poison_mask, y_test_pred).ravel()
+        # TPR = tp / (tp + fn) if (tp + fn) > 0 else 0
+        # FPR = fp / (fp + tn) if (fp + tn) > 0 else 0
+        # f1 = metrics.f1_score(is_poison_mask, y_test_pred)
+        #
+        # print("TPR: {:.2f}%".format(TPR * 100))
+        # print("FPR: {:.2f}%".format(FPR * 100))
+        # print("AUC: {:.4f}".format(auc_val))
+        # print(f"F1 score: {f1:.4f}")
+        # print("True Positives (TP):", tp)
+        # print("False Positives (FP):", fp)
+        # print("True Negatives (TN):", tn)
+        # print("False Negatives (FN):", fn)
+        #
+        # print("\n[INFO] TED run completed.")
 
     def detect(self):
         """
