@@ -925,36 +925,46 @@ class TED(BackdoorDefense):
         inputs_all_unknown = np.concatenate(inputs_all_unknown)
         labels_all_unknown = np.concatenate(labels_all_unknown)
 
-        # Tạo dictionary để lưu dataset theo từng class
-        benign_datasets = {}
+        defense_preds_np = self.h_defense_preds.cpu().numpy()
+        are_equal = np.array_equal(defense_preds_np, labels_all_benign)
+        print(f"Are they equal? {are_equal}")
 
-        unique_classes = np.unique(labels_all_benign)
+        poison_labels_np = self.h_poison_ori_labels.cpu().numpy()
+        clean_labels_np = self.h_clean_ori_labels.cpu().numpy()
+        concatenated_labels_np = np.concatenate((poison_labels_np, clean_labels_np), axis=0)
+        are_equal = np.array_equal(concatenated_labels_np, labels_all_unknown)
+        print(f"Are they equal? {are_equal}")
 
-        # Duyệt qua từng class
-        for class_label in unique_classes:
-            class_indices = np.where(labels_all_benign == class_label)[0]
-            class_data = inputs_all_benign[class_indices]
-
-            print(f'{class_label}: {class_indices}')
-
-            """
-            Chỉ giữ lại các layers có ít nhất 90% giá trị = 0
-            """
-            zero_counts = np.sum(class_data == 0, axis=0)
-            total_samples = class_data.shape[0]
-            zero_ratio_per_layer = zero_counts / total_samples
-
-            selected_layers = np.where(zero_ratio_per_layer >= self.validation_threshold)[0]
-            print(selected_layers)
-            print('------------------------')
-            benign_datasets[class_label] = {
-                "inputs": class_data[:, selected_layers],
-                "kept_layers": selected_layers
-            }
-
-        for class_label, data in benign_datasets.items():
-            print(f"Class {class_label}: {data['inputs'].shape[0]} samples, kept {data['inputs'].shape[1]} layers")
-            print(f"Kept layers indices: {data['kept_layers']}")
+        # # Tạo dictionary để lưu dataset theo từng class
+        # benign_datasets = {}
+        #
+        # unique_classes = np.unique(labels_all_benign)
+        #
+        # # Duyệt qua từng class
+        # for class_label in unique_classes:
+        #     class_indices = np.where(labels_all_benign == class_label)[0]
+        #     class_data = inputs_all_benign[class_indices]
+        #
+        #     print(f'{class_label}: {class_indices}')
+        #
+        #     """
+        #     Chỉ giữ lại các layers có ít nhất 90% giá trị = 0
+        #     """
+        #     zero_counts = np.sum(class_data == 0, axis=0)
+        #     total_samples = class_data.shape[0]
+        #     zero_ratio_per_layer = zero_counts / total_samples
+        #
+        #     selected_layers = np.where(zero_ratio_per_layer >= self.validation_threshold)[0]
+        #     print(selected_layers)
+        #     print('------------------------')
+        #     benign_datasets[class_label] = {
+        #         "inputs": class_data[:, selected_layers],
+        #         "kept_layers": selected_layers
+        #     }
+        #
+        # for class_label, data in benign_datasets.items():
+        #     print(f"Class {class_label}: {data['inputs'].shape[0]} samples, kept {data['inputs'].shape[1]} layers")
+        #     print(f"Kept layers indices: {data['kept_layers']}")
 
         print('STEP 9')
         pca_t = sklearn_PCA(n_components=2)
