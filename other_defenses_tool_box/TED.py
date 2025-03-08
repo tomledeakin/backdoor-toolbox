@@ -228,7 +228,7 @@ class TED(BackdoorDefense):
         os.makedirs(self.save_dir, exist_ok=True)
 
         # 13) TED Extension
-        self.validation_threshold = 0.75
+        self.validation_threshold = 0.9
         self.layers_by_class = {c: [] for c in range(self.num_classes)}
         self.threshold_by_class = {c: None for c in range(self.num_classes)}
 
@@ -918,131 +918,78 @@ class TED(BackdoorDefense):
                 inputs_all_unknown.append(np.array(inputs))
                 labels_all_unknown.append(np.array(labels))
 
-        inputs_all_benign = np.concatenate(inputs_all_benign)
-        labels_all_benign = np.concatenate(labels_all_benign)
+        # =====================
+        # 1) GỘP DỮ LIỆU
+        # =====================
+        # Gộp tất cả benign
+        inputs_all_benign = np.concatenate(inputs_all_benign)  # (N_benign, D)
+        labels_all_benign = np.concatenate(labels_all_benign)  # (N_benign,)
 
-        inputs_all_unknown = np.concatenate(inputs_all_unknown)
-        labels_all_unknown = np.concatenate(labels_all_unknown)
+        # Gộp tất cả unknown
+        inputs_all_unknown = np.concatenate(inputs_all_unknown)  # (N_unknown, D)
+        labels_all_unknown = np.concatenate(labels_all_unknown)  # (N_unknown,)
 
+        # Tách unknown thành poison & clean (nửa đầu => poison, nửa sau => clean)
         inputs_poison = inputs_all_unknown[:inputs_all_unknown.shape[0] // 2]
         inputs_clean = inputs_all_unknown[inputs_all_unknown.shape[0] // 2:]
 
-        labels_all_poison_np = labels_all_poison.cpu().numpy()
-        labels_all_clean_np = labels_all_clean.cpu().numpy()
+        # Tạo mảng label poison/clean (thông qua torch -> numpy)
+        labels_all_poison_np = labels_all_poison.cpu().numpy()  # (N_poison,)
+        labels_all_clean_np = labels_all_clean.cpu().numpy()  # (N_clean,)
         unknown_prediction = np.concatenate((labels_all_poison_np, labels_all_clean_np))
 
-        # Tạo dictionary để lưu dataset theo từng class
-        benign_datasets = {}
+        # =====================
+        # 2) CHỌN LAYERS CHUNG CHO BENIGN
+        # =====================
+        # Tính tỷ lệ 0 theo từng cột (layer)
+        zero_counts = np.sum(inputs_all_benign == 0, axis=0)  # shape (D,)
+        total_benign = inputs_all_benign.shape[0]
+        zero_ratio_per_layer = zero_counts / total_benign
 
-        unique_classes = np.unique(labels_all_benign)
+        # Chỉ giữ lại các layer có >= self.validation_threshold giá trị = 0
+        selected_layers = np.where(zero_ratio_per_layer >= self.validation_threshold)[0]
+        print("[INFO] Selected Layers:", selected_layers)
 
-        # Duyệt qua từng class
-        for class_label in unique_classes:
-            class_indices = np.where(labels_all_benign == class_label)[0]
-            class_data = inputs_all_benign[class_indices]
+        # =====================
+        # 3) TÍNH SCORE TRÊN BENIGN & LẤY NGƯỠNG (top10_threshold)
+        # =====================
+        scores_benign = np.sum(inputs_all_benign[:, selected_layers], axis=1)
 
-            """
-            Chỉ giữ lại các layers có ít nhất 90% giá trị = 0
-            """
-            zero_counts = np.sum(class_data == 0, axis=0)
-            total_samples = class_data.shape[0]
-            zero_ratio_per_layer = zero_counts / total_samples
+        # Ví dụ: lấy top 10% score cao nhất, rồi lấy MIN trong top đó
+        n_top = int(np.ceil(scores_benign.shape[0] * 0.1))
+        if n_top > 0:
+            top_scores = np.sort(scores_benign)[-n_top:]
+            top10_threshold = np.min(top_scores)
+        else:
+            top10_threshold = 0
 
-            selected_layers = np.where(zero_ratio_per_layer >= self.validation_threshold)[0]
-            print(selected_layers)
+        print(f"[INFO] Top 10% threshold on benign = {top10_threshold:.4f}")
 
-            # Tính score: tổng các giá trị của mỗi row sau khi lọc theo các layer được chọn
-            scores = np.sum(class_data[:, selected_layers], axis=1)
+        # =====================
+        # 4) TÍNH SCORE CHO POISON & CLEAN (không chia theo class)
+        # =====================
+        scores_poison = np.sum(inputs_poison[:, selected_layers], axis=1)
+        scores_clean = np.sum(inputs_clean[:, selected_layers], axis=1)
 
-            # Tính top 10% score cao nhất và lấy giá trị thấp nhất trong top 10%
-            n_top = int(np.ceil(scores.shape[0] * (1 - self.validation_threshold)))
-            if n_top > 0:
-                top_scores = np.sort(scores)[-n_top:]
-                top10_threshold = np.min(top_scores)
-            else:
-                top10_threshold = 0
+        # =====================
+        # 5) XÁC ĐỊNH NHÃN NHỊ PHÂN THEO NGƯỠNG
+        # =====================
+        # > top10_threshold => 1, ngược lại => 0
+        binary_poison = np.where(scores_poison > top10_threshold, 1, 0)
+        binary_clean = np.where(scores_clean > top10_threshold, 1, 0)
 
-            benign_datasets[class_label] = {
-                "inputs": class_data[:, selected_layers],
-                "kept_layers": selected_layers,
-                "score": scores,
-                "top10_threshold": top10_threshold
-            }
+        # Ghép hai mảng nhị phân => y_test_pred
+        y_test_pred = np.concatenate((binary_poison, binary_clean))
 
-        unknown_datasets_poison = {}
-        unknown_datasets_clean = {}
-        for class_label, benign_data in benign_datasets.items():
-            selected_layers = benign_data["kept_layers"]
-
-            # Xử lý poison: chọn các sample có label = class_label từ labels_all_poison_np
-            class_indices_poison = np.where(labels_all_poison_np == class_label)[0]
-            class_data_poison = inputs_poison[class_indices_poison]
-            unknown_datasets_poison[class_label] = {
-                "inputs": class_data_poison[:, selected_layers],
-                "kept_layers": selected_layers,
-                "score": np.sum(class_data_poison[:, selected_layers], axis=1)
-            }
-
-            # Xử lý clean: chọn các sample có label = class_label từ labels_all_clean_np
-            class_indices_clean = np.where(labels_all_clean_np == class_label)[0]
-            class_data_clean = inputs_clean[class_indices_clean]
-            unknown_datasets_clean[class_label] = {
-                "inputs": class_data_clean[:, selected_layers],
-                "kept_layers": selected_layers,
-                "score": np.sum(class_data_clean[:, selected_layers], axis=1)
-            }
-
-        # Tạo dictionary để lưu kết quả so sánh cho poison và clean
-        binary_result_poison = {}
-        binary_result_clean = {}
-
-        # Duyệt qua từng class (giả sử benign_datasets chứa các class cần so sánh)
-        for class_label in benign_datasets.keys():
-            top10_threshold = benign_datasets[class_label]["top10_threshold"]
-
-            # Xử lý cho poison:
-            if class_label in unknown_datasets_poison:
-                scores_poison = unknown_datasets_poison[class_label]["score"]
-                # So sánh từng score: nếu score > highest_score thì gán 1, ngược lại gán 0
-                binary_array_poison = np.where(scores_poison > top10_threshold, 1, 0)
-                binary_result_poison[class_label] = binary_array_poison
-            else:
-                binary_result_poison[class_label] = np.array([])
-
-            # Xử lý cho clean:
-            if class_label in unknown_datasets_clean:
-                scores_clean = unknown_datasets_clean[class_label]["score"]
-                binary_array_clean = np.where(scores_clean > top10_threshold, 1, 0)
-                binary_result_clean[class_label] = binary_array_clean
-            else:
-                binary_result_clean[class_label] = np.array([])
-
-        # In kết quả
-        print("=== Binary Comparison for Poison Unknown Datasets ===")
-        for class_label, binary_array in binary_result_poison.items():
-            print(f"Class {class_label}: {binary_array}")
-
-        print("\n=== Binary Comparison for Clean Unknown Datasets ===")
-        for class_label, binary_array in binary_result_clean.items():
-            print(f"Class {class_label}: {binary_array}")
-
-        # Tạo array cho toàn bộ poison bằng cách concatenate các mảng nhị phân theo từng lớp
-        binary_poison_all = np.concatenate(
-            [binary_result_poison[class_label] for class_label in sorted(binary_result_poison.keys()) if
-             binary_result_poison[class_label].size > 0]
-        )
-
-        # Tạo array cho toàn bộ clean tương tự
-        binary_clean_all = np.concatenate(
-            [binary_result_clean[class_label] for class_label in sorted(binary_result_clean.keys()) if
-             binary_result_clean[class_label].size > 0]
-        )
-
-        y_test_pred = np.concatenate((binary_poison_all, binary_clean_all))
+        # Tạo ground truth mask (0=clean, 1=poison)
         is_poison_mask = (labels_all_unknown == self.POISON_TEMP_LABEL).astype(int)
-        print(y_test_pred)
-        print(is_poison_mask)
 
+        print("[DEBUG] y_test_pred:", y_test_pred)
+        print("[DEBUG] is_poison_mask:", is_poison_mask)
+
+        # =====================
+        # 6) TÍNH CÁC CHỈ SỐ ĐÁNH GIÁ
+        # =====================
         tn, fp, fn, tp = confusion_matrix(is_poison_mask, y_test_pred).ravel()
         TPR = tp / (tp + fn) if (tp + fn) > 0 else 0
         FPR = fp / (fp + tn) if (fp + tn) > 0 else 0
@@ -1052,53 +999,17 @@ class TED(BackdoorDefense):
         print("FPR: {:.2f}%".format(FPR * 100))
         print(f"F1 score: {f1:.4f}")
 
-        # print('STEP 9')
-        # pca_t = sklearn_PCA(n_components=2)
-        # pca_fit = pca_t.fit(inputs_all_benign)
-        #
-        # benign_trajectories = pca_fit.transform(inputs_all_benign)
-        # trajectories = pca_fit.transform(np.concatenate((inputs_all_unknown, inputs_all_benign), axis=0))
-        #
-        # df_classes = pd.DataFrame(np.concatenate((labels_all_unknown, labels_all_benign), axis=0))
-        #
-        # fig_ = px.scatter(
-        #     trajectories, x=0, y=1, color=df_classes[0].astype(str), labels={'color': 'digit'},
-        #     color_discrete_sequence=px.colors.qualitative.Dark24,
-        # )
-        #
-        # pca = PCA(contamination=0.01, n_components=2)
-        # pca.fit(inputs_all_benign)
-        #
-        # y_train_scores = pca.decision_function(inputs_all_benign)
-        # y_test_scores = pca.decision_function(inputs_all_unknown)
-        # y_test_pred = pca.predict(inputs_all_unknown)
-        # prediction_mask = (y_test_pred == 1)
-        # prediction_labels = labels_all_unknown[prediction_mask]
-        # label_counts = Counter(prediction_labels)
+        # (Tuỳ chọn) Tính ROC AUC dựa trên y_test_pred (0/1) HOẶC score_poison/score_clean (liên tục)
+        from sklearn.metrics import roc_auc_score
 
-        # print("\n----------- DETECTION RESULTS -----------")
-        # for label, count in label_counts.items():
-        #     print(f'Label {label}: {count}')
-        #
-        # is_poison_mask = (labels_all_unknown == self.POISON_TEMP_LABEL).astype(int)
-        # fpr, tpr, thresholds = metrics.roc_curve(is_poison_mask, y_test_scores, pos_label=1)
-        # auc_val = metrics.auc(fpr, tpr)
-        #
-        # tn, fp, fn, tp = confusion_matrix(is_poison_mask, y_test_pred).ravel()
-        # TPR = tp / (tp + fn) if (tp + fn) > 0 else 0
-        # FPR = fp / (fp + tn) if (fp + tn) > 0 else 0
-        # f1 = metrics.f1_score(is_poison_mask, y_test_pred)
-        #
-        # print("TPR: {:.2f}%".format(TPR * 100))
-        # print("FPR: {:.2f}%".format(FPR * 100))
-        # print("AUC: {:.4f}".format(auc_val))
-        # print(f"F1 score: {f1:.4f}")
-        # print("True Positives (TP):", tp)
-        # print("False Positives (FP):", fp)
-        # print("True Negatives (TN):", tn)
-        # print("False Negatives (FN):", fn)
-        #
-        # print("\n[INFO] TED run completed.")
+        # a) Dùng nhãn nhị phân (0/1)
+        auc_bin = roc_auc_score(is_poison_mask, y_test_pred)
+        print(f"ROC AUC (binary prediction): {auc_bin:.4f}")
+
+        # b) Dùng score liên tục
+        y_test_scores = np.concatenate([scores_poison, scores_clean])
+        auc_cont = roc_auc_score(is_poison_mask, y_test_scores)
+        print(f"ROC AUC (continuous score): {auc_cont:.4f}")
 
     def detect(self):
         """
