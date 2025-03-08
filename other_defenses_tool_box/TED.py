@@ -228,7 +228,7 @@ class TED(BackdoorDefense):
         os.makedirs(self.save_dir, exist_ok=True)
 
         # 13) TED Extension
-        self.validation_threshold = 0.9
+        self.validation_threshold = 0.8
         self.layers_by_class = {c: [] for c in range(self.num_classes)}
         self.threshold_by_class = {c: None for c in range(self.num_classes)}
 
