@@ -982,16 +982,44 @@ class TED(BackdoorDefense):
                 "score": np.sum(class_data_clean[:, selected_layers], axis=1)
             }
 
-        print("=== Poison Unknown Datasets ===")
-        for class_label, data in unknown_datasets_poison.items():
-            print(
-                f"Class {class_label}: {data['inputs'].shape[0]} samples, kept {data['inputs'].shape[1]} layers, lowest score: {np.min(data['score'])}")
+        # Lấy danh sách tất cả class có mặt trong ít nhất một trong ba datasets
+        all_classes = sorted(
+            set(benign_datasets.keys()) | set(unknown_datasets_poison.keys()) | set(unknown_datasets_clean.keys()))
 
-        print("\n=== Clean Unknown Datasets ===")
-        for class_label, data in unknown_datasets_clean.items():
-            print(
-                f"Class {class_label}: {data['inputs'].shape[0]} samples, kept {data['inputs'].shape[1]} layers, highest score: {np.max(data['score'])}")
+        print("\n=== Comparison of Benign, Poison Unknown, and Clean Unknown Datasets ===\n")
 
+        for class_label in all_classes:
+            print(f"🔹 Class {class_label}")
+
+            # In thông tin từ Benign Datasets
+            if class_label in benign_datasets:
+                data = benign_datasets[class_label]
+                lowest_score = np.min(data['score']) if data['score'].size > 0 else "N/A"
+                highest_score = np.max(data['score']) if data['score'].size > 0 else "N/A"
+                print(
+                    f"  ✅ Benign: {data['inputs'].shape[0]} samples, {data['inputs'].shape[1]} layers kept, highest score: {highest_score}")
+            else:
+                print(f"  ❌ Benign: No data for class {class_label}")
+
+            # In thông tin từ Poison Unknown Datasets
+            if class_label in unknown_datasets_poison:
+                data = unknown_datasets_poison[class_label]
+                lowest_score = np.min(data['score']) if data['score'].size > 0 else "N/A"
+                print(
+                    f"  🔥 Poison Unknown: {data['inputs'].shape[0]} samples, {data['inputs'].shape[1]} layers kept, lowest score: {lowest_score}")
+            else:
+                print(f"  ❌ Poison Unknown: No data for class {class_label}")
+
+            # In thông tin từ Clean Unknown Datasets
+            if class_label in unknown_datasets_clean:
+                data = unknown_datasets_clean[class_label]
+                highest_score = np.max(data['score']) if data['score'].size > 0 else "N/A"
+                print(
+                    f"  🧼 Clean Unknown: {data['inputs'].shape[0]} samples, {data['inputs'].shape[1]} layers kept, highest score: {highest_score}")
+            else:
+                print(f"  ❌ Clean Unknown: No data for class {class_label}")
+
+            print("-" * 80)  # Đường ngăn cách giữa các class
 
         print('STEP 9')
         pca_t = sklearn_PCA(n_components=2)
