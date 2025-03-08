@@ -228,7 +228,7 @@ class TED(BackdoorDefense):
         os.makedirs(self.save_dir, exist_ok=True)
 
         # 13) TED Extension
-        self.validation_threshold = 0.9
+        self.validation_threshold = 0.8
         self.layers_by_class = {c: [] for c in range(self.num_classes)}
         self.threshold_by_class = {c: None for c in range(self.num_classes)}
 
@@ -956,7 +956,7 @@ class TED(BackdoorDefense):
         scores_benign = np.sum(inputs_all_benign[:, selected_layers], axis=1)
 
         # Ví dụ: lấy top 10% score cao nhất, rồi lấy MIN trong top đó
-        n_top = int(np.ceil(scores_benign.shape[0] * 0.1))
+        n_top = int(np.ceil(scores_benign.shape[0] * (1 - self.validation_threshold)))
         if n_top > 0:
             top_scores = np.sort(scores_benign)[-n_top:]
             top10_threshold = np.min(top_scores)
