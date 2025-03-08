@@ -228,7 +228,7 @@ class TED(BackdoorDefense):
         os.makedirs(self.save_dir, exist_ok=True)
 
         # 13) TED Extension
-        self.validation_threshold = 0.8
+        self.validation_threshold = 0.9
         self.layers_by_class = {c: [] for c in range(self.num_classes)}
         self.threshold_by_class = {c: None for c in range(self.num_classes)}
 
@@ -982,44 +982,56 @@ class TED(BackdoorDefense):
                 "score": np.sum(class_data_clean[:, selected_layers], axis=1)
             }
 
-        # Lấy danh sách tất cả class có mặt trong ít nhất một trong ba datasets
-        all_classes = sorted(
-            set(benign_datasets.keys()) | set(unknown_datasets_poison.keys()) | set(unknown_datasets_clean.keys()))
+        # Tạo dictionary để lưu kết quả so sánh cho poison và clean
+        binary_result_poison = {}
+        binary_result_clean = {}
 
-        print("\n=== Comparison of Benign, Poison Unknown, and Clean Unknown Datasets ===\n")
+        # Duyệt qua từng class (giả sử benign_datasets chứa các class cần so sánh)
+        for class_label in benign_datasets.keys():
+            highest_score = benign_datasets[class_label]["highest_score"]
 
-        for class_label in all_classes:
-            print(f"🔹 Class {class_label}")
-
-            # In thông tin từ Benign Datasets
-            if class_label in benign_datasets:
-                data = benign_datasets[class_label]
-                lowest_score = np.min(data['score']) if data['score'].size > 0 else "N/A"
-                highest_score = np.max(data['score']) if data['score'].size > 0 else "N/A"
-                print(
-                    f"  ✅ Benign: {data['inputs'].shape[0]} samples, {data['inputs'].shape[1]} layers kept, highest score: {highest_score}")
-            else:
-                print(f"  ❌ Benign: No data for class {class_label}")
-
-            # In thông tin từ Poison Unknown Datasets
+            # Xử lý cho poison:
             if class_label in unknown_datasets_poison:
-                data = unknown_datasets_poison[class_label]
-                lowest_score = np.min(data['score']) if data['score'].size > 0 else "N/A"
-                print(
-                    f"  🔥 Poison Unknown: {data['inputs'].shape[0]} samples, {data['inputs'].shape[1]} layers kept, lowest score: {lowest_score}")
+                scores_poison = unknown_datasets_poison[class_label]["score"]
+                # So sánh từng score: nếu score > highest_score thì gán 1, ngược lại gán 0
+                binary_array_poison = np.where(scores_poison > highest_score, 1, 0)
+                binary_result_poison[class_label] = binary_array_poison
             else:
-                print(f"  ❌ Poison Unknown: No data for class {class_label}")
+                binary_result_poison[class_label] = np.array([])
 
-            # In thông tin từ Clean Unknown Datasets
+            # Xử lý cho clean:
             if class_label in unknown_datasets_clean:
-                data = unknown_datasets_clean[class_label]
-                highest_score = np.max(data['score']) if data['score'].size > 0 else "N/A"
-                print(
-                    f"  🧼 Clean Unknown: {data['inputs'].shape[0]} samples, {data['inputs'].shape[1]} layers kept, highest score: {highest_score}")
+                scores_clean = unknown_datasets_clean[class_label]["score"]
+                binary_array_clean = np.where(scores_clean > highest_score, 1, 0)
+                binary_result_clean[class_label] = binary_array_clean
             else:
-                print(f"  ❌ Clean Unknown: No data for class {class_label}")
+                binary_result_clean[class_label] = np.array([])
 
-            print("-" * 80)  # Đường ngăn cách giữa các class
+        # In kết quả
+        print("=== Binary Comparison for Poison Unknown Datasets ===")
+        for class_label, binary_array in binary_result_poison.items():
+            print(f"Class {class_label}: {binary_array}")
+
+        print("\n=== Binary Comparison for Clean Unknown Datasets ===")
+        for class_label, binary_array in binary_result_clean.items():
+            print(f"Class {class_label}: {binary_array}")
+
+        # Tạo array cho toàn bộ poison bằng cách concatenate các mảng nhị phân theo từng lớp
+        binary_poison_all = np.concatenate(
+            [binary_result_poison[class_label] for class_label in sorted(binary_result_poison.keys()) if
+             binary_result_poison[class_label].size > 0]
+        )
+
+        # Tạo array cho toàn bộ clean tương tự
+        binary_clean_all = np.concatenate(
+            [binary_result_clean[class_label] for class_label in sorted(binary_result_clean.keys()) if
+             binary_result_clean[class_label].size > 0]
+        )
+
+        print("Binary result for all Poison Unknown Samples:")
+        print(binary_poison_all)
+        print("Binary result for all Clean Unknown Samples:")
+        print(binary_clean_all)
 
         print('STEP 9')
         pca_t = sklearn_PCA(n_components=2)
