@@ -967,7 +967,7 @@ class TED(BackdoorDefense):
                 "inputs": class_data_unknown[:, selected_layers],
                 "kept_layers": selected_layers,
                 "score": np.sum(class_data_unknown[:, selected_layers], axis=1),
-                "highest_score": np.max(np.sum(class_data_unknown[:, selected_layers], axis=1))
+                "lowest_score": np.min(np.sum(class_data_unknown[:, selected_layers], axis=1))
             }
 
         # In thông tin của benign_datasets và unknown_datasets so le nhau theo class
@@ -989,7 +989,7 @@ class TED(BackdoorDefense):
                 unknown_data = unknown_datasets[class_label]
                 print(
                     f"  🔄 Unknown: {unknown_data['inputs'].shape[0]} samples, {unknown_data['inputs'].shape[1]} layers kept")
-                print(f"  🏆 Highest Score (Unknown): {unknown_data['highest_score']:.4f}")
+                print(f"  🏆 Lowest Score (Unknown): {unknown_data['lowest_score']:.4f}")
             else:
                 print(f"  ❌ Unknown: No data for class {class_label}")
 
