@@ -32,7 +32,6 @@ from other_defenses_tool_box.backdoor_defense import BackdoorDefense
 from networks.models import Generator, NetC_MNIST
 from defense_dataloader import get_dataset, get_dataloader
 import seaborn as sns
-import math
 
 # ------------------------------
 # Seed settings for reproducibility
@@ -226,12 +225,6 @@ class TED(BackdoorDefense):
         self.candidate_ = {}
         self.save_dir = f"TED/{self.dataset}/{self.poison_type}"
         os.makedirs(self.save_dir, exist_ok=True)
-
-        # 13) TED Extension
-        self.validation_threshold = 0.9
-        self.minimum_num_layers = 6
-        self.layers_by_class = {c: [] for c in range(self.num_classes)}
-        self.threshold_by_class = {c: None for c in range(self.num_classes)}
 
     # ==============================
     #     HELPER FUNCTIONS
@@ -631,60 +624,35 @@ class TED(BackdoorDefense):
 
     def get_dis_sort(self, item, destinations):
         """
-        Trả về (khoảng cách đã sắp xếp tăng dần, chỉ mục tương ứng).
-        Chúng ta sẽ dùng khoảng cách này thay vì "thứ hạng".
+        Sort distances between a single item and all destinations, returning sorted indices.
         """
-        # print(f'destinations: {destinations}')
-        # print(f'destinations shape: {destinations.shape}')  # destinations shape: torch.Size([100, 10])
         item_ = item.reshape(1, item.shape[0])
         dev = self.device
-        new_dis = pairwise_euclidean_distance(item_.to(dev), destinations.to(dev))  # shape: (1, destinations.size(0))
-        sorted_dis, indices_individual = torch.sort(new_dis.squeeze(0))  # sort theo chiều 1-D
-        return sorted_dis.to("cpu"), indices_individual.to("cpu")
+        new_dis = pairwise_euclidean_distance(item_.to(dev), destinations.to(dev))
+        _, indices_individual = torch.sort(new_dis)
+        return indices_individual.to("cpu")
 
     def getDefenseRegion(self, final_prediction, h_defense_activation, processing_label, layer,
                          layer_test_region_individual):
         """
-        Thay vì lưu 'ranking' (thứ hạng sample cùng class trong danh sách khoảng cách),
-        ta lưu 'khoảng cách' đến sample cùng class đầu tiên trong danh sách đó.
+        For each sample in the specified label, compute the region by distance ranking with defense samples.
         """
-
-        processing_label_indices = torch.where(final_prediction == processing_label)[0]
-        processing_label_h_defense_activation = h_defense_activation[processing_label_indices]
-
         if layer not in layer_test_region_individual:
             layer_test_region_individual[layer] = {}
         layer_test_region_individual[layer][processing_label] = []
 
         self.candidate_[layer] = self.gather_activation_into_class(final_prediction, h_defense_activation)
 
-
         if np.ndim(self.candidate_[layer][processing_label]) == 0:
             print("No sample in this class for label =", processing_label)
         else:
             for index, item in enumerate(self.candidate_[layer][processing_label]):
-
-                sorted_dis, sorted_indices = self.get_dis_sort(item, h_defense_activation)
-
-                for i, idx in enumerate(sorted_indices[1:], start=1):
-                    if final_prediction[idx] == processing_label:
-                        """
-                        make a for loop here to compute the distances of "the 
-                        nearest neighbor of the input" to its nearest neighbors 
-                        it self in the validation dataset.
-                        """
-                        mask = ~torch.all(processing_label_h_defense_activation == h_defense_activation[idx], dim=1)
-                        sorted_dis_validation, sorted_indices_validation = self.get_dis_sort(h_defense_activation[idx], processing_label_h_defense_activation[mask])
-                        threshold = torch.max(sorted_dis_validation[:math.ceil(self.SAMPLES_PER_CLASS / 2)])
-                        distance_value = sorted_dis[i].item()
-
-                        if distance_value > threshold:
-                            distance_value_index = self.DEFENSE_TRAIN_SIZE - 1
-                        else:
-                            distance_value_index = i - 1
-
-                        layer_test_region_individual[layer][processing_label].append(distance_value_index)
-                        break
+                ranking_array = self.get_dis_sort(item, h_defense_activation)[0]
+                ranking_array = ranking_array[1:]
+                r_ = [final_prediction[i] for i in ranking_array]
+                if processing_label in r_:
+                    itemindex = r_.index(processing_label)
+                    layer_test_region_individual[layer][processing_label].append(itemindex)
 
         return layer_test_region_individual
 
@@ -692,9 +660,8 @@ class TED(BackdoorDefense):
                                h_defense_prediction, h_defense_activation,
                                layer, layer_test_region_individual):
         """
-        Thay vì lưu 'ranking', ta lưu 'khoảng cách' đến sample cùng class trong tập defense.
+        Compute the distance-based region for a new label, comparing to the defense activations.
         """
-
         if layer not in layer_test_region_individual:
             layer_test_region_individual[layer] = {}
         layer_test_region_individual[layer][new_temp_label] = []
@@ -702,37 +669,15 @@ class TED(BackdoorDefense):
         candidate__ = self.gather_activation_into_class(new_prediction, new_activation)
         labels = torch.unique(new_prediction)
 
-        sorted_list = []
-
         for processing_label in labels:
-            indices = (new_prediction == processing_label).nonzero(as_tuple=True)[0]
-            sorted_list.append(new_prediction[indices])
-
-            processing_label_indices = torch.where(h_defense_prediction == processing_label)[0]
-            processing_label_h_defense_activation = h_defense_activation[processing_label_indices]
             for index, item in enumerate(candidate__[processing_label]):
-                sorted_dis, sorted_indices = self.get_dis_sort(item, h_defense_activation)
-                for i, idx in enumerate(sorted_indices):
-                    if h_defense_prediction[idx] == processing_label:
-                        mask = ~torch.all(processing_label_h_defense_activation == h_defense_activation[idx], dim=1)
-                        sorted_dis_validation, sorted_indices_validation = self.get_dis_sort(
-                            h_defense_activation[idx],
-                            processing_label_h_defense_activation[mask]
-                        )
-                        threshold = torch.max(sorted_dis_validation[:math.ceil(self.SAMPLES_PER_CLASS / 2)])
-                        distance_value = sorted_dis[i].item()
+                ranking_array = self.get_dis_sort(item, h_defense_activation)[0]
+                r_ = [h_defense_prediction[i] for i in ranking_array]
+                if processing_label in r_:
+                    itemindex = r_.index(processing_label)
+                    layer_test_region_individual[layer][new_temp_label].append(itemindex)
 
-                        if distance_value > threshold:
-                            distance_value_index = self.DEFENSE_TRAIN_SIZE - 1
-                        else:
-                            distance_value_index = i
-
-                        layer_test_region_individual[layer][new_temp_label].append(distance_value_index)
-                        break
-
-        new_prediction_sorted = torch.cat(sorted_list)
-
-        return layer_test_region_individual, new_prediction_sorted
+        return layer_test_region_individual
 
     def test(self):
         """
@@ -818,18 +763,26 @@ class TED(BackdoorDefense):
         self.h_clean_ori_labels, self.h_clean_activations, self.h_clean_preds = self.fetch_activation(
             self.clean_loader)
 
-        # Chuyển Tensor sang NumPy array
-        defense_preds_np = self.h_defense_preds.cpu().numpy()
-        poison_labels_np = self.h_poison_ori_labels.cpu().numpy()
-        clean_labels_np = self.h_clean_ori_labels.cpu().numpy()
+        print('DEBUG')
 
-        # Lưu các tệp dưới dạng CSV
-        pd.DataFrame(defense_preds_np).to_csv(os.path.join(self.save_dir, "h_defense_preds.csv"), index=False,
-                                              header=False)
-        pd.DataFrame(poison_labels_np).to_csv(os.path.join(self.save_dir, "h_poison_ori_labels.csv"), index=False,
-                                              header=False)
-        pd.DataFrame(clean_labels_np).to_csv(os.path.join(self.save_dir, "h_clean_ori_labels.csv"), index=False,
-                                             header=False)
+        print(f"Poison Original Labels: {self.h_poison_ori_labels.shape}")
+        print(f"Poison Predictions: {self.h_poison_preds.shape}")
+        print(f"Number of Poison Activations Layers: {len(self.h_poison_activations)}")
+        for layer, activation in self.h_poison_activations.items():
+            print(f"Layer: {layer}, Activation Shape: {activation.shape}")
+
+        print(f"Clean Original Labels: {self.h_clean_ori_labels.shape}")
+        print(f"Clean Predictions: {self.h_clean_preds.shape}")
+        print(f"Number of Clean Activations Layers: {len(self.h_clean_activations)}")
+        for layer, activation in self.h_clean_activations.items():
+            print(f"Layer: {layer}, Activation Shape: {activation.shape}")
+
+        print(f"Defense Original Labels: {self.h_defense_ori_labels.shape}")
+        print(f"Defense Predictions: {self.h_defense_preds.shape}")
+        print(f"Number of Defense Activations Layers: {len(self.h_defense_activations)}")
+        for layer, activation in self.h_defense_activations.items():
+            print(f"Layer: {layer}, Activation Shape: {activation.shape}")
+        print('DEBUG')
 
         print('STEP 5')
         accuracy_defense = self.calculate_accuracy(self.h_defense_ori_labels, self.h_defense_preds)
@@ -858,7 +811,7 @@ class TED(BackdoorDefense):
                 print(f"Mean: {np.mean(topo_rep_array)}\n")
 
         for layer_ in self.h_poison_activations:
-            self.topological_representation, labels_all_poison = self.getLayerRegionDistance(
+            self.topological_representation = self.getLayerRegionDistance(
                 new_prediction=self.h_poison_preds,
                 new_activation=self.h_poison_activations[layer_],
                 new_temp_label=self.POISON_TEMP_LABEL,
@@ -873,7 +826,7 @@ class TED(BackdoorDefense):
             print(f"Mean: {np.mean(topo_rep_array_poison)}\n")
 
         for layer_ in self.h_clean_activations:
-            self.topological_representation, labels_all_clean = self.getLayerRegionDistance(
+            self.topological_representation = self.getLayerRegionDistance(
                 new_prediction=self.h_clean_preds,
                 new_activation=self.h_clean_activations[layer_],
                 new_temp_label=self.CLEAN_TEMP_LABEL,
@@ -919,96 +872,106 @@ class TED(BackdoorDefense):
                 inputs_all_unknown.append(np.array(inputs))
                 labels_all_unknown.append(np.array(labels))
 
-        # =====================
-        # 1) GỘP DỮ LIỆU
-        # =====================
-        # Gộp tất cả benign
-        inputs_all_benign = np.concatenate(inputs_all_benign)  # (N_benign, D)
-        labels_all_benign = np.concatenate(labels_all_benign)  # (N_benign,)
+        inputs_all_benign = np.concatenate(inputs_all_benign)
+        labels_all_benign = np.concatenate(labels_all_benign)
 
-        # Gộp tất cả unknown
-        inputs_all_unknown = np.concatenate(inputs_all_unknown)  # (N_unknown, D)
-        labels_all_unknown = np.concatenate(labels_all_unknown)  # (N_unknown,)
+        inputs_all_unknown = np.concatenate(inputs_all_unknown)
+        labels_all_unknown = np.concatenate(labels_all_unknown)
 
-        # Tách unknown thành poison & clean (nửa đầu => poison, nửa sau => clean)
-        inputs_poison = inputs_all_unknown[:inputs_all_unknown.shape[0] // 2]
-        inputs_clean = inputs_all_unknown[inputs_all_unknown.shape[0] // 2:]
+        # Get the number of samples and columns
+        n_samples, n_columns = inputs_all_unknown.shape
 
-        # Tạo mảng label poison/clean (thông qua torch -> numpy)
-        labels_all_poison_np = labels_all_poison.cpu().numpy()  # (N_poison,)
-        labels_all_clean_np = labels_all_clean.cpu().numpy()  # (N_clean,)
-        unknown_prediction = np.concatenate((labels_all_poison_np, labels_all_clean_np))
+        # Determine the half point to distinguish red (first half) vs green (second half)
+        half_samples = n_samples // 2
 
-        # =====================
-        # 2) CHỌN LAYERS CHUNG CHO BENIGN
-        # =====================
-        # Tính tỷ lệ 0 theo từng cột (layer)
-        zero_counts = np.sum(inputs_all_benign == 0, axis=0)  # shape (D,)
-        total_benign = inputs_all_benign.shape[0]
-        zero_ratio_per_layer = zero_counts / total_benign
+        # Create a DataFrame where each record corresponds to:
+        # - 'Layer': layer number (1 to n_columns)
+        # - 'Ranking': the corresponding ranking value
+        # - 'Type': 'Poison' for first half samples, 'Clean' for second half
+        data_records = []
+        for i in range(n_samples):
+            sample_type = 'Poison' if i < half_samples else 'Clean'
+            for j in range(n_columns):
+                data_records.append({
+                    'Layer': j + 1,  # Layer numbering starts at 1
+                    'Ranking': inputs_all_unknown[i, j],
+                    'Type': sample_type
+                })
 
-        while True:
-            # Chỉ giữ lại các layer có tỷ lệ 0 >= self.validation_threshold
-            selected_layers = np.where(zero_ratio_per_layer >= self.validation_threshold)[0]
-            print("[INFO] Selected Layers:", selected_layers)
+        df = pd.DataFrame(data_records)
 
-            # Nếu số lượng layer được chọn >= 6 thì dừng vòng lặp, ngược lại giảm threshold đi 0.05
-            if selected_layers.shape[0] >= self.minimum_num_layers:
-                break
-            else:
-                self.validation_threshold -= 0.05
-                print(f"[INFO] Validation threshold decreased to: {self.validation_threshold:.2f}")
+        # Set the style using seaborn with a context appropriate for papers
+        sns.set(style="whitegrid", context="paper", font_scale=1)
 
-        # =====================
-        # 3) TÍNH SCORE TRÊN BENIGN & LẤY NGƯỠNG (top10_threshold)
-        # =====================
-        scores_benign = np.sum(inputs_all_benign[:, selected_layers], axis=1)
+        # Create a figure for the box plot; adjust size as needed
+        plt.figure(figsize=(20, 8))
 
-        # Lấy top 10% score cao nhất, rồi lấy MIN trong top đó
-        n_top = int(np.ceil(scores_benign.shape[0] * (1 - self.validation_threshold)))
-        if n_top > 0:
-            top_scores = np.sort(scores_benign)[-n_top:]
-            top10_threshold = np.min(top_scores)
-        else:
-            top10_threshold = 0
+        # Draw box plot: x is Layer, y is Ranking, hue is Type (distinguishing Poison vs Clean)
+        ax = sns.boxplot(
+            x="Layer",
+            y="Ranking",
+            hue="Type",
+            data=df,
+            palette={'Poison': 'red', 'Clean': 'green'},
+            dodge=True
+        )
 
-        print(f"[INFO] Top 10% threshold on benign = {top10_threshold:.4f}")
+        # Set title and axis labels with larger fonts
+        # plt.title("Box Plot across 35 Layers: Poison vs Clean", fontsize=30, fontweight='bold')
+        plt.xlabel("Layer", fontsize=20)
+        plt.ylabel("Ranking", fontsize=20)
 
-        # =====================
-        # 4) TÍNH SCORE CHO POISON & CLEAN (không chia theo class)
-        # =====================
-        scores_poison = np.sum(inputs_poison[:, selected_layers], axis=1)
-        scores_clean = np.sum(inputs_clean[:, selected_layers], axis=1)
+        # Increase tick label sizes for both axes
+        plt.xticks(fontsize=20)
+        plt.yticks(fontsize=20)
 
-        # =====================
-        # 5) XÁC ĐỊNH NHÃN NHỊ PHÂN THEO NGƯỠNG
-        # =====================
-        # > top10_threshold => 1, ngược lại => 0
-        binary_poison = np.where(scores_poison > top10_threshold, 1, 0)
-        binary_clean = np.where(scores_clean > top10_threshold, 1, 0)
+        # Customize the legend with a larger font size
+        legend = plt.legend(title="Type", fontsize=20, title_fontsize=20)
+        # Optionally, adjust legend marker sizes if needed (depends on your style)
 
-        # Ghép hai mảng nhị phân => y_test_pred
-        y_test_pred = np.concatenate((binary_poison, binary_clean))
+        plt.tight_layout()
 
-        # Tạo ground truth mask (0=clean, 1=poison)
+        # Save the box plot in PDF format for publication
+        save_path = os.path.join(self.save_dir, f"k={self.SAMPLES_PER_CLASS}_{self.dataset}_{self.poison_type}_boxplot_ted.pdf")
+        plt.savefig(save_path, bbox_inches='tight', format='pdf', dpi=300)
+        plt.close()
+
+        print('STEP 9')
+        pca_t = sklearn_PCA(n_components=2)
+        pca_fit = pca_t.fit(inputs_all_benign)
+
+        benign_trajectories = pca_fit.transform(inputs_all_benign)
+        trajectories = pca_fit.transform(np.concatenate((inputs_all_unknown, inputs_all_benign), axis=0))
+
+        df_classes = pd.DataFrame(np.concatenate((labels_all_unknown, labels_all_benign), axis=0))
+
+        fig_ = px.scatter(
+            trajectories, x=0, y=1, color=df_classes[0].astype(str), labels={'color': 'digit'},
+            color_discrete_sequence=px.colors.qualitative.Dark24,
+        )
+
+        pca = PCA(contamination=0.01, n_components=2)
+        pca.fit(inputs_all_benign)
+
+        y_train_scores = pca.decision_function(inputs_all_benign)
+        y_test_scores = pca.decision_function(inputs_all_unknown)
+        y_test_pred = pca.predict(inputs_all_unknown)
+        prediction_mask = (y_test_pred == 1)
+        prediction_labels = labels_all_unknown[prediction_mask]
+        label_counts = Counter(prediction_labels)
+
+        print("\n----------- DETECTION RESULTS -----------")
+        for label, count in label_counts.items():
+            print(f'Label {label}: {count}')
+
         is_poison_mask = (labels_all_unknown == self.POISON_TEMP_LABEL).astype(int)
+        fpr, tpr, thresholds = metrics.roc_curve(is_poison_mask, y_test_scores, pos_label=1)
+        auc_val = metrics.auc(fpr, tpr)
 
-        print("[DEBUG] y_test_pred:", y_test_pred)
-        print("[DEBUG] is_poison_mask:", is_poison_mask)
-
-        # =====================
-        # 6) TÍNH CÁC CHỈ SỐ ĐÁNH GIÁ
-        # =====================
         tn, fp, fn, tp = confusion_matrix(is_poison_mask, y_test_pred).ravel()
         TPR = tp / (tp + fn) if (tp + fn) > 0 else 0
         FPR = fp / (fp + tn) if (fp + tn) > 0 else 0
         f1 = metrics.f1_score(is_poison_mask, y_test_pred)
-
-        # (Tuỳ chọn) Tính ROC AUC dựa trên y_test_pred (0/1) HOẶC score_poison/score_clean (liên tục)
-        from sklearn.metrics import roc_auc_score
-
-        y_test_scores = np.concatenate([scores_poison, scores_clean])
-        auc_val = roc_auc_score(is_poison_mask, y_test_scores)
 
         print("TPR: {:.2f}%".format(TPR * 100))
         print("FPR: {:.2f}%".format(FPR * 100))
