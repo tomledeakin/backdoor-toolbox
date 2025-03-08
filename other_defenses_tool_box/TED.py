@@ -724,7 +724,17 @@ class TED(BackdoorDefense):
                         layer_test_region_individual[layer][new_temp_label].append(distance_value_index)
                         break
 
-        return layer_test_region_individual
+        sorted_indices_list = []
+        for label in labels:
+            indices = (new_prediction == label).nonzero(as_tuple=True)[0]
+            sorted_indices_list.append(indices)
+        if sorted_indices_list:
+            sorted_indices = torch.cat(sorted_indices_list)
+            new_prediction_sorted = new_prediction[sorted_indices]
+        else:
+            new_prediction_sorted = new_prediction
+
+        return layer_test_region_individual, new_prediction_sorted
 
     def test(self):
         """
@@ -850,7 +860,7 @@ class TED(BackdoorDefense):
                 print(f"Mean: {np.mean(topo_rep_array)}\n")
 
         for layer_ in self.h_poison_activations:
-            self.topological_representation = self.getLayerRegionDistance(
+            self.topological_representation, labels_all_poison = self.getLayerRegionDistance(
                 new_prediction=self.h_poison_preds,
                 new_activation=self.h_poison_activations[layer_],
                 new_temp_label=self.POISON_TEMP_LABEL,
@@ -865,7 +875,7 @@ class TED(BackdoorDefense):
             print(f"Mean: {np.mean(topo_rep_array_poison)}\n")
 
         for layer_ in self.h_clean_activations:
-            self.topological_representation = self.getLayerRegionDistance(
+            self.topological_representation, labels_all_clean = self.getLayerRegionDistance(
                 new_prediction=self.h_clean_preds,
                 new_activation=self.h_clean_activations[layer_],
                 new_temp_label=self.CLEAN_TEMP_LABEL,
@@ -916,6 +926,12 @@ class TED(BackdoorDefense):
 
         inputs_all_unknown = np.concatenate(inputs_all_unknown)
         labels_all_unknown = np.concatenate(labels_all_unknown)
+
+        test_prediction = np.concatenate((labels_all_poison, labels_all_clean))
+
+        df = pd.DataFrame(test_prediction, columns=["label"])
+        csv_path = os.path.join(self.save_dir, "test_prediction.csv")
+        df.to_csv(csv_path, index=False)
 
         # # Tạo dictionary để lưu dataset theo từng class
         # benign_datasets = {}
