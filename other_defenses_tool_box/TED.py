@@ -995,21 +995,22 @@ class TED(BackdoorDefense):
         FPR = fp / (fp + tn) if (fp + tn) > 0 else 0
         f1 = metrics.f1_score(is_poison_mask, y_test_pred)
 
-        print("TPR: {:.2f}%".format(TPR * 100))
-        print("FPR: {:.2f}%".format(FPR * 100))
-        print(f"F1 score: {f1:.4f}")
-
         # (Tuỳ chọn) Tính ROC AUC dựa trên y_test_pred (0/1) HOẶC score_poison/score_clean (liên tục)
         from sklearn.metrics import roc_auc_score
 
-        # a) Dùng nhãn nhị phân (0/1)
-        auc_bin = roc_auc_score(is_poison_mask, y_test_pred)
-        print(f"ROC AUC (binary prediction): {auc_bin:.4f}")
-
-        # b) Dùng score liên tục
         y_test_scores = np.concatenate([scores_poison, scores_clean])
-        auc_cont = roc_auc_score(is_poison_mask, y_test_scores)
-        print(f"ROC AUC (continuous score): {auc_cont:.4f}")
+        auc_val = roc_auc_score(is_poison_mask, y_test_scores)
+
+        print("TPR: {:.2f}%".format(TPR * 100))
+        print("FPR: {:.2f}%".format(FPR * 100))
+        print("AUC: {:.4f}".format(auc_val))
+        print(f"F1 score: {f1:.4f}")
+        print("True Positives (TP):", tp)
+        print("False Positives (FP):", fp)
+        print("True Negatives (TN):", tn)
+        print("False Negatives (FN):", fn)
+
+        print("\n[INFO] TED run completed.")
 
     def detect(self):
         """
