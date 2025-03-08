@@ -227,6 +227,11 @@ class TED(BackdoorDefense):
         self.save_dir = f"TED/{self.dataset}/{self.poison_type}"
         os.makedirs(self.save_dir, exist_ok=True)
 
+        # 13) TED Extension
+        self.validation_threshold = 0.9
+        self.layers_by_class = {c: [] for c in range(self.num_classes)}
+        self.threshold_by_class = {c: None for c in range(self.num_classes)}
+
     # ==============================
     #     HELPER FUNCTIONS
     # ==============================
@@ -697,7 +702,6 @@ class TED(BackdoorDefense):
         labels = torch.unique(new_prediction)
 
         for processing_label in labels:
-
             processing_label_indices = torch.where(h_defense_prediction == processing_label)[0]
             processing_label_h_defense_activation = h_defense_activation[processing_label_indices]
             for index, item in enumerate(candidate__[processing_label]):
@@ -920,6 +924,11 @@ class TED(BackdoorDefense):
 
         inputs_all_unknown = np.concatenate(inputs_all_unknown)
         labels_all_unknown = np.concatenate(labels_all_unknown)
+
+        pd.DataFrame(inputs_all_benign).to_csv(os.path.join(self.save_dir, "inputs_all_benign.csv"), index=False, header=False)
+        pd.DataFrame(labels_all_benign).to_csv(os.path.join(self.save_dir, "labels_all_benign.csv"), index=False, header=False)
+        pd.DataFrame(inputs_all_unknown).to_csv(os.path.join(self.save_dir, "inputs_all_unknown.csv"), index=False, header=False)
+        pd.DataFrame(labels_all_unknown).to_csv(os.path.join(self.save_dir, "labels_all_unknown.csv"), index=False, header=False)
 
         print('STEP 9')
         pca_t = sklearn_PCA(n_components=2)
