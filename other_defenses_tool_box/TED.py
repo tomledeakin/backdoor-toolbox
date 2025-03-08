@@ -701,18 +701,23 @@ class TED(BackdoorDefense):
         candidate__ = self.gather_activation_into_class(new_prediction, new_activation)
         labels = torch.unique(new_prediction)
 
+        sorted_list = []
+
         for processing_label in labels:
+            indices = (new_prediction == processing_label).nonzero(as_tuple=True)[0]
+            sorted_list.append(new_prediction[indices])
+
             processing_label_indices = torch.where(h_defense_prediction == processing_label)[0]
             processing_label_h_defense_activation = h_defense_activation[processing_label_indices]
             for index, item in enumerate(candidate__[processing_label]):
-
                 sorted_dis, sorted_indices = self.get_dis_sort(item, h_defense_activation)
-                # Tìm khoảng cách đầu tiên tới sample trong defense có nhãn = processing_label
-
                 for i, idx in enumerate(sorted_indices):
                     if h_defense_prediction[idx] == processing_label:
                         mask = ~torch.all(processing_label_h_defense_activation == h_defense_activation[idx], dim=1)
-                        sorted_dis_validation, sorted_indices_validation = self.get_dis_sort(h_defense_activation[idx], processing_label_h_defense_activation[mask])
+                        sorted_dis_validation, sorted_indices_validation = self.get_dis_sort(
+                            h_defense_activation[idx],
+                            processing_label_h_defense_activation[mask]
+                        )
                         threshold = torch.max(sorted_dis_validation[:math.ceil(self.SAMPLES_PER_CLASS / 2)])
                         distance_value = sorted_dis[i].item()
 
@@ -724,15 +729,7 @@ class TED(BackdoorDefense):
                         layer_test_region_individual[layer][new_temp_label].append(distance_value_index)
                         break
 
-        sorted_indices_list = []
-        for label in labels:
-            indices = (new_prediction == label).nonzero(as_tuple=True)[0]
-            sorted_indices_list.append(indices)
-        if sorted_indices_list:
-            sorted_indices = torch.cat(sorted_indices_list)
-            new_prediction_sorted = new_prediction[sorted_indices]
-        else:
-            new_prediction_sorted = new_prediction
+        new_prediction_sorted = torch.cat(sorted_list)
 
         return layer_test_region_individual, new_prediction_sorted
 
@@ -935,36 +932,39 @@ class TED(BackdoorDefense):
         csv_path = os.path.join(self.save_dir, "test_prediction.csv")
         df.to_csv(csv_path, index=False)
 
-        # # Tạo dictionary để lưu dataset theo từng class
-        # benign_datasets = {}
-        #
-        # unique_classes = np.unique(labels_all_benign)
-        #
-        # # Duyệt qua từng class
-        # for class_label in unique_classes:
-        #     class_indices = np.where(labels_all_benign == class_label)[0]
-        #     class_data = inputs_all_benign[class_indices]
-        #
-        #     print(f'{class_label}: {class_indices}')
-        #
-        #     """
-        #     Chỉ giữ lại các layers có ít nhất 90% giá trị = 0
-        #     """
-        #     zero_counts = np.sum(class_data == 0, axis=0)
-        #     total_samples = class_data.shape[0]
-        #     zero_ratio_per_layer = zero_counts / total_samples
-        #
-        #     selected_layers = np.where(zero_ratio_per_layer >= self.validation_threshold)[0]
-        #     print(selected_layers)
-        #     print('------------------------')
-        #     benign_datasets[class_label] = {
-        #         "inputs": class_data[:, selected_layers],
-        #         "kept_layers": selected_layers
-        #     }
-        #
-        # for class_label, data in benign_datasets.items():
-        #     print(f"Class {class_label}: {data['inputs'].shape[0]} samples, kept {data['inputs'].shape[1]} layers")
-        #     print(f"Kept layers indices: {data['kept_layers']}")
+        # Tạo dictionary để lưu dataset theo từng class
+        benign_datasets = {}
+
+        unique_classes = np.unique(labels_all_benign)
+
+        # Duyệt qua từng class
+        for class_label in unique_classes:
+            class_indices = np.where(labels_all_benign == class_label)[0]
+            class_data = inputs_all_benign[class_indices]
+
+            print(f'{class_label}: {class_indices}')
+
+            """
+            Chỉ giữ lại các layers có ít nhất 90% giá trị = 0
+            """
+            zero_counts = np.sum(class_data == 0, axis=0)
+            total_samples = class_data.shape[0]
+            zero_ratio_per_layer = zero_counts / total_samples
+
+            selected_layers = np.where(zero_ratio_per_layer >= self.validation_threshold)[0]
+            print(selected_layers)
+            print('------------------------')
+            benign_datasets[class_label] = {
+                "inputs": class_data[:, selected_layers],
+                "kept_layers": selected_layers
+            }
+
+        for class_label, data in benign_datasets.items():
+            print(f"Class {class_label}: {data['inputs'].shape[0]} samples, kept {data['inputs'].shape[1]} layers")
+            print(f"Kept layers indices: {data['kept_layers']}")
+
+        unknown_datasets = {}
+
 
         print('STEP 9')
         pca_t = sklearn_PCA(n_components=2)
