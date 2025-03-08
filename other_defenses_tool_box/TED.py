@@ -941,8 +941,6 @@ class TED(BackdoorDefense):
             class_indices = np.where(labels_all_benign == class_label)[0]
             class_data = inputs_all_benign[class_indices]
 
-            print(f'{class_label}: {class_indices}')
-
             """
             Chỉ giữ lại các layers có ít nhất 90% giá trị = 0
             """
@@ -952,11 +950,23 @@ class TED(BackdoorDefense):
 
             selected_layers = np.where(zero_ratio_per_layer >= self.validation_threshold)[0]
             print(selected_layers)
+
+            # Tính score: tổng các giá trị của mỗi row sau khi lọc theo các layer được chọn
+            scores = np.sum(class_data[:, selected_layers], axis=1)
+
+            # Tính top 10% score cao nhất và lấy giá trị thấp nhất trong top 10%
+            n_top = int(np.ceil(scores.shape[0] * (1 - self.validation_threshold)))
+            if n_top > 0:
+                top_scores = np.sort(scores)[-n_top:]
+                top10_threshold = np.min(top_scores)
+            else:
+                top10_threshold = 0
+
             benign_datasets[class_label] = {
                 "inputs": class_data[:, selected_layers],
                 "kept_layers": selected_layers,
-                "score": np.sum(class_data[:, selected_layers], axis=1),
-                "highest_score": np.max(np.sum(class_data[:, selected_layers], axis=1))
+                "score": scores,
+                "top10_threshold": top10_threshold
             }
 
         unknown_datasets_poison = {}
@@ -988,13 +998,13 @@ class TED(BackdoorDefense):
 
         # Duyệt qua từng class (giả sử benign_datasets chứa các class cần so sánh)
         for class_label in benign_datasets.keys():
-            highest_score = benign_datasets[class_label]["highest_score"]
+            top10_threshold = benign_datasets[class_label]["top10_threshold"]
 
             # Xử lý cho poison:
             if class_label in unknown_datasets_poison:
                 scores_poison = unknown_datasets_poison[class_label]["score"]
                 # So sánh từng score: nếu score > highest_score thì gán 1, ngược lại gán 0
-                binary_array_poison = np.where(scores_poison > highest_score, 1, 0)
+                binary_array_poison = np.where(scores_poison > top10_threshold, 1, 0)
                 binary_result_poison[class_label] = binary_array_poison
             else:
                 binary_result_poison[class_label] = np.array([])
@@ -1002,7 +1012,7 @@ class TED(BackdoorDefense):
             # Xử lý cho clean:
             if class_label in unknown_datasets_clean:
                 scores_clean = unknown_datasets_clean[class_label]["score"]
-                binary_array_clean = np.where(scores_clean > highest_score, 1, 0)
+                binary_array_clean = np.where(scores_clean > top10_threshold, 1, 0)
                 binary_result_clean[class_label] = binary_array_clean
             else:
                 binary_result_clean[class_label] = np.array([])
