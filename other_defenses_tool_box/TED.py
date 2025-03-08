@@ -810,26 +810,18 @@ class TED(BackdoorDefense):
         self.h_clean_ori_labels, self.h_clean_activations, self.h_clean_preds = self.fetch_activation(
             self.clean_loader)
 
-        print('DEBUG')
+        # Chuyển Tensor sang NumPy array
+        defense_preds_np = self.h_defense_preds.cpu().numpy()
+        poison_labels_np = self.h_poison_ori_labels.cpu().numpy()
+        clean_labels_np = self.h_clean_ori_labels.cpu().numpy()
 
-        print(f"Poison Original Labels: {self.h_poison_ori_labels.shape}")
-        print(f"Poison Predictions: {self.h_poison_preds.shape}")
-        print(f"Number of Poison Activations Layers: {len(self.h_poison_activations)}")
-        for layer, activation in self.h_poison_activations.items():
-            print(f"Layer: {layer}, Activation Shape: {activation.shape}")
-
-        print(f"Clean Original Labels: {self.h_clean_ori_labels.shape}")
-        print(f"Clean Predictions: {self.h_clean_preds.shape}")
-        print(f"Number of Clean Activations Layers: {len(self.h_clean_activations)}")
-        for layer, activation in self.h_clean_activations.items():
-            print(f"Layer: {layer}, Activation Shape: {activation.shape}")
-
-        print(f"Defense Original Labels: {self.h_defense_ori_labels.shape}")
-        print(f"Defense Predictions: {self.h_defense_preds.shape}")
-        print(f"Number of Defense Activations Layers: {len(self.h_defense_activations)}")
-        for layer, activation in self.h_defense_activations.items():
-            print(f"Layer: {layer}, Activation Shape: {activation.shape}")
-        print('DEBUG')
+        # Lưu các tệp dưới dạng CSV
+        pd.DataFrame(defense_preds_np).to_csv(os.path.join(self.save_dir, "h_defense_preds.csv"), index=False,
+                                              header=False)
+        pd.DataFrame(poison_labels_np).to_csv(os.path.join(self.save_dir, "h_poison_ori_labels.csv"), index=False,
+                                              header=False)
+        pd.DataFrame(clean_labels_np).to_csv(os.path.join(self.save_dir, "h_clean_ori_labels.csv"), index=False,
+                                             header=False)
 
         print('STEP 5')
         accuracy_defense = self.calculate_accuracy(self.h_defense_ori_labels, self.h_defense_preds)
@@ -924,16 +916,6 @@ class TED(BackdoorDefense):
 
         inputs_all_unknown = np.concatenate(inputs_all_unknown)
         labels_all_unknown = np.concatenate(labels_all_unknown)
-
-        defense_preds_np = self.h_defense_preds.cpu().numpy()
-        are_equal = np.array_equal(defense_preds_np, labels_all_benign)
-        print(f"Are they equal? {are_equal}")
-
-        poison_labels_np = self.h_poison_ori_labels.cpu().numpy()
-        clean_labels_np = self.h_clean_ori_labels.cpu().numpy()
-        concatenated_labels_np = np.concatenate((poison_labels_np, clean_labels_np), axis=0)
-        are_equal = np.array_equal(concatenated_labels_np, labels_all_unknown)
-        print(f"Are they equal? {are_equal}")
 
         # # Tạo dictionary để lưu dataset theo từng class
         # benign_datasets = {}
