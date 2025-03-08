@@ -949,15 +949,12 @@ class TED(BackdoorDefense):
 
             selected_layers = np.where(zero_ratio_per_layer >= self.validation_threshold)[0]
             print(selected_layers)
-            print('------------------------')
             benign_datasets[class_label] = {
                 "inputs": class_data[:, selected_layers],
-                "kept_layers": selected_layers
+                "kept_layers": selected_layers,
+                "score": np.sum(class_data[:, selected_layers], axis=1),
+                "highest_score": np.max(np.sum(class_data[:, selected_layers], axis=1))
             }
-
-        for class_label, data in benign_datasets.items():
-            print(f"Class {class_label}: {data['inputs'].shape[0]} samples, kept {data['inputs'].shape[1]} layers")
-            print(f"Kept layers indices: {data['kept_layers']}")
 
         unknown_datasets = {}
         for class_label, benign_data in benign_datasets.items():
@@ -968,13 +965,35 @@ class TED(BackdoorDefense):
 
             unknown_datasets[class_label] = {
                 "inputs": class_data_unknown[:, selected_layers],
-                "kept_layers": selected_layers
+                "kept_layers": selected_layers,
+                "score": np.sum(class_data_unknown[:, selected_layers], axis=1),
+                "highest_score": np.max(np.sum(class_data_unknown[:, selected_layers], axis=1))
             }
 
-        for class_label, data in unknown_datasets.items():
-            print(f"Class {class_label}: {data['inputs'].shape[0]} samples, kept {data['inputs'].shape[1]} layers")
-            print(f"Kept layers indices: {data['kept_layers']}")
+        # In thông tin của benign_datasets và unknown_datasets so le nhau theo class
+        print("\n🔍 Comparison of Benign and Unknown Datasets (Alternating by Class):\n")
+        for class_label in unique_classes:
+            print(f"🔹 Class {class_label}")
 
+            # Thông tin Benign Dataset
+            if class_label in benign_datasets:
+                benign_data = benign_datasets[class_label]
+                print(
+                    f"  ✅ Benign: {benign_data['inputs'].shape[0]} samples, {benign_data['inputs'].shape[1]} layers kept")
+                print(f"  🏆 Highest Score (Benign): {benign_data['highest_score']:.4f}")
+            else:
+                print(f"  ❌ Benign: No data for class {class_label}")
+
+            # Thông tin Unknown Dataset
+            if class_label in unknown_datasets:
+                unknown_data = unknown_datasets[class_label]
+                print(
+                    f"  🔄 Unknown: {unknown_data['inputs'].shape[0]} samples, {unknown_data['inputs'].shape[1]} layers kept")
+                print(f"  🏆 Highest Score (Unknown): {unknown_data['highest_score']:.4f}")
+            else:
+                print(f"  ❌ Unknown: No data for class {class_label}")
+
+            print("-" * 50)  # Đường ngăn cách để dễ đọc
 
         print('STEP 9')
         pca_t = sklearn_PCA(n_components=2)
