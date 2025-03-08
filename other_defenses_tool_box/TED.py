@@ -228,7 +228,8 @@ class TED(BackdoorDefense):
         os.makedirs(self.save_dir, exist_ok=True)
 
         # 13) TED Extension
-        self.validation_threshold = 0.8
+        self.validation_threshold = 0.9
+        self.minimum_num_layers = 6
         self.layers_by_class = {c: [] for c in range(self.num_classes)}
         self.threshold_by_class = {c: None for c in range(self.num_classes)}
 
@@ -946,16 +947,24 @@ class TED(BackdoorDefense):
         total_benign = inputs_all_benign.shape[0]
         zero_ratio_per_layer = zero_counts / total_benign
 
-        # Chỉ giữ lại các layer có >= self.validation_threshold giá trị = 0
-        selected_layers = np.where(zero_ratio_per_layer >= self.validation_threshold)[0]
-        print("[INFO] Selected Layers:", selected_layers)
+        while True:
+            # Chỉ giữ lại các layer có tỷ lệ 0 >= self.validation_threshold
+            selected_layers = np.where(zero_ratio_per_layer >= self.validation_threshold)[0]
+            print("[INFO] Selected Layers:", selected_layers)
+
+            # Nếu số lượng layer được chọn >= 6 thì dừng vòng lặp, ngược lại giảm threshold đi 0.05
+            if selected_layers.shape[0] >= self.minimum_num_layers:
+                break
+            else:
+                self.validation_threshold -= 0.05
+                print(f"[INFO] Validation threshold decreased to: {self.validation_threshold:.2f}")
 
         # =====================
         # 3) TÍNH SCORE TRÊN BENIGN & LẤY NGƯỠNG (top10_threshold)
         # =====================
         scores_benign = np.sum(inputs_all_benign[:, selected_layers], axis=1)
 
-        # Ví dụ: lấy top 10% score cao nhất, rồi lấy MIN trong top đó
+        # Lấy top 10% score cao nhất, rồi lấy MIN trong top đó
         n_top = int(np.ceil(scores_benign.shape[0] * (1 - self.validation_threshold)))
         if n_top > 0:
             top_scores = np.sort(scores_benign)[-n_top:]
