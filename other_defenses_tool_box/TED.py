@@ -924,6 +924,9 @@ class TED(BackdoorDefense):
         inputs_all_unknown = np.concatenate(inputs_all_unknown)
         labels_all_unknown = np.concatenate(labels_all_unknown)
 
+        inputs_poison = inputs_all_unknown[:inputs_all_unknown.shape[0] // 2]
+        inputs_clean = inputs_all_unknown[inputs_all_unknown.shape[0] // 2:]
+
         labels_all_poison_np = labels_all_poison.cpu().numpy()
         labels_all_clean_np = labels_all_clean.cpu().numpy()
         unknown_prediction = np.concatenate((labels_all_poison_np, labels_all_clean_np))
@@ -956,44 +959,39 @@ class TED(BackdoorDefense):
                 "highest_score": np.max(np.sum(class_data[:, selected_layers], axis=1))
             }
 
-        unknown_datasets = {}
+        unknown_datasets_poison = {}
+        unknown_datasets_clean = {}
         for class_label, benign_data in benign_datasets.items():
-            class_indices_unknown = np.where(unknown_prediction == class_label)[0]
-            class_data_unknown = inputs_all_unknown[class_indices_unknown]
-
             selected_layers = benign_data["kept_layers"]
 
-            unknown_datasets[class_label] = {
-                "inputs": class_data_unknown[:, selected_layers],
+            # Xử lý poison: chọn các sample có label = class_label từ labels_all_poison_np
+            class_indices_poison = np.where(labels_all_poison_np == class_label)[0]
+            class_data_poison = inputs_poison[class_indices_poison]
+            unknown_datasets_poison[class_label] = {
+                "inputs": class_data_poison[:, selected_layers],
                 "kept_layers": selected_layers,
-                "score": np.sum(class_data_unknown[:, selected_layers], axis=1),
-                "lowest_score": np.min(np.sum(class_data_unknown[:, selected_layers], axis=1))
+                "score": np.sum(class_data_poison[:, selected_layers], axis=1)
             }
 
-        # In thông tin của benign_datasets và unknown_datasets so le nhau theo class
-        print("\n🔍 Comparison of Benign and Unknown Datasets (Alternating by Class):\n")
-        for class_label in unique_classes:
-            print(f"🔹 Class {class_label}")
+            # Xử lý clean: chọn các sample có label = class_label từ labels_all_clean_np
+            class_indices_clean = np.where(labels_all_clean_np == class_label)[0]
+            class_data_clean = inputs_clean[class_indices_clean]
+            unknown_datasets_clean[class_label] = {
+                "inputs": class_data_clean[:, selected_layers],
+                "kept_layers": selected_layers,
+                "score": np.sum(class_data_clean[:, selected_layers], axis=1)
+            }
 
-            # Thông tin Benign Dataset
-            if class_label in benign_datasets:
-                benign_data = benign_datasets[class_label]
-                print(
-                    f"  ✅ Benign: {benign_data['inputs'].shape[0]} samples, {benign_data['inputs'].shape[1]} layers kept")
-                print(f"  🏆 Highest Score (Benign): {benign_data['highest_score']:.4f}")
-            else:
-                print(f"  ❌ Benign: No data for class {class_label}")
+        print("=== Poison Unknown Datasets ===")
+        for class_label, data in unknown_datasets_poison.items():
+            print(
+                f"Class {class_label}: {data['inputs'].shape[0]} samples, kept {data['inputs'].shape[1]} layers, lowest score: {np.min(data['score'])}")
 
-            # Thông tin Unknown Dataset
-            if class_label in unknown_datasets:
-                unknown_data = unknown_datasets[class_label]
-                print(
-                    f"  🔄 Unknown: {unknown_data['inputs'].shape[0]} samples, {unknown_data['inputs'].shape[1]} layers kept")
-                print(f"  🏆 Lowest Score (Unknown): {unknown_data['lowest_score']:.4f}")
-            else:
-                print(f"  ❌ Unknown: No data for class {class_label}")
+        print("\n=== Clean Unknown Datasets ===")
+        for class_label, data in unknown_datasets_clean.items():
+            print(
+                f"Class {class_label}: {data['inputs'].shape[0]} samples, kept {data['inputs'].shape[1]} layers, highest score: {np.max(data['score'])}")
 
-            print("-" * 50)  # Đường ngăn cách để dễ đọc
 
         print('STEP 9')
         pca_t = sklearn_PCA(n_components=2)
