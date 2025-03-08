@@ -927,7 +927,9 @@ class TED(BackdoorDefense):
         inputs_all_unknown = np.concatenate(inputs_all_unknown)
         labels_all_unknown = np.concatenate(labels_all_unknown)
 
-        test_prediction = np.concatenate((labels_all_poison, labels_all_clean))
+        labels_all_poison_np = labels_all_poison.cpu().numpy()
+        labels_all_clean_np = labels_all_clean.cpu().numpy()
+        test_prediction = np.concatenate((labels_all_poison_np, labels_all_clean_np))
 
         df = pd.DataFrame(test_prediction, columns=["label"])
         csv_path = os.path.join(self.save_dir, "test_prediction.csv")
