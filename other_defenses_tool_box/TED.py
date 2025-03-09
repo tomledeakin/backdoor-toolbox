@@ -32,6 +32,7 @@ from other_defenses_tool_box.backdoor_defense import BackdoorDefense
 from networks.models import Generator, NetC_MNIST
 from defense_dataloader import get_dataset, get_dataloader
 import seaborn as sns
+import math
 
 # ------------------------------
 # Seed settings for reproducibility
@@ -624,35 +625,60 @@ class TED(BackdoorDefense):
 
     def get_dis_sort(self, item, destinations):
         """
-        Sort distances between a single item and all destinations, returning sorted indices.
+        Trả về (khoảng cách đã sắp xếp tăng dần, chỉ mục tương ứng).
+        Chúng ta sẽ dùng khoảng cách này thay vì "thứ hạng".
         """
+        # print(f'destinations: {destinations}')
+        # print(f'destinations shape: {destinations.shape}')  # destinations shape: torch.Size([100, 10])
         item_ = item.reshape(1, item.shape[0])
         dev = self.device
-        new_dis = pairwise_euclidean_distance(item_.to(dev), destinations.to(dev))
-        _, indices_individual = torch.sort(new_dis)
-        return indices_individual.to("cpu")
+        new_dis = pairwise_euclidean_distance(item_.to(dev), destinations.to(dev))  # shape: (1, destinations.size(0))
+        sorted_dis, indices_individual = torch.sort(new_dis.squeeze(0))  # sort theo chiều 1-D
+        return sorted_dis.to("cpu"), indices_individual.to("cpu")
 
     def getDefenseRegion(self, final_prediction, h_defense_activation, processing_label, layer,
                          layer_test_region_individual):
         """
-        For each sample in the specified label, compute the region by distance ranking with defense samples.
+        Thay vì lưu 'ranking' (thứ hạng sample cùng class trong danh sách khoảng cách),
+        ta lưu 'khoảng cách' đến sample cùng class đầu tiên trong danh sách đó.
         """
+
+        processing_label_indices = torch.where(final_prediction == processing_label)[0]
+        processing_label_h_defense_activation = h_defense_activation[processing_label_indices]
+
         if layer not in layer_test_region_individual:
             layer_test_region_individual[layer] = {}
         layer_test_region_individual[layer][processing_label] = []
 
         self.candidate_[layer] = self.gather_activation_into_class(final_prediction, h_defense_activation)
 
+
         if np.ndim(self.candidate_[layer][processing_label]) == 0:
             print("No sample in this class for label =", processing_label)
         else:
             for index, item in enumerate(self.candidate_[layer][processing_label]):
-                ranking_array = self.get_dis_sort(item, h_defense_activation)[0]
-                ranking_array = ranking_array[1:]
-                r_ = [final_prediction[i] for i in ranking_array]
-                if processing_label in r_:
-                    itemindex = r_.index(processing_label)
-                    layer_test_region_individual[layer][processing_label].append(itemindex)
+
+                sorted_dis, sorted_indices = self.get_dis_sort(item, h_defense_activation)
+
+                for i, idx in enumerate(sorted_indices[1:], start=1):
+                    if final_prediction[idx] == processing_label:
+                        """
+                        make a for loop here to compute the distances of "the 
+                        nearest neighbor of the input" to its nearest neighbors 
+                        it self in the validation dataset.
+                        """
+                        mask = ~torch.all(processing_label_h_defense_activation == h_defense_activation[idx], dim=1)
+                        sorted_dis_validation, sorted_indices_validation = self.get_dis_sort(h_defense_activation[idx], processing_label_h_defense_activation[mask])
+                        threshold = torch.max(sorted_dis_validation[:math.ceil(self.SAMPLES_PER_CLASS / 2)])
+                        distance_value = sorted_dis[i].item()
+
+                        if distance_value > threshold:
+                            distance_value_index = self.DEFENSE_TRAIN_SIZE - 1
+                        else:
+                            distance_value_index = i - 1
+
+                        layer_test_region_individual[layer][processing_label].append(distance_value_index)
+                        break
 
         return layer_test_region_individual
 
@@ -660,8 +686,9 @@ class TED(BackdoorDefense):
                                h_defense_prediction, h_defense_activation,
                                layer, layer_test_region_individual):
         """
-        Compute the distance-based region for a new label, comparing to the defense activations.
+        Thay vì lưu 'ranking', ta lưu 'khoảng cách' đến sample cùng class trong tập defense.
         """
+
         if layer not in layer_test_region_individual:
             layer_test_region_individual[layer] = {}
         layer_test_region_individual[layer][new_temp_label] = []
@@ -670,12 +697,28 @@ class TED(BackdoorDefense):
         labels = torch.unique(new_prediction)
 
         for processing_label in labels:
+
+            processing_label_indices = torch.where(h_defense_prediction == processing_label)[0]
+            processing_label_h_defense_activation = h_defense_activation[processing_label_indices]
             for index, item in enumerate(candidate__[processing_label]):
-                ranking_array = self.get_dis_sort(item, h_defense_activation)[0]
-                r_ = [h_defense_prediction[i] for i in ranking_array]
-                if processing_label in r_:
-                    itemindex = r_.index(processing_label)
-                    layer_test_region_individual[layer][new_temp_label].append(itemindex)
+
+                sorted_dis, sorted_indices = self.get_dis_sort(item, h_defense_activation)
+                # Tìm khoảng cách đầu tiên tới sample trong defense có nhãn = processing_label
+
+                for i, idx in enumerate(sorted_indices):
+                    if h_defense_prediction[idx] == processing_label:
+                        mask = ~torch.all(processing_label_h_defense_activation == h_defense_activation[idx], dim=1)
+                        sorted_dis_validation, sorted_indices_validation = self.get_dis_sort(h_defense_activation[idx], processing_label_h_defense_activation[mask])
+                        threshold = torch.max(sorted_dis_validation[:math.ceil(self.SAMPLES_PER_CLASS / 2)])
+                        distance_value = sorted_dis[i].item()
+
+                        if distance_value > threshold:
+                            distance_value_index = self.DEFENSE_TRAIN_SIZE - 1
+                        else:
+                            distance_value_index = i
+
+                        layer_test_region_individual[layer][new_temp_label].append(distance_value_index)
+                        break
 
         return layer_test_region_individual
 
@@ -932,7 +975,8 @@ class TED(BackdoorDefense):
         plt.tight_layout()
 
         # Save the box plot in PDF format for publication
-        save_path = os.path.join(self.save_dir, f"k={self.SAMPLES_PER_CLASS}_{self.dataset}_{self.poison_type}_boxplot_ted.pdf")
+        save_path = os.path.join(self.save_dir,
+                                 f"k={self.SAMPLES_PER_CLASS}_{self.dataset}_{self.poison_type}_boxplot_ted_penalty.pdf")
         plt.savefig(save_path, bbox_inches='tight', format='pdf', dpi=300)
         plt.close()
 
