@@ -677,7 +677,7 @@ class TED(BackdoorDefense):
                         # else:
                         #     distance_value_index = i - 1
 
-                        # distance_value = distance_value / threshold
+                        distance_value = distance_value / threshold
 
                         layer_test_region_individual[layer][processing_label].append(distance_value)
                         break
@@ -719,7 +719,7 @@ class TED(BackdoorDefense):
                         # else:
                         #     distance_value_index = i
 
-                        # distance_value = distance_value / threshold
+                        distance_value = distance_value / threshold
 
                         layer_test_region_individual[layer][new_temp_label].append(distance_value)
                         break
@@ -980,7 +980,7 @@ class TED(BackdoorDefense):
 
         # Save the box plot in PDF format for publication
         save_path = os.path.join(self.save_dir,
-                                 f"k={self.SAMPLES_PER_CLASS}_{self.dataset}_{self.poison_type}_boxplot_ted_penalty.pdf")
+                                 f"k={self.SAMPLES_PER_CLASS}_{self.dataset}_{self.poison_type}_boxplot_ted_normalization.pdf")
         plt.savefig(save_path, bbox_inches='tight', format='pdf', dpi=300)
         plt.close()
 
