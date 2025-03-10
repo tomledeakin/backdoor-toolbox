@@ -219,7 +219,7 @@ class TED(BackdoorDefense):
         self.hook_handles = []
         self.activations = {}
         self.register_hooks()
-        self.top_neighbors = math.ceil(self.SAMPLES_PER_CLASS / 2)
+        self.top_neighbors = self.SAMPLES_PER_CLASS - 1
 
         # 12) Additional intermediate variables and directory for saving visualizations
         self.Test_C = self.num_classes + 2
@@ -669,7 +669,6 @@ class TED(BackdoorDefense):
                         distance_value = sorted_dis[i].item()
                         top_neighbor_list.append(distance_value)
                         lid = self.compute_lid(top_neighbor_list)
-                        print(f'len: {len(top_neighbor_list)}')
                         count += 1
                         if count == self.top_neighbors:
                             layer_test_region_individual[layer][processing_label].append(lid)
@@ -702,7 +701,6 @@ class TED(BackdoorDefense):
                         distance_value = sorted_dis[i].item()
                         top_neighbor_list.append(distance_value)
                         lid = self.compute_lid(top_neighbor_list)
-                        print(f'len: {len(top_neighbor_list)}')
                         count += 1
                         if count == self.top_neighbors:
                             layer_test_region_individual[layer][new_temp_label].append(lid)
