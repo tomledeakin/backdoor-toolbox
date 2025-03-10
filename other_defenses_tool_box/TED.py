@@ -219,7 +219,7 @@ class TED(BackdoorDefense):
         self.hook_handles = []
         self.activations = {}
         self.register_hooks()
-        self.top_neighbors = self.SAMPLES_PER_CLASS - 1
+        self.top_neighbors = self.SAMPLES_PER_CLASS - 2
 
         # 12) Additional intermediate variables and directory for saving visualizations
         self.Test_C = self.num_classes + 2
