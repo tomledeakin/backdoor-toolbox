@@ -670,6 +670,7 @@ class TED(BackdoorDefense):
                         top_neighbor_list.append(distance_value)
                         lid = self.compute_lid(top_neighbor_list)
                         print(f'len: {len(top_neighbor_list)}')
+                        count += 1
                         if count == self.top_neighbors:
                             layer_test_region_individual[layer][processing_label].append(lid)
                             break
@@ -702,6 +703,7 @@ class TED(BackdoorDefense):
                         top_neighbor_list.append(distance_value)
                         lid = self.compute_lid(top_neighbor_list)
                         print(f'len: {len(top_neighbor_list)}')
+                        count += 1
                         if count == self.top_neighbors:
                             layer_test_region_individual[layer][new_temp_label].append(lid)
                             break
@@ -718,7 +720,6 @@ class TED(BackdoorDefense):
         avg_log = np.mean(logs)
 
         lid = -1.0 / avg_log
-        print("Equal?", max(distances) == distances[-1])
         return lid
 
 
