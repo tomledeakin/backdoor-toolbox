@@ -31,7 +31,7 @@ from other_defenses_tool_box.tools import generate_dataloader
 from other_defenses_tool_box.backdoor_defense import BackdoorDefense
 from networks.models import Generator, NetC_MNIST
 from defense_dataloader import get_dataset, get_dataloader
-import seaborn as sns
+import math
 
 # ------------------------------
 # Seed settings for reproducibility
@@ -220,6 +220,7 @@ class FOLD(BackdoorDefense):
         self.activations = {}
         self.register_hooks()
         self.nnb_distance_dictionary = {}
+        self.top_neighbors = math.ceil(self.SAMPLES_PER_CLASS / 2)
 
         # 12) Additional intermediate variables and directory for saving visualizations
         self.Test_C = self.num_classes + 2
@@ -630,8 +631,6 @@ class FOLD(BackdoorDefense):
         Trả về (khoảng cách đã sắp xếp tăng dần, chỉ mục tương ứng).
         Chúng ta sẽ dùng khoảng cách này thay vì "thứ hạng".
         """
-        # print(f'destinations: {destinations}')
-        # print(f'destinations shape: {destinations.shape}')  # destinations shape: torch.Size([100, 10])
         item_ = item.reshape(1, item.shape[0])
         dev = self.device
         new_dis = pairwise_euclidean_distance(item_.to(dev), destinations.to(dev))  # shape: (1, destinations.size(0))
@@ -663,20 +662,13 @@ class FOLD(BackdoorDefense):
                 self.nnb_distance_dictionary[layer][processing_label] = meadian_nnb_distance
 
                 sorted_dis, sorted_indices = self.get_dis_sort(item, h_defense_activation)
-                count = 0
                 result_array = np.array([])
                 for i, idx in enumerate(sorted_indices[1:], start=1):
                     if final_prediction[idx] == processing_label:
-                        # if count == 0:
-                        #     distance_value_index = i - 1
-                        #     result_array = np.append(result_array, distance_value_index)
-                        # distance_value = sorted_dis[i].item() / meadian_nnb_distance
-                        distance_value = sorted_dis[i].item()
+                        distance_value = sorted_dis[i].item() / meadian_nnb_distance
                         result_array = np.append(result_array, distance_value)
-                        count += 1
-                        if count == self.NUM_NEIGHBORS:
-                            layer_test_region_individual[layer][processing_label].append(result_array)
-                            break
+                    layer_test_region_individual[layer][processing_label].append(result_array)
+                    break
 
         return layer_test_region_individual
 
@@ -699,21 +691,14 @@ class FOLD(BackdoorDefense):
                 meadian_nnb_distance = self.nnb_distance_dictionary[layer][processing_label.item()]
 
                 sorted_dis, sorted_indices = self.get_dis_sort(item, h_defense_activation)
-                # Tìm khoảng cách đầu tiên tới sample trong defense có nhãn = processing_label
-                count = 0
+
                 result_array = np.array([])
                 for i, idx in enumerate(sorted_indices):
                     if h_defense_prediction[idx] == processing_label:
-                        # if count == 0:
-                        #     distance_value_index = i
-                        #     result_array = np.append(result_array, distance_value_index)
-                        # distance_value = sorted_dis[i].item() / meadian_nnb_distance
-                        distance_value = sorted_dis[i].item()
+                        distance_value = sorted_dis[i].item() / meadian_nnb_distance
                         result_array = np.append(result_array, distance_value)
-                        count += 1
-                    if count == self.NUM_NEIGHBORS:
-                        layer_test_region_individual[layer][new_temp_label].append(result_array)
-                        break
+                layer_test_region_individual[layer][new_temp_label].append(result_array)
+                break
 
         return layer_test_region_individual
 
@@ -907,64 +892,6 @@ class FOLD(BackdoorDefense):
 
         inputs_all_unknown = np.concatenate(inputs_all_unknown)
         labels_all_unknown = np.concatenate(labels_all_unknown)
-
-        # Get the number of samples and columns
-        n_samples, n_columns = inputs_all_unknown.shape
-
-        # Determine the half point to distinguish red (first half) vs green (second half)
-        half_samples = n_samples // 2
-
-        # Create a DataFrame where each record corresponds to:
-        # - 'Layer': layer number (1 to n_columns)
-        # - 'Ranking': the corresponding ranking value
-        # - 'Type': 'Poison' for first half samples, 'Clean' for second half
-        data_records = []
-        for i in range(n_samples):
-            sample_type = 'Poison' if i < half_samples else 'Clean'
-            for j in range(n_columns):
-                data_records.append({
-                    'Layer': j + 1,  # Layer numbering starts at 1
-                    'Distance': inputs_all_unknown[i, j],
-                    'Type': sample_type
-                })
-
-        df = pd.DataFrame(data_records)
-
-        # Set the style using seaborn with a context appropriate for papers
-        sns.set(style="whitegrid", context="paper", font_scale=1)
-
-        # Create a figure for the box plot; adjust size as needed
-        plt.figure(figsize=(20, 8))
-
-        # Draw box plot: x is Layer, y is Ranking, hue is Type (distinguishing Poison vs Clean)
-        ax = sns.boxplot(
-            x="Layer",
-            y="Distance",
-            hue="Type",
-            data=df,
-            palette={'Poison': 'red', 'Clean': 'green'},
-            dodge=True
-        )
-
-        # Set title and axis labels with larger fonts
-        # plt.title("Box Plot across 35 Layers: Poison vs Clean", fontsize=30, fontweight='bold')
-        plt.xlabel("Layer", fontsize=20)
-        plt.ylabel("Distance", fontsize=20)
-
-        # Increase tick label sizes for both axes
-        plt.xticks(fontsize=20)
-        plt.yticks(fontsize=20)
-
-        # Customize the legend with a larger font size
-        legend = plt.legend(title="Type", fontsize=20, title_fontsize=20)
-        # Optionally, adjust legend marker sizes if needed (depends on your style)
-
-        plt.tight_layout()
-
-        # Save the box plot in PDF format for publication
-        save_path = os.path.join(self.save_dir, f"k={self.SAMPLES_PER_CLASS}_{self.dataset}_{self.poison_type}_boxplot_fold.pdf")
-        plt.savefig(save_path, bbox_inches='tight', format='pdf', dpi=300)
-        plt.close()
 
         print('STEP 9')
         # ============ ÁP DỤNG SCALING TRƯỚC PCA ============
