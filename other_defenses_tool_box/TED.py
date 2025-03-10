@@ -219,6 +219,7 @@ class TED(BackdoorDefense):
         self.hook_handles = []
         self.activations = {}
         self.register_hooks()
+        self.top_neighbors = math.ceil(self.SAMPLES_PER_CLASS / 2)
 
         # 12) Additional intermediate variables and directory for saving visualizations
         self.Test_C = self.num_classes + 2
@@ -656,7 +657,8 @@ class TED(BackdoorDefense):
             for index, item in enumerate(self.candidate_[layer][processing_label]):
 
                 sorted_dis, sorted_indices = self.get_dis_sort(item, h_defense_activation)
-
+                top_neighbor_list = []
+                count = 0
                 for i, idx in enumerate(sorted_indices[1:], start=1):
                     if final_prediction[idx] == processing_label:
                         """
@@ -665,9 +667,12 @@ class TED(BackdoorDefense):
                         it self in the validation dataset.
                         """
                         distance_value = sorted_dis[i].item()
-
-                        layer_test_region_individual[layer][processing_label].append(distance_value)
-                        break
+                        top_neighbor_list.append(distance_value)
+                        lid = self.compute_lid(top_neighbor_list)
+                        print(f'len: {len(top_neighbor_list)}')
+                        if count == self.top_neighbors:
+                            layer_test_region_individual[layer][processing_label].append(lid)
+                            break
 
         return layer_test_region_individual
 
@@ -689,16 +694,33 @@ class TED(BackdoorDefense):
             for index, item in enumerate(candidate__[processing_label]):
 
                 sorted_dis, sorted_indices = self.get_dis_sort(item, h_defense_activation)
-                # Tìm khoảng cách đầu tiên tới sample trong defense có nhãn = processing_label
-
+                top_neighbor_list = []
+                count = 0
                 for i, idx in enumerate(sorted_indices):
                     if h_defense_prediction[idx] == processing_label:
                         distance_value = sorted_dis[i].item()
-
-                        layer_test_region_individual[layer][new_temp_label].append(distance_value)
-                        break
+                        top_neighbor_list.append(distance_value)
+                        lid = self.compute_lid(top_neighbor_list)
+                        print(f'len: {len(top_neighbor_list)}')
+                        if count == self.top_neighbors:
+                            layer_test_region_individual[layer][new_temp_label].append(lid)
+                            break
 
         return layer_test_region_individual
+
+    def compute_lid(self, distances):
+
+        distances = np.asarray(distances)
+        k = len(distances)
+
+        logs = np.log(distances / distances[-1])
+
+        avg_log = np.mean(logs)
+
+        lid = -1.0 / avg_log
+        print("Equal?", max(distances) == distances[-1])
+        return lid
+
 
     def test(self):
         """
