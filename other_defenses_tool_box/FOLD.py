@@ -31,7 +31,6 @@ from other_defenses_tool_box.tools import generate_dataloader
 from other_defenses_tool_box.backdoor_defense import BackdoorDefense
 from networks.models import Generator, NetC_MNIST
 from defense_dataloader import get_dataset, get_dataloader
-import math
 
 # ------------------------------
 # Seed settings for reproducibility
@@ -220,7 +219,6 @@ class FOLD(BackdoorDefense):
         self.activations = {}
         self.register_hooks()
         self.nnb_distance_dictionary = {}
-        self.top_neighbors = math.ceil(self.SAMPLES_PER_CLASS / 2)
 
         # 12) Additional intermediate variables and directory for saving visualizations
         self.Test_C = self.num_classes + 2
@@ -631,6 +629,8 @@ class FOLD(BackdoorDefense):
         Trả về (khoảng cách đã sắp xếp tăng dần, chỉ mục tương ứng).
         Chúng ta sẽ dùng khoảng cách này thay vì "thứ hạng".
         """
+        # print(f'destinations: {destinations}')
+        # print(f'destinations shape: {destinations.shape}')  # destinations shape: torch.Size([100, 10])
         item_ = item.reshape(1, item.shape[0])
         dev = self.device
         new_dis = pairwise_euclidean_distance(item_.to(dev), destinations.to(dev))  # shape: (1, destinations.size(0))
@@ -662,13 +662,19 @@ class FOLD(BackdoorDefense):
                 self.nnb_distance_dictionary[layer][processing_label] = meadian_nnb_distance
 
                 sorted_dis, sorted_indices = self.get_dis_sort(item, h_defense_activation)
+                count = 0
                 result_array = np.array([])
                 for i, idx in enumerate(sorted_indices[1:], start=1):
                     if final_prediction[idx] == processing_label:
+                        if count == 0:
+                            distance_value_index = i - 1
+                            result_array = np.append(result_array, distance_value_index)
                         distance_value = sorted_dis[i].item() / meadian_nnb_distance
                         result_array = np.append(result_array, distance_value)
-                    layer_test_region_individual[layer][processing_label].append(result_array)
-                    break
+                        count += 1
+                        if count == self.NUM_NEIGHBORS:
+                            layer_test_region_individual[layer][processing_label].append(result_array)
+                            break
 
         return layer_test_region_individual
 
@@ -691,14 +697,20 @@ class FOLD(BackdoorDefense):
                 meadian_nnb_distance = self.nnb_distance_dictionary[layer][processing_label.item()]
 
                 sorted_dis, sorted_indices = self.get_dis_sort(item, h_defense_activation)
-
+                # Tìm khoảng cách đầu tiên tới sample trong defense có nhãn = processing_label
+                count = 0
                 result_array = np.array([])
                 for i, idx in enumerate(sorted_indices):
                     if h_defense_prediction[idx] == processing_label:
+                        if count == 0:
+                            distance_value_index = i
+                            result_array = np.append(result_array, distance_value_index)
                         distance_value = sorted_dis[i].item() / meadian_nnb_distance
                         result_array = np.append(result_array, distance_value)
-                layer_test_region_individual[layer][new_temp_label].append(result_array)
-                break
+                        count += 1
+                    if count == self.NUM_NEIGHBORS:
+                        layer_test_region_individual[layer][new_temp_label].append(result_array)
+                        break
 
         return layer_test_region_individual
 
