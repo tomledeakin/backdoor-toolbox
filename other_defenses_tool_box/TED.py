@@ -233,7 +233,7 @@ class TED(BackdoorDefense):
             if isinstance(module, nn.BatchNorm2d):
                 with torch.no_grad():
                     module.weight *= 1  # gamma
-                    module.bias *= 1  # beta
+                    module.bias *= 1.5  # beta
 
     # ==============================
     #     HELPER FUNCTIONS
