@@ -77,6 +77,28 @@ elif args.dataset == 'gtsrb':
     learning_rate = 0.1
     batch_size = 128
 
+elif args.dataset == 'imagenet50':
+
+    num_classes = 50
+    arch = supervisor.get_arch(args)
+    momentum = 0.9
+    weight_decay = 1e-4
+    epochs = 100
+    milestones = torch.tensor([40, 80])
+    learning_rate = 0.01
+    batch_size = 16
+
+elif args.dataset == 'imagenet100':
+
+    num_classes = 100
+    arch = supervisor.get_arch(args)
+    momentum = 0.9
+    weight_decay = 1e-4
+    epochs = 100
+    milestones = torch.tensor([40, 80])
+    learning_rate = 0.01
+    batch_size = 16
+    
 elif args.dataset == 'imagenette':
     num_classes = 10
     momentum = 0.9
