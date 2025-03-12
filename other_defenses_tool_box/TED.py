@@ -61,7 +61,6 @@ class TED(BackdoorDefense):
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.model.to(self.device)
         print(self.poison_type)
-        self.scale_bn_params()
 
         # 2) Define the backdoor target class
         self.target = self.target_class
@@ -227,13 +226,6 @@ class TED(BackdoorDefense):
         self.candidate_ = {}
         self.save_dir = f"TED/{self.dataset}/{self.poison_type}"
         os.makedirs(self.save_dir, exist_ok=True)
-
-    def scale_bn_params(self):
-        for module in self.model.modules():
-            if isinstance(module, nn.BatchNorm2d):
-                with torch.no_grad():
-                    module.weight *= 1  # gamma
-                    module.bias *= 1.5  # beta
 
     # ==============================
     #     HELPER FUNCTIONS
