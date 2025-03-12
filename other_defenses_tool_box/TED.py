@@ -525,7 +525,6 @@ class TED(BackdoorDefense):
         activation_container = {}
 
         if self.dataset == 'imagenet100':
-            # Sử dụng phiên bản cũ cho imagenet100 để hạn chế OOM
             # Khởi tạo hook với một batch
             for (images, labels) in loader:
                 print("Running the first batch to init hooks")
@@ -543,27 +542,29 @@ class TED(BackdoorDefense):
                 except Exception as e:
                     print(f"Error running model on batch {batch_idx}: {e}")
                     break
-                pred_set.append(torch.argmax(output, -1).to(self.device))
 
-                # Thu thập activation theo cách cũ
+                # Chuyển kết quả về CPU ngay khi thu thập
+                pred_set.append(torch.argmax(output, -1).cpu())
+
                 for key in self.activations:
-                    h_batch[key] = self.activations[key].view(images.shape[0], -1)
+                    # Thu thập activation, chuyển về CPU ngay
+                    h_batch[key] = self.activations[key].view(images.shape[0], -1).cpu()
                     for h in h_batch[key]:
-                        activation_container[key].append(h.to(self.device))
-                # Lưu labels trên device
+                        activation_container[key].append(h.cpu())
+                # Lưu labels về CPU
                 for label_ in labels:
-                    all_h_label.append(label_.to(self.device))
+                    all_h_label.append(label_.cpu())
 
                 self.activations.clear()
 
                 if batch_idx % 10 == 0:
                     print(f"Processed {batch_idx} batches")
 
-            # Nối các batch
             for key in activation_container:
                 activation_container[key] = torch.stack(activation_container[key])
             all_h_label = torch.stack(all_h_label)
             pred_set = torch.cat(pred_set)
+
 
         else:
             # Sử dụng phiên bản mới cho các dataset khác (tránh OOM)
