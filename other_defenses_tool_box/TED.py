@@ -935,7 +935,7 @@ class TED(BackdoorDefense):
             color_discrete_sequence=px.colors.qualitative.Dark24,
         )
 
-        pca = PCA(contamination=0.1, n_components=2)
+        pca = PCA(contamination=0.06, n_components=2)
         pca.fit(inputs_all_benign)
 
         y_train_scores = pca.decision_function(inputs_all_benign)
