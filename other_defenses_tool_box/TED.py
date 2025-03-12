@@ -219,7 +219,6 @@ class TED(BackdoorDefense):
         self.hook_handles = []
         self.activations = {}
         self.register_hooks()
-        self.top_neighbors = self.SAMPLES_PER_CLASS - 2
 
         # 12) Additional intermediate variables and directory for saving visualizations
         self.Test_C = self.num_classes + 2
@@ -644,6 +643,9 @@ class TED(BackdoorDefense):
         ta lưu 'khoảng cách' đến sample cùng class đầu tiên trong danh sách đó.
         """
 
+        processing_label_indices = torch.where(final_prediction == processing_label)[0]
+        processing_label_h_defense_activation = h_defense_activation[processing_label_indices]
+
         if layer not in layer_test_region_individual:
             layer_test_region_individual[layer] = {}
         layer_test_region_individual[layer][processing_label] = []
@@ -657,8 +659,7 @@ class TED(BackdoorDefense):
             for index, item in enumerate(self.candidate_[layer][processing_label]):
 
                 sorted_dis, sorted_indices = self.get_dis_sort(item, h_defense_activation)
-                top_neighbor_list = []
-                count = 0
+
                 for i, idx in enumerate(sorted_indices[1:], start=1):
                     if final_prediction[idx] == processing_label:
                         """
@@ -666,13 +667,18 @@ class TED(BackdoorDefense):
                         nearest neighbor of the input" to its nearest neighbors 
                         it self in the validation dataset.
                         """
+                        mask = ~torch.all(processing_label_h_defense_activation == h_defense_activation[idx], dim=1)
+                        sorted_dis_validation, sorted_indices_validation = self.get_dis_sort(h_defense_activation[idx], processing_label_h_defense_activation[mask])
+                        threshold = torch.max(sorted_dis_validation[:math.ceil(self.SAMPLES_PER_CLASS / 2)])
                         distance_value = sorted_dis[i].item()
-                        top_neighbor_list.append(distance_value)
-                        lid = self.compute_lid(top_neighbor_list)
-                        count += 1
-                        if count == self.top_neighbors:
-                            layer_test_region_individual[layer][processing_label].append(lid)
-                            break
+
+                        if distance_value > threshold:
+                            distance_value_index = self.DEFENSE_TRAIN_SIZE - 1
+                        else:
+                            distance_value_index = i - 1
+
+                        layer_test_region_individual[layer][processing_label].append(distance_value_index)
+                        break
 
         return layer_test_region_individual
 
@@ -691,35 +697,30 @@ class TED(BackdoorDefense):
         labels = torch.unique(new_prediction)
 
         for processing_label in labels:
+
+            processing_label_indices = torch.where(h_defense_prediction == processing_label)[0]
+            processing_label_h_defense_activation = h_defense_activation[processing_label_indices]
             for index, item in enumerate(candidate__[processing_label]):
 
                 sorted_dis, sorted_indices = self.get_dis_sort(item, h_defense_activation)
-                top_neighbor_list = []
-                count = 0
+                # Tìm khoảng cách đầu tiên tới sample trong defense có nhãn = processing_label
+
                 for i, idx in enumerate(sorted_indices):
                     if h_defense_prediction[idx] == processing_label:
+                        mask = ~torch.all(processing_label_h_defense_activation == h_defense_activation[idx], dim=1)
+                        sorted_dis_validation, sorted_indices_validation = self.get_dis_sort(h_defense_activation[idx], processing_label_h_defense_activation[mask])
+                        threshold = torch.max(sorted_dis_validation[:math.ceil(self.SAMPLES_PER_CLASS / 2)])
                         distance_value = sorted_dis[i].item()
-                        top_neighbor_list.append(distance_value)
-                        lid = self.compute_lid(top_neighbor_list)
-                        count += 1
-                        if count == self.top_neighbors:
-                            layer_test_region_individual[layer][new_temp_label].append(lid)
-                            break
+
+                        if distance_value > threshold:
+                            distance_value_index = self.DEFENSE_TRAIN_SIZE - 1
+                        else:
+                            distance_value_index = i
+
+                        layer_test_region_individual[layer][new_temp_label].append(distance_value_index)
+                        break
 
         return layer_test_region_individual
-
-    def compute_lid(self, distances):
-
-        distances = np.asarray(distances)
-        k = len(distances)
-
-        logs = np.log(distances / distances[-1])
-
-        avg_log = np.mean(logs)
-
-        lid = -1.0 / avg_log
-        return lid
-
 
     def test(self):
         """
@@ -919,65 +920,6 @@ class TED(BackdoorDefense):
 
         inputs_all_unknown = np.concatenate(inputs_all_unknown)
         labels_all_unknown = np.concatenate(labels_all_unknown)
-
-        # Get the number of samples and columns
-        n_samples, n_columns = inputs_all_unknown.shape
-
-        # Determine the half point to distinguish red (first half) vs green (second half)
-        half_samples = n_samples // 2
-
-        # Create a DataFrame where each record corresponds to:
-        # - 'Layer': layer number (1 to n_columns)
-        # - 'Ranking': the corresponding ranking value
-        # - 'Type': 'Poison' for first half samples, 'Clean' for second half
-        data_records = []
-        for i in range(n_samples):
-            sample_type = 'Poison' if i < half_samples else 'Clean'
-            for j in range(n_columns):
-                data_records.append({
-                    'Layer': j + 1,  # Layer numbering starts at 1
-                    'Ranking': inputs_all_unknown[i, j],
-                    'Type': sample_type
-                })
-
-        df = pd.DataFrame(data_records)
-
-        # Set the style using seaborn with a context appropriate for papers
-        sns.set(style="whitegrid", context="paper", font_scale=1)
-
-        # Create a figure for the box plot; adjust size as needed
-        plt.figure(figsize=(20, 8))
-
-        # Draw box plot: x is Layer, y is Ranking, hue is Type (distinguishing Poison vs Clean)
-        ax = sns.boxplot(
-            x="Layer",
-            y="Ranking",
-            hue="Type",
-            data=df,
-            palette={'Poison': 'red', 'Clean': 'green'},
-            dodge=True
-        )
-
-        # Set title and axis labels with larger fonts
-        # plt.title("Box Plot across 35 Layers: Poison vs Clean", fontsize=30, fontweight='bold')
-        plt.xlabel("Layer", fontsize=20)
-        plt.ylabel("Ranking", fontsize=20)
-
-        # Increase tick label sizes for both axes
-        plt.xticks(fontsize=20)
-        plt.yticks(fontsize=20)
-
-        # Customize the legend with a larger font size
-        legend = plt.legend(title="Type", fontsize=20, title_fontsize=20)
-        # Optionally, adjust legend marker sizes if needed (depends on your style)
-
-        plt.tight_layout()
-
-        # Save the box plot in PDF format for publication
-        save_path = os.path.join(self.save_dir,
-                                 f"k={self.SAMPLES_PER_CLASS}_{self.dataset}_{self.poison_type}_boxplot_ted_normalization.pdf")
-        plt.savefig(save_path, bbox_inches='tight', format='pdf', dpi=300)
-        plt.close()
 
         print('STEP 9')
         pca_t = sklearn_PCA(n_components=2)
