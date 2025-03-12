@@ -524,7 +524,7 @@ class TED(BackdoorDefense):
         h_batch = {}
         activation_container = {}
 
-        if self.dataset == 'imagenet100':
+        if self.dataset == 'imagenette':
             # Khởi tạo hook với một batch
             for (images, labels) in loader:
                 print("Running the first batch to init hooks")
