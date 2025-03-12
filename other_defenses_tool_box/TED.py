@@ -227,6 +227,12 @@ class TED(BackdoorDefense):
         self.save_dir = f"TED/{self.dataset}/{self.poison_type}"
         os.makedirs(self.save_dir, exist_ok=True)
 
+        # 13) TED Extension
+        self.validation_threshold = 0.9
+        self.minimum_num_layers = 6
+        self.layers_by_class = {c: [] for c in range(self.num_classes)}
+        self.threshold_by_class = {c: None for c in range(self.num_classes)}
+
     # ==============================
     #     HELPER FUNCTIONS
     # ==============================
@@ -516,51 +522,56 @@ class TED(BackdoorDefense):
     #       HOOK & MAIN TEST
     # ==============================
     def fetch_activation(self, loader):
+        """
+        Run the model on the given loader and fetch intermediate activations based on the registered hooks.
+        """
         print("Starting fetch_activation")
         self.model.eval()
-
         all_h_label = []
         pred_set = []
         h_batch = {}
         activation_container = {}
 
-        # Khởi tạo hook (nếu cần)
-        with torch.no_grad():
-            for (images, labels) in loader:
-                _ = self.model(images.to(self.device))
-                break
+        # Initialize hooks with one batch
+        for (images, labels) in loader:
+            print("Running the first batch to init hooks")
+            _ = self.model(images.to(self.device))
+            break
 
+        for key in self.activations:
+            activation_container[key] = []
+
+        self.activations.clear()
+
+        for batch_idx, (images, labels) in enumerate(loader, start=1):
+            print(f"Running batch {batch_idx} - Images shape: {images.shape}, Labels shape: {labels.shape}")
+            try:
+                output = self.model(images.to(self.device))
+            except Exception as e:
+                print(f"Error running model on batch {batch_idx}: {e}")
+                break
+            pred_set.append(torch.argmax(output, -1).to(self.device))
+
+            # Collect activations from hooks
             for key in self.activations:
-                activation_container[key] = []
+                h_batch[key] = self.activations[key].view(images.shape[0], -1)
+                for h in h_batch[key]:
+                    activation_container[key].append(h.to(self.device))
+
+            # Save original labels
+            for label_ in labels:
+                all_h_label.append(label_.to(self.device))
+
             self.activations.clear()
 
-            for batch_idx, (images, labels) in enumerate(loader, start=1):
-                images = images.to(self.device)
+            if batch_idx % 10 == 0:
+                print(f"Processed {batch_idx} batches")
 
-                output = self.model(images)
-                pred_set.append(torch.argmax(output, dim=1).cpu())
-
-                # Thu thập activation
-                for key in self.activations:
-                    h_batch[key] = self.activations[key].view(images.shape[0], -1).cpu()
-                    activation_container[key].append(h_batch[key])
-
-                # Lưu labels về CPU
-                all_h_label.append(labels.cpu())
-
-                # Clear
-                self.activations.clear()
-                del images, labels, output
-                torch.cuda.empty_cache()
-
-                if batch_idx % 10 == 0:
-                    print(f"Processed {batch_idx} batches")
-
-        # Gộp tất cả batch
+        # Stack everything
         for key in activation_container:
-            activation_container[key] = torch.cat(activation_container[key], dim=0)
-        all_h_label = torch.cat(all_h_label, dim=0)
-        pred_set = torch.cat(pred_set, dim=0)
+            activation_container[key] = torch.stack(activation_container[key])
+        all_h_label = torch.stack(all_h_label)
+        pred_set = torch.cat(pred_set)
 
         print("Finished fetch_activation")
         return all_h_label, activation_container, pred_set
@@ -691,19 +702,23 @@ class TED(BackdoorDefense):
         candidate__ = self.gather_activation_into_class(new_prediction, new_activation)
         labels = torch.unique(new_prediction)
 
+        sorted_list = []
+
         for processing_label in labels:
+            indices = (new_prediction == processing_label).nonzero(as_tuple=True)[0]
+            sorted_list.append(new_prediction[indices])
 
             processing_label_indices = torch.where(h_defense_prediction == processing_label)[0]
             processing_label_h_defense_activation = h_defense_activation[processing_label_indices]
             for index, item in enumerate(candidate__[processing_label]):
-
                 sorted_dis, sorted_indices = self.get_dis_sort(item, h_defense_activation)
-                # Tìm khoảng cách đầu tiên tới sample trong defense có nhãn = processing_label
-
                 for i, idx in enumerate(sorted_indices):
                     if h_defense_prediction[idx] == processing_label:
                         mask = ~torch.all(processing_label_h_defense_activation == h_defense_activation[idx], dim=1)
-                        sorted_dis_validation, sorted_indices_validation = self.get_dis_sort(h_defense_activation[idx], processing_label_h_defense_activation[mask])
+                        sorted_dis_validation, sorted_indices_validation = self.get_dis_sort(
+                            h_defense_activation[idx],
+                            processing_label_h_defense_activation[mask]
+                        )
                         threshold = torch.max(sorted_dis_validation[:math.ceil(self.SAMPLES_PER_CLASS / 2)])
                         distance_value = sorted_dis[i].item()
 
@@ -715,7 +730,9 @@ class TED(BackdoorDefense):
                         layer_test_region_individual[layer][new_temp_label].append(distance_value_index)
                         break
 
-        return layer_test_region_individual
+        new_prediction_sorted = torch.cat(sorted_list)
+
+        return layer_test_region_individual, new_prediction_sorted
 
     def test(self):
         """
@@ -801,26 +818,18 @@ class TED(BackdoorDefense):
         self.h_clean_ori_labels, self.h_clean_activations, self.h_clean_preds = self.fetch_activation(
             self.clean_loader)
 
-        print('DEBUG')
+        # Chuyển Tensor sang NumPy array
+        defense_preds_np = self.h_defense_preds.cpu().numpy()
+        poison_labels_np = self.h_poison_ori_labels.cpu().numpy()
+        clean_labels_np = self.h_clean_ori_labels.cpu().numpy()
 
-        print(f"Poison Original Labels: {self.h_poison_ori_labels.shape}")
-        print(f"Poison Predictions: {self.h_poison_preds.shape}")
-        print(f"Number of Poison Activations Layers: {len(self.h_poison_activations)}")
-        for layer, activation in self.h_poison_activations.items():
-            print(f"Layer: {layer}, Activation Shape: {activation.shape}")
-
-        print(f"Clean Original Labels: {self.h_clean_ori_labels.shape}")
-        print(f"Clean Predictions: {self.h_clean_preds.shape}")
-        print(f"Number of Clean Activations Layers: {len(self.h_clean_activations)}")
-        for layer, activation in self.h_clean_activations.items():
-            print(f"Layer: {layer}, Activation Shape: {activation.shape}")
-
-        print(f"Defense Original Labels: {self.h_defense_ori_labels.shape}")
-        print(f"Defense Predictions: {self.h_defense_preds.shape}")
-        print(f"Number of Defense Activations Layers: {len(self.h_defense_activations)}")
-        for layer, activation in self.h_defense_activations.items():
-            print(f"Layer: {layer}, Activation Shape: {activation.shape}")
-        print('DEBUG')
+        # Lưu các tệp dưới dạng CSV
+        pd.DataFrame(defense_preds_np).to_csv(os.path.join(self.save_dir, "h_defense_preds.csv"), index=False,
+                                              header=False)
+        pd.DataFrame(poison_labels_np).to_csv(os.path.join(self.save_dir, "h_poison_ori_labels.csv"), index=False,
+                                              header=False)
+        pd.DataFrame(clean_labels_np).to_csv(os.path.join(self.save_dir, "h_clean_ori_labels.csv"), index=False,
+                                             header=False)
 
         print('STEP 5')
         accuracy_defense = self.calculate_accuracy(self.h_defense_ori_labels, self.h_defense_preds)
@@ -849,7 +858,7 @@ class TED(BackdoorDefense):
                 print(f"Mean: {np.mean(topo_rep_array)}\n")
 
         for layer_ in self.h_poison_activations:
-            self.topological_representation = self.getLayerRegionDistance(
+            self.topological_representation, labels_all_poison = self.getLayerRegionDistance(
                 new_prediction=self.h_poison_preds,
                 new_activation=self.h_poison_activations[layer_],
                 new_temp_label=self.POISON_TEMP_LABEL,
@@ -864,7 +873,7 @@ class TED(BackdoorDefense):
             print(f"Mean: {np.mean(topo_rep_array_poison)}\n")
 
         for layer_ in self.h_clean_activations:
-            self.topological_representation = self.getLayerRegionDistance(
+            self.topological_representation, labels_all_clean = self.getLayerRegionDistance(
                 new_prediction=self.h_clean_preds,
                 new_activation=self.h_clean_activations[layer_],
                 new_temp_label=self.CLEAN_TEMP_LABEL,
@@ -910,48 +919,96 @@ class TED(BackdoorDefense):
                 inputs_all_unknown.append(np.array(inputs))
                 labels_all_unknown.append(np.array(labels))
 
-        inputs_all_benign = np.concatenate(inputs_all_benign)
-        labels_all_benign = np.concatenate(labels_all_benign)
+        # =====================
+        # 1) GỘP DỮ LIỆU
+        # =====================
+        # Gộp tất cả benign
+        inputs_all_benign = np.concatenate(inputs_all_benign)  # (N_benign, D)
+        labels_all_benign = np.concatenate(labels_all_benign)  # (N_benign,)
 
-        inputs_all_unknown = np.concatenate(inputs_all_unknown)
-        labels_all_unknown = np.concatenate(labels_all_unknown)
+        # Gộp tất cả unknown
+        inputs_all_unknown = np.concatenate(inputs_all_unknown)  # (N_unknown, D)
+        labels_all_unknown = np.concatenate(labels_all_unknown)  # (N_unknown,)
 
-        print('STEP 9')
-        pca_t = sklearn_PCA(n_components=2)
-        pca_fit = pca_t.fit(inputs_all_benign)
+        # Tách unknown thành poison & clean (nửa đầu => poison, nửa sau => clean)
+        inputs_poison = inputs_all_unknown[:inputs_all_unknown.shape[0] // 2]
+        inputs_clean = inputs_all_unknown[inputs_all_unknown.shape[0] // 2:]
 
-        benign_trajectories = pca_fit.transform(inputs_all_benign)
-        trajectories = pca_fit.transform(np.concatenate((inputs_all_unknown, inputs_all_benign), axis=0))
+        # Tạo mảng label poison/clean (thông qua torch -> numpy)
+        labels_all_poison_np = labels_all_poison.cpu().numpy()  # (N_poison,)
+        labels_all_clean_np = labels_all_clean.cpu().numpy()  # (N_clean,)
+        unknown_prediction = np.concatenate((labels_all_poison_np, labels_all_clean_np))
 
-        df_classes = pd.DataFrame(np.concatenate((labels_all_unknown, labels_all_benign), axis=0))
+        # =====================
+        # 2) CHỌN LAYERS CHUNG CHO BENIGN
+        # =====================
+        # Tính tỷ lệ 0 theo từng cột (layer)
+        zero_counts = np.sum(inputs_all_benign == 0, axis=0)  # shape (D,)
+        total_benign = inputs_all_benign.shape[0]
+        zero_ratio_per_layer = zero_counts / total_benign
 
-        fig_ = px.scatter(
-            trajectories, x=0, y=1, color=df_classes[0].astype(str), labels={'color': 'digit'},
-            color_discrete_sequence=px.colors.qualitative.Dark24,
-        )
+        while True:
+            # Chỉ giữ lại các layer có tỷ lệ 0 >= self.validation_threshold
+            selected_layers = np.where(zero_ratio_per_layer >= self.validation_threshold)[0]
+            print("[INFO] Selected Layers:", selected_layers)
 
-        pca = PCA(contamination=0.01, n_components=2)
-        pca.fit(inputs_all_benign)
+            # Nếu số lượng layer được chọn >= 6 thì dừng vòng lặp, ngược lại giảm threshold đi 0.05
+            if selected_layers.shape[0] >= self.minimum_num_layers:
+                break
+            else:
+                self.validation_threshold -= 0.05
+                print(f"[INFO] Validation threshold decreased to: {self.validation_threshold:.2f}")
 
-        y_train_scores = pca.decision_function(inputs_all_benign)
-        y_test_scores = pca.decision_function(inputs_all_unknown)
-        y_test_pred = pca.predict(inputs_all_unknown)
-        prediction_mask = (y_test_pred == 1)
-        prediction_labels = labels_all_unknown[prediction_mask]
-        label_counts = Counter(prediction_labels)
+        # =====================
+        # 3) TÍNH SCORE TRÊN BENIGN & LẤY NGƯỠNG (top10_threshold)
+        # =====================
+        scores_benign = np.sum(inputs_all_benign[:, selected_layers], axis=1)
 
-        print("\n----------- DETECTION RESULTS -----------")
-        for label, count in label_counts.items():
-            print(f'Label {label}: {count}')
+        # Lấy top 10% score cao nhất, rồi lấy MIN trong top đó
+        n_top = int(np.ceil(scores_benign.shape[0] * (1 - self.validation_threshold)))
+        if n_top > 0:
+            top_scores = np.sort(scores_benign)[-n_top:]
+            top10_threshold = np.min(top_scores)
+        else:
+            top10_threshold = 0
 
+        print(f"[INFO] Top 10% threshold on benign = {top10_threshold:.4f}")
+
+        # =====================
+        # 4) TÍNH SCORE CHO POISON & CLEAN (không chia theo class)
+        # =====================
+        scores_poison = np.sum(inputs_poison[:, selected_layers], axis=1)
+        scores_clean = np.sum(inputs_clean[:, selected_layers], axis=1)
+
+        # =====================
+        # 5) XÁC ĐỊNH NHÃN NHỊ PHÂN THEO NGƯỠNG
+        # =====================
+        # > top10_threshold => 1, ngược lại => 0
+        binary_poison = np.where(scores_poison > top10_threshold, 1, 0)
+        binary_clean = np.where(scores_clean > top10_threshold, 1, 0)
+
+        # Ghép hai mảng nhị phân => y_test_pred
+        y_test_pred = np.concatenate((binary_poison, binary_clean))
+
+        # Tạo ground truth mask (0=clean, 1=poison)
         is_poison_mask = (labels_all_unknown == self.POISON_TEMP_LABEL).astype(int)
-        fpr, tpr, thresholds = metrics.roc_curve(is_poison_mask, y_test_scores, pos_label=1)
-        auc_val = metrics.auc(fpr, tpr)
 
+        print("[DEBUG] y_test_pred:", y_test_pred)
+        print("[DEBUG] is_poison_mask:", is_poison_mask)
+
+        # =====================
+        # 6) TÍNH CÁC CHỈ SỐ ĐÁNH GIÁ
+        # =====================
         tn, fp, fn, tp = confusion_matrix(is_poison_mask, y_test_pred).ravel()
         TPR = tp / (tp + fn) if (tp + fn) > 0 else 0
         FPR = fp / (fp + tn) if (fp + tn) > 0 else 0
         f1 = metrics.f1_score(is_poison_mask, y_test_pred)
+
+        # (Tuỳ chọn) Tính ROC AUC dựa trên y_test_pred (0/1) HOẶC score_poison/score_clean (liên tục)
+        from sklearn.metrics import roc_auc_score
+
+        y_test_scores = np.concatenate([scores_poison, scores_clean])
+        auc_val = roc_auc_score(is_poison_mask, y_test_scores)
 
         print("TPR: {:.2f}%".format(TPR * 100))
         print("FPR: {:.2f}%".format(FPR * 100))
