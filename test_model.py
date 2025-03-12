@@ -98,7 +98,7 @@ elif args.dataset == 'imagenet100':
     milestones = torch.tensor([40, 80])
     learning_rate = 0.01
     batch_size = 16
-    
+
 elif args.dataset == 'imagenette':
     num_classes = 10
     momentum = 0.9
