@@ -62,7 +62,7 @@ class TED(BackdoorDefense):
         self.model.to(self.device)
         print(self.poison_type)
         self.scale_bn_params()
-        
+
         # 2) Define the backdoor target class
         self.target = self.target_class
         print(f"Target Class: {self.target}")
@@ -232,8 +232,8 @@ class TED(BackdoorDefense):
         for module in self.model.modules():
             if isinstance(module, nn.BatchNorm2d):
                 with torch.no_grad():
-                    module.weight *= 1.5  # gamma
-                    module.bias *= 1.5  # beta
+                    module.weight *= 1  # gamma
+                    module.bias *= 1  # beta
 
     # ==============================
     #     HELPER FUNCTIONS
