@@ -185,6 +185,20 @@ else:
                                          data_transform)
         img_size = 224
         num_classes = 100
+
+    elif args.dataset == 'imagenet200':
+
+        data_transform = transforms.Compose([
+            transforms.Resize(256),
+            transforms.RandomHorizontalFlip(),
+            transforms.CenterCrop(224),
+            transforms.ToTensor(),
+        ])
+
+        train_set = datasets.ImageFolder(os.path.join(os.path.join(data_dir, 'imagenet200'), 'train'),
+                                         data_transform)
+        img_size = 224
+        num_classes = 200
         
     else:
         raise NotImplementedError('Undefined Dataset')

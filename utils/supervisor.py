@@ -457,7 +457,7 @@ def get_transforms(args):
                                      [1 / 0.229, 1 / 0.224, 1 / 0.225])
             ])
 
-    elif args.dataset == 'imagenet100':
+    elif args.dataset == 'imagenet100' or args.dataset == 'imagenet200':
         if args.no_normalize:
             data_transform_aug = transforms.Compose([
                 transforms.Resize(256),
@@ -531,7 +531,7 @@ def get_poison_transform(poison_type, dataset_name, target_class, source_class=1
 
     if dataset_name in ['gtsrb', 'cifar10', 'cifar100']:
         img_size = 32
-    elif dataset_name in ['imagenette', 'imagenet', 'imagenet50', 'imagenet100']:
+    elif dataset_name in ['imagenette', 'imagenet', 'imagenet50', 'imagenet100', 'imagenet200']:
         img_size = 224
     else:
         raise NotImplementedError('<Undefined> Dataset = %s' % dataset_name)
@@ -590,6 +590,15 @@ def get_poison_transform(poison_type, dataset_name, target_class, source_class=1
                                  (1.0 / 0.229, 1.0 / 0.224, 1.0 / 0.225)),
         ])
         num_classes = 100
+    elif dataset_name == 'imagenet200':
+        normalizer = transforms.Compose([
+            transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
+        ])
+        denormalizer = transforms.Compose([
+            transforms.Normalize((-0.485 / 0.229, -0.456 / 0.224, -0.406 / 0.225),
+                                 (1.0 / 0.229, 1.0 / 0.224, 1.0 / 0.225)),
+        ])
+        num_classes = 200
     else:
         raise Exception("Invalid Dataset")
 
