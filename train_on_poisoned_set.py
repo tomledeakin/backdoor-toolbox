@@ -6,9 +6,9 @@ from utils import default_args, imagenet
 from torch.cuda.amp import autocast, GradScaler
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--epochs', type=int, default=None,
+parser.add_argument('-epochs', type=int, default=None,
                     help='Số lượng epoch huấn luyện. Nếu không cung cấp, sẽ sử dụng giá trị mặc định theo dataset.')
-parser.add_argument('--lr', type=float, default=None,
+parser.add_argument('-lr', type=float, default=None,
                     help='Learning rate ban đầu. Nếu không cung cấp, sẽ sử dụng giá trị mặc định theo dataset.')
 parser.add_argument('-dataset', type=str, required=False,
                     default=default_args.parser_default['dataset'],
@@ -136,7 +136,7 @@ elif args.dataset == 'imagenet100':
     epochs = 100
     milestones = torch.tensor([40, 80])
     learning_rate = 0.01
-    batch_size = 16
+    batch_size = 32
 
 elif args.dataset == 'imagenet200':
 
@@ -144,10 +144,10 @@ elif args.dataset == 'imagenet200':
     arch = supervisor.get_arch(args)
     momentum = 0.9
     weight_decay = 1e-4
-    epochs = 100
+    epochs = 500
     milestones = torch.tensor([40, 80])
     learning_rate = 0.01
-    batch_size = 16
+    batch_size = 32
 
 elif args.dataset == 'imagenet':
 
