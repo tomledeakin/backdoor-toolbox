@@ -1,38 +1,38 @@
-# from datasets import load_dataset
-#
-# dataset = load_dataset('slegroux/tiny-imagenet-200-clean')
-#
-# print(dataset)
-
-
-
 import os
-from datasets import load_dataset
 from PIL import Image
 from tqdm import tqdm
+import argparse
 
-# Load dataset
-dataset = load_dataset('slegroux/tiny-imagenet-200-clean')
+def resize_images(input_dir, output_dir, target_size=(256, 256)):
+    """
+    Resize all images in input_dir to target_size and save to output_dir.
 
-# Output directory
-output_dir = 'data/imagenet-200'
-os.makedirs(output_dir, exist_ok=True)
+    Args:
+        input_dir (str): Path to the directory containing original images (224x224).
+        output_dir (str): Path to the directory where resized images (256x256) will be saved.
+        target_size (tuple): Target size to resize images (default: (256, 256)).
+    """
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+        print(f"[INFO] Created output directory: {output_dir}")
 
-# Convert each split
-def save_split(split_name):
-    split = dataset[split_name]
-    for idx, sample in tqdm(enumerate(split), total=len(split), desc=f"Processing {split_name}"):
-        label = sample['label']
-        label_dir = os.path.join(output_dir, split_name, str(label))
-        os.makedirs(label_dir, exist_ok=True)
+    image_files = [f for f in os.listdir(input_dir) if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
 
-        # Save image
-        image = sample['image']
-        if not isinstance(image, Image.Image):
-            image = Image.fromarray(image)
-        image.save(os.path.join(label_dir, f'{idx}.jpg'))
+    for image_name in tqdm(image_files, desc='Resizing Images'):
+        input_path = os.path.join(input_dir, image_name)
+        output_path = os.path.join(output_dir, image_name)
 
-# Save all splits
-save_split('train')
-save_split('validation')
-save_split('test')
+        with Image.open(input_path) as img:
+            img_resized = img.resize(target_size, Image.BICUBIC)  # You can also try Image.LANCZOS for better quality
+            img_resized.save(output_path)
+
+    print(f"[INFO] Resized {len(image_files)} images and saved to {output_dir}")
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Resize images from 224x224 to 256x256.")
+    parser.add_argument('--input_dir', type=str, required=True, help="Directory containing 224x224 triggers.")
+    parser.add_argument('--output_dir', type=str, required=True, help="Directory to save resized 256x256 triggers.")
+    args = parser.parse_args()
+
+    resize_images(args.input_dir, args.output_dir, target_size=(256, 256))
