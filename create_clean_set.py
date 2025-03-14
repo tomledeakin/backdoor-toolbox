@@ -51,13 +51,13 @@ elif args.dataset == 'imagenette':
 
     data_transform = transforms.Compose([
         transforms.Resize(256),
-        transforms.CenterCrop(224),
+        # transforms.CenterCrop(224),
         transforms.ToTensor(),
     ])
 
     clean_set = datasets.ImageFolder(os.path.join(os.path.join(data_dir, 'imagenette2'), 'val'), data_transform)
 
-    img_size = 224
+    img_size = 256
     num_classes = 10
     
 elif args.dataset == 'imagenet50':
@@ -90,14 +90,14 @@ elif args.dataset == 'imagenet200':
 
     data_transform = transforms.Compose([
         transforms.Resize(256),
-        transforms.CenterCrop(224),
+        # transforms.CenterCrop(224),
         transforms.ToTensor(),
     ])
 
     clean_set = datasets.ImageFolder(os.path.join(os.path.join(data_dir, 'imagenet200'), 'val'), data_transform)
 
-    img_size = 224
-    num_classes = 100
+    img_size = 256
+    num_classes = 200
 
 elif args.dataset == 'imagenet':
     data_transform = transforms.Compose([
