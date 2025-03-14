@@ -189,9 +189,7 @@ else:
     elif args.dataset == 'imagenet200':
 
         data_transform = transforms.Compose([
-            transforms.Resize(256),
-            transforms.RandomHorizontalFlip(),
-            transforms.CenterCrop(224),
+            transforms.Resize((256, 256)),
             transforms.ToTensor(),
         ])
 

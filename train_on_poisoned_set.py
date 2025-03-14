@@ -7,9 +7,9 @@ from torch.cuda.amp import autocast, GradScaler
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-epochs', type=int, default=None,
-                    help='Số lượng epoch huấn luyện. Nếu không cung cấp, sẽ sử dụng giá trị mặc định theo dataset.')
+                    help='Number of epochs.')
 parser.add_argument('-lr', type=float, default=None,
-                    help='Learning rate ban đầu. Nếu không cung cấp, sẽ sử dụng giá trị mặc định theo dataset.')
+                    help='Learning rate.')
 parser.add_argument('-dataset', type=str, required=False,
                     default=default_args.parser_default['dataset'],
                     choices=default_args.parser_choices['dataset'])
