@@ -84,8 +84,6 @@ class TED(BackdoorDefense):
 
         print(f"Number of samples in full test set: {len(self.testset)}")
         self.SELECTED_CLASSES = 30
-        if self.dataset == "imagenet200":
-            self.num_classes = self.SELECTED_CLASSES
 
         ########################################################################
         # BỔ SUNG: CHỈ LỰA CHỌN NGẪU NHIÊN 30 CLASSES (BAO GỒM TARGET CLASS)
@@ -167,8 +165,11 @@ class TED(BackdoorDefense):
 
         # 6) Set defense training parameters
         self.SAMPLES_PER_CLASS = args.validation_per_class
-        self.DEFENSE_TRAIN_SIZE = self.num_classes * self.SAMPLES_PER_CLASS
 
+        if self.dataset == "imagenet200":
+            self.DEFENSE_TRAIN_SIZE = self.SELECTED_CLASSES * self.SAMPLES_PER_CLASS
+        else:
+            self.DEFENSE_TRAIN_SIZE = self.num_classes * self.SAMPLES_PER_CLASS
         # 7) Define number of neighbors and samples for constructing poison/clean sets
         self.NUM_SAMPLES = args.num_test_samples
 
