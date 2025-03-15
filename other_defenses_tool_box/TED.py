@@ -642,7 +642,9 @@ class TED(BackdoorDefense):
         sorted_dis = distances[sorted_idx]
         sorted_indices = indices[sorted_idx]
 
-        return sorted_dis, sorted_indices
+        sorted_dis_tensor = torch.from_numpy(sorted_dis)
+        sorted_indices_tensor = torch.from_numpy(sorted_indices)
+        return sorted_dis_tensor, sorted_indices_tensor
 
     def getDefenseRegion(self, final_prediction, h_defense_activation, processing_label, layer,
                          layer_test_region_individual):
