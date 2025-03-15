@@ -107,6 +107,7 @@ class TED(BackdoorDefense):
             all_labels.extend(labels.tolist())
         unique_classes = set(all_labels)
         num_classes = len(unique_classes)
+        print(f"Total number of samples (from defense set): {len(all_labels)}")
         print(f"Number of unique classes (from defense set): {num_classes}")
         print(f"Expected number of classes from args: {self.num_classes}")
 
