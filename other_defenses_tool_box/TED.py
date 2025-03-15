@@ -79,7 +79,7 @@ class TED(BackdoorDefense):
             self.test_loader = generate_dataloader(
                 dataset=self.dataset,
                 dataset_path=config.data_dir,
-                batch_size=50,
+                batch_size=5,
                 split='test',
                 data_transform=self.data_transform,
                 shuffle=False,
@@ -100,8 +100,8 @@ class TED(BackdoorDefense):
         test_subset = data.Subset(self.testset, test_indices)
 
         # Create DataLoaders for defense and test sets
-        self.defense_loader = data.DataLoader(defense_subset, batch_size=50, shuffle=True, num_workers=0)
-        self.test_loader = data.DataLoader(test_subset, batch_size=50, shuffle=False, num_workers=0)
+        self.defense_loader = data.DataLoader(defense_subset, batch_size=5, shuffle=True, num_workers=0)
+        self.test_loader = data.DataLoader(test_subset, batch_size=5, shuffle=False, num_workers=0)
 
         print(f"Number of samples in defense set (90% of test): {len(defense_subset)}")
         print(f"Number of samples in final test set (10% of test): {len(test_subset)}")
@@ -141,7 +141,7 @@ class TED(BackdoorDefense):
                 print(f"Warning: File {idx}.png does not exist.")
 
         correct_indices_per_class = defaultdict(list)
-        defense_loader_no_shuffle = data.DataLoader(defense_set, batch_size=50, num_workers=0, shuffle=False)
+        defense_loader_no_shuffle = data.DataLoader(defense_set, batch_size=5, num_workers=0, shuffle=False)
         current_idx = 0
 
         with torch.no_grad():
@@ -173,7 +173,7 @@ class TED(BackdoorDefense):
             defense_indices_final.extend(sampled)
 
         final_defense_subset = data.Subset(underlying_dataset, defense_indices_final)
-        self.defense_loader = data.DataLoader(final_defense_subset, batch_size=50, shuffle=True, num_workers=0)
+        self.defense_loader = data.DataLoader(final_defense_subset, batch_size=5, shuffle=True, num_workers=0)
 
         h_benign_preds = []
         h_benign_ori_labels = []
@@ -191,7 +191,7 @@ class TED(BackdoorDefense):
         if len(benign_indices) > self.DEFENSE_TRAIN_SIZE:
             benign_indices = np.random.choice(benign_indices, self.DEFENSE_TRAIN_SIZE, replace=False)
         final_defense_subset = data.Subset(underlying_dataset, benign_indices)
-        self.defense_loader = data.DataLoader(final_defense_subset, batch_size=50, shuffle=True, num_workers=0)
+        self.defense_loader = data.DataLoader(final_defense_subset, batch_size=5, shuffle=True, num_workers=0)
 
         self.POISON_TEMP_LABEL = "Poison"
         self.CLEAN_TEMP_LABEL = "Clean"
@@ -345,10 +345,10 @@ class TED(BackdoorDefense):
                 chosen = np.random.choice(all_indices, size=self.NUM_SAMPLES, replace=False)
 
             clean_subset = data.Subset(self.testset, chosen)
-            clean_loader = data.DataLoader(clean_subset, batch_size=50, shuffle=False)
+            clean_loader = data.DataLoader(clean_subset, batch_size=5, shuffle=False)
 
             poison_subset = data.Subset(self.testset, chosen)
-            poison_loader = data.DataLoader(poison_subset, batch_size=50, shuffle=False)
+            poison_loader = data.DataLoader(poison_subset, batch_size=5, shuffle=False)
 
             for (inputs, labels) in clean_loader:
                 inputs, labels = inputs.to(self.device), labels.to(self.device)
@@ -422,11 +422,11 @@ class TED(BackdoorDefense):
                 return img, label
 
         poison_set = CustomDataset(bd_inputs_set, bd_labels_set)
-        self.poison_loader = data.DataLoader(poison_set, batch_size=50, num_workers=0, shuffle=True)
+        self.poison_loader = data.DataLoader(poison_set, batch_size=5, num_workers=0, shuffle=True)
         print("Poison set size:", len(self.poison_loader))
 
         clean_set = CustomDataset(clean_inputs_set, clean_labels_set)
-        self.clean_loader = data.DataLoader(clean_set, batch_size=50, num_workers=0, shuffle=True)
+        self.clean_loader = data.DataLoader(clean_set, batch_size=5, num_workers=0, shuffle=True)
         print("Clean set size:", len(self.clean_loader))
 
         del bd_inputs_set, bd_labels_set, bd_pred_set
