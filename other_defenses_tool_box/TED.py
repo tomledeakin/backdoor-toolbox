@@ -618,12 +618,21 @@ class TED(BackdoorDefense):
             h_c_c[c] = h_c
         return h_c_c
 
-    def get_dis_sort(self, item, destinations):
-        item_ = item.reshape(1, item.shape[0])
-        # Chuyển về CPU để giảm tải bộ nhớ GPU
-        new_dis = pairwise_euclidean_distance(item_.cpu(), destinations.cpu())
-        sorted_dis, sorted_indices = torch.sort(new_dis.squeeze(0))
-        return sorted_dis, sorted_indices
+    def get_dis_sort(self, item, destinations, chunk_size=100):
+        item_ = item.reshape(1, -1)
+        distances = []
+        indices = []
+        for start in range(0, destinations.size(0), chunk_size):
+            end = min(start + chunk_size, destinations.size(0))
+            dest_chunk = destinations[start:end]
+            d_chunk = pairwise_euclidean_distance(item_.to(self.device), dest_chunk.to(self.device))
+            distances.append(d_chunk.squeeze(0))
+            indices.append(torch.arange(start, end))
+        distances = torch.cat(distances)
+        indices = torch.cat(indices)
+        sorted_dis, sorted_idx = torch.sort(distances)
+        sorted_indices = indices[sorted_idx]
+        return sorted_dis.cpu(), sorted_indices.cpu()
 
     def getDefenseRegion(self, final_prediction, h_defense_activation, processing_label, layer,
                          layer_test_region_individual):
