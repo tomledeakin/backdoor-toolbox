@@ -627,12 +627,14 @@ class TED(BackdoorDefense):
             dest_chunk = destinations[start:end]
             d_chunk = pairwise_euclidean_distance(item_.to(self.device), dest_chunk.to(self.device))
             distances.append(d_chunk.squeeze(0))
+            # Tạo indices trên CPU (mặc định) là hợp lý nếu chúng ta chuyển distances về CPU ngay sau đó
             indices.append(torch.arange(start, end))
-        distances = torch.cat(distances)
-        indices = torch.cat(indices)
+        # Chuyển cả distances và indices về CPU trước khi sắp xếp
+        distances = torch.cat(distances).cpu()
+        indices = torch.cat(indices).cpu()
         sorted_dis, sorted_idx = torch.sort(distances)
         sorted_indices = indices[sorted_idx]
-        return sorted_dis.cpu(), sorted_indices.cpu()
+        return sorted_dis, sorted_indices
 
     def getDefenseRegion(self, final_prediction, h_defense_activation, processing_label, layer,
                          layer_test_region_individual):
