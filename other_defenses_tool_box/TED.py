@@ -618,22 +618,30 @@ class TED(BackdoorDefense):
             h_c_c[c] = h_c
         return h_c_c
 
-    def get_dis_sort(self, item, destinations, chunk_size=100):
-        item_ = item.reshape(1, -1)
+    def get_dis_sort(self, item, destinations, chunk_size=1000):
+        # Chuyển item và destinations về numpy trên CPU
+        item_np = item.view(1, -1).cpu().numpy()  # (1, d)
+        dest_np = destinations.cpu().numpy()  # (N, d)
         distances = []
         indices = []
-        for start in range(0, destinations.size(0), chunk_size):
-            end = min(start + chunk_size, destinations.size(0))
-            dest_chunk = destinations[start:end]
-            d_chunk = pairwise_euclidean_distance(item_.to(self.device), dest_chunk.to(self.device))
-            distances.append(d_chunk.squeeze(0))
-            # Tạo indices trên CPU (mặc định) là hợp lý nếu chúng ta chuyển distances về CPU ngay sau đó
-            indices.append(torch.arange(start, end))
-        # Chuyển cả distances và indices về CPU trước khi sắp xếp
-        distances = torch.cat(distances).cpu()
-        indices = torch.cat(indices).cpu()
-        sorted_dis, sorted_idx = torch.sort(distances)
+
+        # Tính khoảng cách theo từng khúc để tránh dùng quá nhiều RAM
+        for start in range(0, dest_np.shape[0], chunk_size):
+            end = min(start + chunk_size, dest_np.shape[0])
+            chunk = dest_np[start:end]  # (chunk_size, d)
+            # Tính khoảng cách Euclidean giữa item_np và chunk
+            d_chunk = np.linalg.norm(item_np - chunk, axis=1)
+            distances.append(d_chunk)
+            indices.append(np.arange(start, end))
+
+        distances = np.concatenate(distances)  # mảng khoảng cách (N, )
+        indices = np.concatenate(indices)  # mảng chỉ số (N, )
+
+        # Sắp xếp khoảng cách
+        sorted_idx = np.argsort(distances)
+        sorted_dis = distances[sorted_idx]
         sorted_indices = indices[sorted_idx]
+
         return sorted_dis, sorted_indices
 
     def getDefenseRegion(self, final_prediction, h_defense_activation, processing_label, layer,
