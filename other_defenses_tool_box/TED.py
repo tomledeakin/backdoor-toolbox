@@ -96,12 +96,7 @@ class TED(BackdoorDefense):
 
         # Create DataLoaders for defense and test sets
         self.defense_loader = data.DataLoader(defense_subset, batch_size=50, shuffle=True, num_workers=0)
-
-        # Giả sử test_subset là dataset ban đầu (ví dụ, từ datasets.ImageFolder)
-        filtered_indices = [i for i, (_, label) in enumerate(test_subset) if label == 120]
-        filtered_test_set = data.Subset(test_subset, filtered_indices)
-        self.test_loader = data.DataLoader(filtered_test_set, batch_size=50, shuffle=False, num_workers=0)
-
+        self.test_loader = data.DataLoader(test_subset, batch_size=50, shuffle=False, num_workers=0)
 
         print(f"Number of samples in defense set (90% of test): {len(defense_subset)}")
         print(f"Number of samples in final test set (10% of test): {len(test_subset)}")

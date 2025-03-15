@@ -84,7 +84,7 @@ trigger_default = {
     'imagenet200': {
         'none': 'none',
         'badnet': 'badnet_patch_256.png',
-        'blend' : 'hellokitty_224.png',
+        'blend' : 'hellokitty_256.png',
         'adaptive_blend': 'hellokitty_256.png',
         'adaptive_patch': 'none',
         'trojan' : 'trojan_watermark_224.png',
