@@ -53,6 +53,10 @@ elif args.dataset in ["imagenet", "pubfig", "imagenette"]:
     args.input_height = 64
     args.input_width = 64
     args.input_channel = 3
+elif args.dataset == "imagenet200":
+    args.input_height = 224
+    args.input_width = 224
+    args.input_channel = 3
 
 # Cập nhật số lớp cho từng dataset; thêm imagenette với 10 lớp
 args.class_number = {
@@ -62,6 +66,7 @@ args.class_number = {
     "imagenet": 100,
     "pubfig": 83,
     "imagenette": 10,
+    "imagenet200": 200,
 }.get(args.dataset, 10)
 
 # Cập nhật kích thước training của defense; đối với imagenette cũng dùng 1000 mẫu
@@ -72,6 +77,7 @@ args.defense_train_size = {
     "imagenet": (args.class_number * 100),
     "pubfig": (args.class_number * 100),
     "imagenette": 1000,
+    "imagenet200": 1000,
 }.get(args.dataset, 1000)
 
 print(args.poison_type)
