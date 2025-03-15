@@ -163,6 +163,18 @@ class TED(BackdoorDefense):
                         correct_indices_per_class[label].append(sample_idx)
                     current_idx += 1
 
+        # # For each class, sample SAMPLES_PER_CLASS correctly predicted samples
+        # defense_indices_final = []
+        # for label in unique_classes:
+        #     correct_indices = correct_indices_per_class[label]
+        #     num_correct = len(correct_indices)
+        #     if num_correct >= self.SAMPLES_PER_CLASS:
+        #         sampled = np.random.choice(correct_indices, self.SAMPLES_PER_CLASS, replace=False)
+        #     else:
+        #         sampled = np.random.choice(correct_indices, self.SAMPLES_PER_CLASS, replace=True)
+        #         print(f"Warning: Not enough correctly predicted samples for class {label}. Sampling with replacement.")
+        #     defense_indices_final.extend(sampled)
+
         # For each class, sample SAMPLES_PER_CLASS correctly predicted samples
         defense_indices_final = []
         for label in unique_classes:
@@ -170,10 +182,10 @@ class TED(BackdoorDefense):
             num_correct = len(correct_indices)
             if num_correct >= self.SAMPLES_PER_CLASS:
                 sampled = np.random.choice(correct_indices, self.SAMPLES_PER_CLASS, replace=False)
+                defense_indices_final.extend(sampled)
             else:
-                sampled = np.random.choice(correct_indices, self.SAMPLES_PER_CLASS, replace=True)
-                print(f"Warning: Not enough correctly predicted samples for class {label}. Sampling with replacement.")
-            defense_indices_final.extend(sampled)
+                print(
+                    f"Warning: Not enough correctly predicted samples for class {label} (only {num_correct}). Skipping this class.")
 
         # Create a new defense subset using the sampled indices and update the defense_loader
         final_defense_subset = data.Subset(underlying_dataset, defense_indices_final)

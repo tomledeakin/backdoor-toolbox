@@ -270,27 +270,16 @@ def generate_dataloader(dataset='cifar10', dataset_path='./data/', batch_size=12
                                                      drop_last=drop_last, num_workers=32, pin_memory=True)
             return val_loader
         elif split == 'test':
-            from torch.utils.data import DataLoader, ConcatDataset
-            from torchvision import datasets, transforms
+            # test_set_dir = os.path.join('clean_set', 'imagenet200', 'test_split')
+            # test_set_img_dir = os.path.join(test_set_dir, 'data')
+            # test_set_label_path = os.path.join(test_set_dir, 'labels')
+            # test_set = IMG_Dataset(data_dir=test_set_img_dir, label_path=test_set_label_path, transforms=data_transform)
+            # test_loader = torch.utils.data.DataLoader(test_set, batch_size=batch_size, shuffle=True,
+            #                                           drop_last=drop_last, num_workers=32, pin_memory=True)
 
-            test_set_dir = os.path.join('clean_set', 'imagenet200', 'test_split')
-            test_set_img_dir = os.path.join(test_set_dir, 'data')
-            test_set_label_path = os.path.join(test_set_dir, 'labels')
-            test_set1 = IMG_Dataset(data_dir=test_set_img_dir, label_path=test_set_label_path,
-                                    transforms=data_transform)
-
-            test_data2 = datasets.ImageFolder(os.path.join(dataset_path, 'test'), data_transform)
-
-            combined_test_dataset = ConcatDataset([test_set1, test_data2])
-
-            test_loader = DataLoader(
-                dataset=combined_test_dataset,
-                batch_size=batch_size,
-                shuffle=shuffle,
-                drop_last=drop_last,
-                num_workers=32,
-                pin_memory=True
-            )
+            test_data = datasets.ImageFolder(os.path.join(dataset_path, 'test'), data_transform)
+            test_loader = DataLoader(dataset=test_data, batch_size=batch_size, shuffle=shuffle,
+                                          drop_last=drop_last, num_workers=32, pin_memory=True)
 
             return test_loader
 
