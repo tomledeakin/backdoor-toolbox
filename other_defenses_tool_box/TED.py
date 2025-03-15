@@ -548,139 +548,139 @@ class TED(BackdoorDefense):
         return layer_test_region_individual
 
     def test(self):
-        print('STEP 1')
-        self.generate_poison_clean_sets()
-        print('STEP 2')
-        self.create_poison_clean_dataloaders()
-        print('STEP 3')
-        images_to_display = []
-        predictions_to_display = []
-        pairs = [
-            (self.poison_loader, 3, "Poison Image"),
-            (self.clean_loader, 9, "Clean Image")
-        ]
-        for loader, limit, prefix in pairs:
-            count = 0
-            for inputs, labels in loader:
-                inputs = inputs.to(self.device)
-                predictions = torch.argmax(self.model(inputs), dim=1).cpu()
-                for input_image, pred_ in zip(inputs, predictions):
-                    if count < limit:
-                        images_to_display.append(input_image.unsqueeze(0))
-                        predictions_to_display.append(pred_)
-                        count += 1
-                    else:
-                        break
-                if count >= limit:
-                    break
-            self.display_images_grid(images_to_display, predictions_to_display, title_prefix=prefix)
-            images_to_display.clear()
-            predictions_to_display.clear()
-        print('STEP 4')
-        self.h_defense_ori_labels, self.h_defense_activations, self.h_defense_preds = self.fetch_activation(self.defense_loader)
-        self.h_poison_ori_labels, self.h_poison_activations, self.h_poison_preds = self.fetch_activation(self.poison_loader)
-        self.h_clean_ori_labels, self.h_clean_activations, self.h_clean_preds = self.fetch_activation(self.clean_loader)
-        accuracy_defense = self.calculate_accuracy(self.h_defense_ori_labels, self.h_defense_preds)
-        poison_GT = torch.ones_like(self.h_poison_preds) * self.target
-        correct_poison = torch.sum(poison_GT == self.h_poison_preds).item()
-        total_poison = len(self.h_poison_preds)
-        accuracy_poison = (correct_poison / total_poison) * 100
-        print(f"\nAccuracy on defense_loader (Clean): {accuracy_defense:.2f}%")
-        print(f"Accuracy on poison_loader (Poison) : {accuracy_poison:.2f}%")
-        print('STEP 5')
-        class_names = np.unique(self.h_defense_ori_labels.cpu().numpy())
-        for index, label in enumerate(class_names):
-            for layer in self.h_defense_activations:
-                self.topological_representation = self.getDefenseRegion(
-                    final_prediction=self.h_defense_preds,
-                    h_defense_activation=self.h_defense_activations[layer],
-                    processing_label=label,
-                    layer=layer,
-                    layer_test_region_individual=self.topological_representation
-                )
-        for layer_ in self.h_poison_activations:
-            self.topological_representation = self.getLayerRegionDistance(
-                new_prediction=self.h_poison_preds,
-                new_activation=self.h_poison_activations[layer_],
-                new_temp_label=self.POISON_TEMP_LABEL,
-                h_defense_prediction=self.h_defense_preds,
-                h_defense_activation=self.h_defense_activations[layer_],
-                layer=layer_,
-                layer_test_region_individual=self.topological_representation
-            )
-        for layer_ in self.h_clean_activations:
-            self.topological_representation = self.getLayerRegionDistance(
-                new_prediction=self.h_clean_preds,
-                new_activation=self.h_clean_activations[layer_],
-                new_temp_label=self.CLEAN_TEMP_LABEL,
-                h_defense_prediction=self.h_defense_preds,
-                h_defense_activation=self.h_defense_activations[layer_],
-                layer=layer_,
-                layer_test_region_individual=self.topological_representation
-            )
-        print('STEP 6')
-        def aggregate_by_all_layers(output_label):
-            inputs_container = []
-            first_key = list(self.topological_representation.keys())[0]
-            labels_container = np.repeat(output_label, len(self.topological_representation[first_key][output_label]))
-            for l in self.topological_representation.keys():
-                temp = []
-                for j in range(len(self.topological_representation[l][output_label])):
-                    temp.append(self.topological_representation[l][output_label][j])
-                if temp:
-                    inputs_container.append(np.array(temp))
-            return np.array(inputs_container).T, np.array(labels_container)
-        inputs_all_benign = []
-        labels_all_benign = []
-        inputs_all_unknown = []
-        labels_all_unknown = []
-        first_key = list(self.topological_representation.keys())[0]
-        class_name = list(self.topological_representation[first_key])
-        for inx in class_name:
-            inputs, labels = aggregate_by_all_layers(output_label=inx)
-            if inx != self.POISON_TEMP_LABEL and inx != self.CLEAN_TEMP_LABEL:
-                inputs_all_benign.append(np.array(inputs))
-                labels_all_benign.append(np.array(labels))
-            else:
-                inputs_all_unknown.append(np.array(inputs))
-                labels_all_unknown.append(np.array(labels))
-        inputs_all_benign = np.concatenate(inputs_all_benign) if inputs_all_benign else np.array([])
-        labels_all_benign = np.concatenate(labels_all_benign) if labels_all_benign else np.array([])
-        inputs_all_unknown = np.concatenate(inputs_all_unknown) if inputs_all_unknown else np.array([])
-        labels_all_unknown = np.concatenate(labels_all_unknown) if labels_all_unknown else np.array([])
-        if inputs_all_benign.size == 0 or inputs_all_unknown.size == 0:
-            print("[WARNING] Not enough data to perform outlier detection!")
-            return
-        pca_t = sklearn_PCA(n_components=2)
-        pca_fit = pca_t.fit(inputs_all_benign)
-        trajectories_unknown = pca_fit.transform(inputs_all_unknown)
-        trajectories_benign = pca_fit.transform(inputs_all_benign)
-        od = PCA(contamination=0.06, n_components=2)
-        od.fit(inputs_all_benign)
-        y_train_scores = od.decision_function(inputs_all_benign)
-        y_test_scores = od.decision_function(inputs_all_unknown)
-        y_test_pred = od.predict(inputs_all_unknown)
-        prediction_mask = (y_test_pred == 1)
-        prediction_labels = labels_all_unknown[prediction_mask]
-        label_counts = Counter(prediction_labels)
-        print("\n----------- DETECTION RESULTS -----------")
-        for label, count in label_counts.items():
-            print(f'Label {label}: {count}')
-        is_poison_mask = (labels_all_unknown == self.POISON_TEMP_LABEL).astype(int)
-        fpr, tpr, thresholds = metrics.roc_curve(is_poison_mask, y_test_scores, pos_label=1)
-        auc_val = metrics.auc(fpr, tpr)
-        tn, fp, fn, tp = confusion_matrix(is_poison_mask, y_test_pred).ravel()
-        TPR = tp / (tp + fn) if (tp + fn) > 0 else 0
-        FPR = fp / (fp + tn) if (fp + tn) > 0 else 0
-        f1 = metrics.f1_score(is_poison_mask, y_test_pred)
-        print("TPR: {:.2f}%".format(TPR * 100))
-        print("FPR: {:.2f}%".format(FPR * 100))
-        print("AUC: {:.4f}".format(auc_val))
-        print(f"F1 score: {f1:.4f}")
-        print("True Positives (TP):", tp)
-        print("False Positives (FP):", fp)
-        print("True Negatives (TN):", tn)
-        print("False Negatives (FN):", fn)
+        # print('STEP 1')
+        # self.generate_poison_clean_sets()
+        # print('STEP 2')
+        # self.create_poison_clean_dataloaders()
+        # print('STEP 3')
+        # images_to_display = []
+        # predictions_to_display = []
+        # pairs = [
+        #     (self.poison_loader, 3, "Poison Image"),
+        #     (self.clean_loader, 9, "Clean Image")
+        # ]
+        # for loader, limit, prefix in pairs:
+        #     count = 0
+        #     for inputs, labels in loader:
+        #         inputs = inputs.to(self.device)
+        #         predictions = torch.argmax(self.model(inputs), dim=1).cpu()
+        #         for input_image, pred_ in zip(inputs, predictions):
+        #             if count < limit:
+        #                 images_to_display.append(input_image.unsqueeze(0))
+        #                 predictions_to_display.append(pred_)
+        #                 count += 1
+        #             else:
+        #                 break
+        #         if count >= limit:
+        #             break
+        #     self.display_images_grid(images_to_display, predictions_to_display, title_prefix=prefix)
+        #     images_to_display.clear()
+        #     predictions_to_display.clear()
+        # print('STEP 4')
+        # self.h_defense_ori_labels, self.h_defense_activations, self.h_defense_preds = self.fetch_activation(self.defense_loader)
+        # self.h_poison_ori_labels, self.h_poison_activations, self.h_poison_preds = self.fetch_activation(self.poison_loader)
+        # self.h_clean_ori_labels, self.h_clean_activations, self.h_clean_preds = self.fetch_activation(self.clean_loader)
+        # accuracy_defense = self.calculate_accuracy(self.h_defense_ori_labels, self.h_defense_preds)
+        # poison_GT = torch.ones_like(self.h_poison_preds) * self.target
+        # correct_poison = torch.sum(poison_GT == self.h_poison_preds).item()
+        # total_poison = len(self.h_poison_preds)
+        # accuracy_poison = (correct_poison / total_poison) * 100
+        # print(f"\nAccuracy on defense_loader (Clean): {accuracy_defense:.2f}%")
+        # print(f"Accuracy on poison_loader (Poison) : {accuracy_poison:.2f}%")
+        # print('STEP 5')
+        # class_names = np.unique(self.h_defense_ori_labels.cpu().numpy())
+        # for index, label in enumerate(class_names):
+        #     for layer in self.h_defense_activations:
+        #         self.topological_representation = self.getDefenseRegion(
+        #             final_prediction=self.h_defense_preds,
+        #             h_defense_activation=self.h_defense_activations[layer],
+        #             processing_label=label,
+        #             layer=layer,
+        #             layer_test_region_individual=self.topological_representation
+        #         )
+        # for layer_ in self.h_poison_activations:
+        #     self.topological_representation = self.getLayerRegionDistance(
+        #         new_prediction=self.h_poison_preds,
+        #         new_activation=self.h_poison_activations[layer_],
+        #         new_temp_label=self.POISON_TEMP_LABEL,
+        #         h_defense_prediction=self.h_defense_preds,
+        #         h_defense_activation=self.h_defense_activations[layer_],
+        #         layer=layer_,
+        #         layer_test_region_individual=self.topological_representation
+        #     )
+        # for layer_ in self.h_clean_activations:
+        #     self.topological_representation = self.getLayerRegionDistance(
+        #         new_prediction=self.h_clean_preds,
+        #         new_activation=self.h_clean_activations[layer_],
+        #         new_temp_label=self.CLEAN_TEMP_LABEL,
+        #         h_defense_prediction=self.h_defense_preds,
+        #         h_defense_activation=self.h_defense_activations[layer_],
+        #         layer=layer_,
+        #         layer_test_region_individual=self.topological_representation
+        #     )
+        # print('STEP 6')
+        # def aggregate_by_all_layers(output_label):
+        #     inputs_container = []
+        #     first_key = list(self.topological_representation.keys())[0]
+        #     labels_container = np.repeat(output_label, len(self.topological_representation[first_key][output_label]))
+        #     for l in self.topological_representation.keys():
+        #         temp = []
+        #         for j in range(len(self.topological_representation[l][output_label])):
+        #             temp.append(self.topological_representation[l][output_label][j])
+        #         if temp:
+        #             inputs_container.append(np.array(temp))
+        #     return np.array(inputs_container).T, np.array(labels_container)
+        # inputs_all_benign = []
+        # labels_all_benign = []
+        # inputs_all_unknown = []
+        # labels_all_unknown = []
+        # first_key = list(self.topological_representation.keys())[0]
+        # class_name = list(self.topological_representation[first_key])
+        # for inx in class_name:
+        #     inputs, labels = aggregate_by_all_layers(output_label=inx)
+        #     if inx != self.POISON_TEMP_LABEL and inx != self.CLEAN_TEMP_LABEL:
+        #         inputs_all_benign.append(np.array(inputs))
+        #         labels_all_benign.append(np.array(labels))
+        #     else:
+        #         inputs_all_unknown.append(np.array(inputs))
+        #         labels_all_unknown.append(np.array(labels))
+        # inputs_all_benign = np.concatenate(inputs_all_benign) if inputs_all_benign else np.array([])
+        # labels_all_benign = np.concatenate(labels_all_benign) if labels_all_benign else np.array([])
+        # inputs_all_unknown = np.concatenate(inputs_all_unknown) if inputs_all_unknown else np.array([])
+        # labels_all_unknown = np.concatenate(labels_all_unknown) if labels_all_unknown else np.array([])
+        # if inputs_all_benign.size == 0 or inputs_all_unknown.size == 0:
+        #     print("[WARNING] Not enough data to perform outlier detection!")
+        #     return
+        # pca_t = sklearn_PCA(n_components=2)
+        # pca_fit = pca_t.fit(inputs_all_benign)
+        # trajectories_unknown = pca_fit.transform(inputs_all_unknown)
+        # trajectories_benign = pca_fit.transform(inputs_all_benign)
+        # od = PCA(contamination=0.06, n_components=2)
+        # od.fit(inputs_all_benign)
+        # y_train_scores = od.decision_function(inputs_all_benign)
+        # y_test_scores = od.decision_function(inputs_all_unknown)
+        # y_test_pred = od.predict(inputs_all_unknown)
+        # prediction_mask = (y_test_pred == 1)
+        # prediction_labels = labels_all_unknown[prediction_mask]
+        # label_counts = Counter(prediction_labels)
+        # print("\n----------- DETECTION RESULTS -----------")
+        # for label, count in label_counts.items():
+        #     print(f'Label {label}: {count}')
+        # is_poison_mask = (labels_all_unknown == self.POISON_TEMP_LABEL).astype(int)
+        # fpr, tpr, thresholds = metrics.roc_curve(is_poison_mask, y_test_scores, pos_label=1)
+        # auc_val = metrics.auc(fpr, tpr)
+        # tn, fp, fn, tp = confusion_matrix(is_poison_mask, y_test_pred).ravel()
+        # TPR = tp / (tp + fn) if (tp + fn) > 0 else 0
+        # FPR = fp / (fp + tn) if (fp + tn) > 0 else 0
+        # f1 = metrics.f1_score(is_poison_mask, y_test_pred)
+        # print("TPR: {:.2f}%".format(TPR * 100))
+        # print("FPR: {:.2f}%".format(FPR * 100))
+        # print("AUC: {:.4f}".format(auc_val))
+        # print(f"F1 score: {f1:.4f}")
+        # print("True Positives (TP):", tp)
+        # print("False Positives (FP):", fp)
+        # print("True Negatives (TN):", tn)
+        # print("False Negatives (FN):", fn)
 
         # -------------------------------
         # Bổ sung: Chạy toàn bộ test set qua model để thu thập prediction
