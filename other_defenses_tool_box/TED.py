@@ -438,17 +438,16 @@ class TED(BackdoorDefense):
     def fetch_activation(self, loader):
         """
         Run the model on the given loader and fetch intermediate activations based on the registered hooks.
+        Các activation sẽ được chuyển về CPU để tránh sử dụng bộ nhớ GPU quá nhiều.
         """
         print("Starting fetch_activation")
         self.model.eval()
         all_h_label = []
         pred_set = []
-        h_batch = {}
         activation_container = {}
 
-        # Initialize hooks with one batch
+        # Khởi tạo container cho các activation hook thông qua một forward pass ban đầu
         for (images, labels) in loader:
-            print("Running the first batch to init hooks")
             _ = self.model(images.to(self.device))
             break
 
@@ -464,23 +463,30 @@ class TED(BackdoorDefense):
             except Exception as e:
                 print(f"Error running model on batch {batch_idx}: {e}")
                 break
-            pred_set.append(torch.argmax(output, -1).to(self.device))
+            # Lấy dự đoán và chuyển về CPU
+            pred_set.append(torch.argmax(output, -1).cpu())
 
+            # Thu thập các activation từ hook và chuyển về CPU ngay khi nhận được
             for key in self.activations:
-                h_batch[key] = self.activations[key].view(images.shape[0], -1)
-                for h in h_batch[key]:
-                    activation_container[key].append(h.to(self.device))
+                # Giả sử activation ban đầu có kích thước (batch, ...)
+                act = self.activations[key]
+                # Flatten activation cho mỗi sample và chuyển về CPU
+                act_flat = act.view(images.shape[0], -1).cpu()
+                activation_container[key].append(act_flat)
 
+            # Lưu label, chuyển về CPU
             for label_ in labels:
-                all_h_label.append(label_.to(self.device))
+                all_h_label.append(label_.cpu())
 
             self.activations.clear()
 
             if batch_idx % 10 == 0:
                 print(f"Processed {batch_idx} batches")
+                torch.cuda.empty_cache()
 
+        # Nối các tensor trên CPU (dùng torch.cat vì các tensor đã ở CPU)
         for key in activation_container:
-            activation_container[key] = torch.stack(activation_container[key])
+            activation_container[key] = torch.cat(activation_container[key], dim=0)
         all_h_label = torch.stack(all_h_label)
         pred_set = torch.cat(pred_set)
 
