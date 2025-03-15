@@ -32,7 +32,6 @@ from other_defenses_tool_box.backdoor_defense import BackdoorDefense
 from networks.models import Generator, NetC_MNIST
 from defense_dataloader import get_dataset, get_dataloader
 import seaborn as sns
-import math
 
 # ------------------------------
 # Seed settings for reproducibility
@@ -47,6 +46,7 @@ torch.manual_seed(42)
 if torch.cuda.is_available():
     torch.cuda.manual_seed(42)
     torch.cuda.manual_seed_all(42)
+
 
 # ------------------------------
 
@@ -116,9 +116,10 @@ class TED(BackdoorDefense):
         # -------------------------------------------------------------------------------------------
 
         ########################################################################
-
+        
         # 4) Split the full test set into 10% (defense/validation) and 90% (final test)
         all_indices = np.arange(len(self.testset))
+        from sklearn.model_selection import train_test_split
         defense_indices, test_indices = train_test_split(all_indices, test_size=0.1, random_state=42)
 
         # Create subsets for defense and test sets
@@ -158,6 +159,7 @@ class TED(BackdoorDefense):
             underlying_dataset = defense_set
             subset_indices = np.arange(len(defense_set))
 
+        from collections import defaultdict
         label_to_indices = defaultdict(list)
         for idx in subset_indices:
             try:
@@ -268,6 +270,7 @@ class TED(BackdoorDefense):
         def get_activation(name):
             def hook(model, input, output):
                 self.activations[name] = output.detach()
+
             return hook
 
         # Remove previous hooks if any
@@ -316,7 +319,7 @@ class TED(BackdoorDefense):
     #   CREATE POISON & CLEAN SETS
     # ==============================
     def generate_poison_clean_sets(self):
-        if self.poison_type in ['TaCT', 'SSDT']:
+        if self.poison_type == 'TaCT' or self.poison_type == 'SSDT':
             print(self.poison_type)
 
             while self.poison_count < self.NUM_SAMPLES or self.clean_count < self.NUM_SAMPLES:
@@ -329,6 +332,7 @@ class TED(BackdoorDefense):
                     if self.poison_count < self.NUM_SAMPLES:
                         victim_indices = (labels == config.source_class)
                         if victim_indices.sum().item() > 0:
+                            # Tách victim_inputs và victim_labels
                             victim_inputs = inputs[victim_indices]
                             victim_labels = labels[victim_indices]
 
@@ -355,6 +359,7 @@ class TED(BackdoorDefense):
                                 )
                                 final_poison_preds = preds_bd[correct_pred_indices]
 
+                                # Thêm vào list
                                 self.temp_poison_inputs_set.append(final_poison.cpu())
                                 self.temp_poison_labels_set.append(final_poison_targets.cpu())
                                 self.temp_poison_pred_set.append(final_poison_preds.cpu())
@@ -370,10 +375,14 @@ class TED(BackdoorDefense):
                             clean_inputs = inputs[non_victim_indices]
                             clean_labels_ori = labels[non_victim_indices]
 
+                            # Dùng ảnh gốc => KHÔNG gắn trigger
                             preds_clean = torch.argmax(self.model(clean_inputs), dim=1)
 
+                            # Tạo label tạm "Clean"=102
                             label_value = self.label_mapping[self.CLEAN_TEMP_LABEL]
-                            clean_targets = self.create_targets(clean_labels_ori, label_value)
+                            clean_targets = self.create_targets(
+                                clean_labels_ori, label_value
+                            )
 
                             self.temp_clean_inputs_set.append(clean_inputs.cpu())
                             self.temp_clean_labels_set.append(clean_targets.cpu())
@@ -439,7 +448,7 @@ class TED(BackdoorDefense):
 
                 self.clean_count += labels.size(0)
 
-            # Tạo POISON set
+            # Tạo POISON set từ cùng subset
             for (inputs, labels) in poison_loader:
                 inputs, labels = inputs.to(self.device), labels.to(self.device)
                 poisoned_inputs, poisoned_labels = self.poison_transform.transform(inputs, labels)
@@ -455,34 +464,42 @@ class TED(BackdoorDefense):
                 self.poison_count += labels.size(0)
 
         ############################################
-        # Lưu hình ảnh Poison/Clean ra thư mục
+        # TÍCH HỢP ĐOẠN CODE LƯU ẢNH (POISON/CLEAN)
         ############################################
+        # Tạo thư mục lưu
         poison_save_dir = os.path.join(self.save_dir, "poison_images")
         clean_save_dir = os.path.join(self.save_dir, "clean_images")
         os.makedirs(poison_save_dir, exist_ok=True)
         os.makedirs(clean_save_dir, exist_ok=True)
 
+        # Gom các tensor lại
         poison_images = torch.cat(self.temp_poison_inputs_set, dim=0)
         poison_labels = torch.cat(self.temp_poison_labels_set, dim=0)
 
         clean_images = torch.cat(self.temp_clean_inputs_set, dim=0)
         clean_labels = torch.cat(self.temp_clean_labels_set, dim=0)
 
+        # Lưu poison
         for idx in range(poison_images.shape[0]):
             image_tensor = poison_images[idx]
             label_val = int(poison_labels[idx].item())
+            # Lưu với tên file: poison_{idx}_label_{label_val}.png
             filename = f"poison_{idx}_label_{label_val}.png"
             save_path = os.path.join(poison_save_dir, filename)
             save_image(image_tensor, save_path)
 
+        # Lưu clean
         for idx in range(clean_images.shape[0]):
             image_tensor = clean_images[idx]
             label_val = int(clean_labels[idx].item())
+            # Lưu với tên file: clean_{idx}_label_{label_val}.png
             filename = f"clean_{idx}_label_{label_val}.png"
             save_path = os.path.join(clean_save_dir, filename)
             save_image(image_tensor, save_path)
 
-        print(f"Finished generate_poison_clean_sets. Clean_count = {self.clean_count}, Poison_count = {self.poison_count}")
+        print(
+            f"Finished generate_poison_clean_sets. Clean_count = {self.clean_count}, Poison_count = {self.poison_count}"
+        )
 
     def create_poison_clean_dataloaders(self):
         """
@@ -513,15 +530,17 @@ class TED(BackdoorDefense):
                 label = self.labels[index]
                 return img, label
 
+        # Create poison_loader
         poison_set = CustomDataset(bd_inputs_set, bd_labels_set)
         self.poison_loader = data.DataLoader(poison_set, batch_size=50, num_workers=0, shuffle=True)
         print("Poison set size:", len(self.poison_loader))
 
+        # Create clean_loader
         clean_set = CustomDataset(clean_inputs_set, clean_labels_set)
         self.clean_loader = data.DataLoader(clean_set, batch_size=50, num_workers=0, shuffle=True)
         print("Clean set size:", len(self.clean_loader))
 
-        # Giải phóng tạm
+        # Remove temporary variables
         del bd_inputs_set, bd_labels_set, bd_pred_set
         del clean_inputs_set, clean_labels_set, clean_pred_set
 
@@ -529,49 +548,56 @@ class TED(BackdoorDefense):
     #       HOOK & MAIN TEST
     # ==============================
     def fetch_activation(self, loader):
+        """
+        Run the model on the given loader and fetch intermediate activations based on the registered hooks.
+        """
         print("Starting fetch_activation")
         self.model.eval()
-
         all_h_label = []
         pred_set = []
         h_batch = {}
         activation_container = {}
 
-        with torch.no_grad():
-            # Chạy 1 batch để "kích hoạt" model, phòng khi model chưa forward bao giờ
-            for (images, labels) in loader:
-                _ = self.model(images.to(self.device))
-                break
+        # Initialize hooks with one batch
+        for (images, labels) in loader:
+            print("Running the first batch to init hooks")
+            _ = self.model(images.to(self.device))
+            break
 
+        for key in self.activations:
+            activation_container[key] = []
+
+        self.activations.clear()
+
+        for batch_idx, (images, labels) in enumerate(loader, start=1):
+            print(f"Running batch {batch_idx} - Images shape: {images.shape}, Labels shape: {labels.shape}")
+            try:
+                output = self.model(images.to(self.device))
+            except Exception as e:
+                print(f"Error running model on batch {batch_idx}: {e}")
+                break
+            pred_set.append(torch.argmax(output, -1).to(self.device))
+
+            # Collect activations from hooks
             for key in self.activations:
-                activation_container[key] = []
+                h_batch[key] = self.activations[key].view(images.shape[0], -1)
+                for h in h_batch[key]:
+                    activation_container[key].append(h.to(self.device))
+
+            # Save original labels
+            for label_ in labels:
+                all_h_label.append(label_.to(self.device))
+
             self.activations.clear()
 
-            # Lặp qua từng batch để lấy activation
-            for batch_idx, (images, labels) in enumerate(loader, start=1):
-                images = images.to(self.device)
-                output = self.model(images)
-                pred_set.append(torch.argmax(output, dim=1).cpu())
+            if batch_idx % 10 == 0:
+                print(f"Processed {batch_idx} batches")
 
-                # Lưu activation của các layer
-                for key in self.activations:
-                    h_batch[key] = self.activations[key].view(images.shape[0], -1).cpu()
-                    activation_container[key].append(h_batch[key])
-
-                all_h_label.append(labels.cpu())
-
-                self.activations.clear()
-                del images, labels, output
-                torch.cuda.empty_cache()
-
-                if batch_idx % 10 == 0:
-                    print(f"Processed {batch_idx} batches")
-
-        # Gộp lại thành tensor lớn
+        # Stack everything
         for key in activation_container:
-            activation_container[key] = torch.cat(activation_container[key], dim=0)
-        all_h_label = torch.cat(all_h_label, dim=0)
-        pred_set = torch.cat(pred_set, dim=0)
+            activation_container[key] = torch.stack(activation_container[key])
+        all_h_label = torch.stack(all_h_label)
+        pred_set = torch.cat(pred_set)
 
         print("Finished fetch_activation")
         return all_h_label, activation_container, pred_set
@@ -589,7 +615,7 @@ class TED(BackdoorDefense):
 
     def display_images_grid(self, images, predictions, title_prefix):
         """
-        Hiển thị một vài ảnh (grid) kèm theo dự đoán, lưu vào self.save_dir.
+        Display a small grid of images with their predictions. Saves the figure to self.save_dir.
         """
         num_images = len(images)
         if num_images == 0:
@@ -618,7 +644,7 @@ class TED(BackdoorDefense):
 
     def gather_activation_into_class(self, target, h):
         """
-        Gom activation theo từng class, phục vụ cho tính khoảng cách/topo representation.
+        Group activations by class index and store them for further analysis.
         """
         h_c_c = [0 for _ in range(self.Test_C)]
         for c in range(self.Test_C):
@@ -631,24 +657,19 @@ class TED(BackdoorDefense):
 
     def get_dis_sort(self, item, destinations):
         """
-        Tính khoảng cách Euclidean giữa 'item' và tất cả 'destinations',
-        sau đó sắp xếp tăng dần. Trả về (khoảng_cách_sorted, chỉ_mục_sorted).
+        Sort distances between a single item and all destinations, returning sorted indices.
         """
         item_ = item.reshape(1, item.shape[0])
         dev = self.device
         new_dis = pairwise_euclidean_distance(item_.to(dev), destinations.to(dev))
-        sorted_dis, indices_individual = torch.sort(new_dis.squeeze(0))
-        return sorted_dis.to("cpu"), indices_individual.to("cpu")
+        _, indices_individual = torch.sort(new_dis)
+        return indices_individual.to("cpu")
 
     def getDefenseRegion(self, final_prediction, h_defense_activation, processing_label, layer,
                          layer_test_region_individual):
         """
-        Với mỗi sample (thuộc class=processing_label) trong defense set,
-        tìm khoảng cách tới sample cùng class gần nhất (và kiểm tra thêm ngưỡng).
+        For each sample in the specified label, compute the region by distance ranking with defense samples.
         """
-        processing_label_indices = torch.where(final_prediction == processing_label)[0]
-        processing_label_h_defense_activation = h_defense_activation[processing_label_indices]
-
         if layer not in layer_test_region_individual:
             layer_test_region_individual[layer] = {}
         layer_test_region_individual[layer][processing_label] = []
@@ -659,25 +680,12 @@ class TED(BackdoorDefense):
             print("No sample in this class for label =", processing_label)
         else:
             for index, item in enumerate(self.candidate_[layer][processing_label]):
-                sorted_dis, sorted_indices = self.get_dis_sort(item, h_defense_activation)
-
-                # Duyệt xem sample defense nào cùng class -> dừng ở sample đầu tiên
-                for i, idx in enumerate(sorted_indices[1:], start=1):
-                    if final_prediction[idx] == processing_label:
-                        # Kiểm tra thêm ngưỡng so với neighbors
-                        mask = ~torch.all(processing_label_h_defense_activation == h_defense_activation[idx], dim=1)
-                        sorted_dis_validation, _ = self.get_dis_sort(h_defense_activation[idx],
-                                                                     processing_label_h_defense_activation[mask])
-                        threshold = torch.max(sorted_dis_validation[:math.ceil(self.SAMPLES_PER_CLASS / 2)])
-                        distance_value = sorted_dis[i].item()
-
-                        if distance_value > threshold:
-                            distance_value_index = self.DEFENSE_TRAIN_SIZE - 1
-                        else:
-                            distance_value_index = i - 1
-
-                        layer_test_region_individual[layer][processing_label].append(distance_value_index)
-                        break
+                ranking_array = self.get_dis_sort(item, h_defense_activation)[0]
+                ranking_array = ranking_array[1:]
+                r_ = [final_prediction[i] for i in ranking_array]
+                if processing_label in r_:
+                    itemindex = r_.index(processing_label)
+                    layer_test_region_individual[layer][processing_label].append(itemindex)
 
         return layer_test_region_individual
 
@@ -685,7 +693,7 @@ class TED(BackdoorDefense):
                                h_defense_prediction, h_defense_activation,
                                layer, layer_test_region_individual):
         """
-        Tính "khoảng cách" của mỗi sample (trong poison/clean) tới sample defense cùng class.
+        Compute the distance-based region for a new label, comparing to the defense activations.
         """
         if layer not in layer_test_region_individual:
             layer_test_region_individual[layer] = {}
@@ -695,37 +703,23 @@ class TED(BackdoorDefense):
         labels = torch.unique(new_prediction)
 
         for processing_label in labels:
-            processing_label_indices = torch.where(h_defense_prediction == processing_label)[0]
-            processing_label_h_defense_activation = h_defense_activation[processing_label_indices]
             for index, item in enumerate(candidate__[processing_label]):
-                sorted_dis, sorted_indices = self.get_dis_sort(item, h_defense_activation)
-
-                for i, idx in enumerate(sorted_indices):
-                    if h_defense_prediction[idx] == processing_label:
-                        mask = ~torch.all(processing_label_h_defense_activation == h_defense_activation[idx], dim=1)
-                        sorted_dis_validation, _ = self.get_dis_sort(h_defense_activation[idx],
-                                                                     processing_label_h_defense_activation[mask])
-                        threshold = torch.max(sorted_dis_validation[:math.ceil(self.SAMPLES_PER_CLASS / 2)])
-                        distance_value = sorted_dis[i].item()
-
-                        if distance_value > threshold:
-                            distance_value_index = self.DEFENSE_TRAIN_SIZE - 1
-                        else:
-                            distance_value_index = i
-
-                        layer_test_region_individual[layer][new_temp_label].append(distance_value_index)
-                        break
+                ranking_array = self.get_dis_sort(item, h_defense_activation)[0]
+                r_ = [h_defense_prediction[i] for i in ranking_array]
+                if processing_label in r_:
+                    itemindex = r_.index(processing_label)
+                    layer_test_region_individual[layer][new_temp_label].append(itemindex)
 
         return layer_test_region_individual
 
     def test(self):
         """
-        Main testing procedure:
+        The main testing procedure:
           1) Generate poison/clean sets.
           2) Create corresponding DataLoaders.
           3) Extract activations via hooks.
           4) Compute topological representations.
-          5) (Optional) Visualization + outlier detection.
+          5) (Optional) Visualization and outlier detection steps.
         """
         print('STEP 1')
         self.generate_poison_clean_sets()
@@ -880,10 +874,10 @@ class TED(BackdoorDefense):
             print(f"Mean: {np.mean(topo_rep_array_clean)}\n")
 
         print('STEP 8')
+
         def aggregate_by_all_layers(output_label):
             inputs_container = []
             first_key = list(self.topological_representation.keys())[0]
-            # Số lượng sample của output_label tại layer đầu tiên
             labels_container = np.repeat(output_label,
                                          len(self.topological_representation[first_key][output_label]))
             for l in self.topological_representation.keys():
