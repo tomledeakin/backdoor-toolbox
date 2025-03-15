@@ -618,33 +618,18 @@ class TED(BackdoorDefense):
             h_c_c[c] = h_c
         return h_c_c
 
-    def get_dis_sort(self, item, destinations, chunk_size=1000):
-        # Chuyển item và destinations về numpy trên CPU
-        item_np = item.view(1, -1).cpu().numpy()  # (1, d)
-        dest_np = destinations.cpu().numpy()  # (N, d)
-        distances = []
-        indices = []
-
-        # Tính khoảng cách theo từng khúc để tránh dùng quá nhiều RAM
-        for start in range(0, dest_np.shape[0], chunk_size):
-            end = min(start + chunk_size, dest_np.shape[0])
-            chunk = dest_np[start:end]  # (chunk_size, d)
-            # Tính khoảng cách Euclidean giữa item_np và chunk
-            d_chunk = np.linalg.norm(item_np - chunk, axis=1)
-            distances.append(d_chunk)
-            indices.append(np.arange(start, end))
-
-        distances = np.concatenate(distances)  # mảng khoảng cách (N, )
-        indices = np.concatenate(indices)  # mảng chỉ số (N, )
-
-        # Sắp xếp khoảng cách
-        sorted_idx = np.argsort(distances)
-        sorted_dis = distances[sorted_idx]
-        sorted_indices = indices[sorted_idx]
-
-        sorted_dis_tensor = torch.from_numpy(sorted_dis)
-        sorted_indices_tensor = torch.from_numpy(sorted_indices)
-        return sorted_dis_tensor, sorted_indices_tensor
+    def get_dis_sort(self, item, destinations):
+        """
+        Trả về (khoảng cách đã sắp xếp tăng dần, chỉ mục tương ứng).
+        Chúng ta sẽ dùng khoảng cách này thay vì "thứ hạng".
+        """
+        # print(f'destinations: {destinations}')
+        # print(f'destinations shape: {destinations.shape}')  # destinations shape: torch.Size([100, 10])
+        item_ = item.reshape(1, item.shape[0])
+        dev = self.device
+        new_dis = pairwise_euclidean_distance(item_.to(dev), destinations.to(dev))  # shape: (1, destinations.size(0))
+        sorted_dis, indices_individual = torch.sort(new_dis.squeeze(0))  # sort theo chiều 1-D
+        return sorted_dis.to("cpu"), indices_individual.to("cpu")
 
     def getDefenseRegion(self, final_prediction, h_defense_activation, processing_label, layer,
                          layer_test_region_individual):
