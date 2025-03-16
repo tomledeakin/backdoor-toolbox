@@ -1,12 +1,12 @@
 import os
-from math import sqrt
-import random
 import torch
 import torch.nn.functional as F
-import numpy as np
+import random
 from torchvision.utils import save_image
+import numpy as np
 import config
 from torchvision import transforms
+from math import sqrt
 
 """Adaptive Mask backdoor attack
 - Keep the original labels for some (say 50%) poisoned samples.
@@ -33,12 +33,12 @@ def get_trigger_mask(img_size, total_pieces, masked_pieces):
 class poison_generator():
     def __init__(self, img_size, dataset, poison_rate, path, trigger, target_class=0, alpha=0.2, cover_rate=0.01,
                  pieces=16, mask_rate=0.5):
+
         self.img_size = img_size
         self.dataset = dataset
         self.poison_rate = poison_rate
         self.path = path  # path to save the dataset
         self.target_class = target_class  # by default : target_class = 0
-        self.trigger = trigger  # trigger tensor, kích thước ban đầu có thể khác img_size
         self.alpha = alpha
         self.cover_rate = cover_rate
         assert abs(round(sqrt(pieces)) - sqrt(pieces)) <= 1e-8
@@ -47,12 +47,14 @@ class poison_generator():
         self.mask_rate = mask_rate
         self.masked_pieces = round(self.mask_rate * self.pieces)
 
-        # Số lượng ảnh
-        self.num_img = len(dataset)
-
-        # Resize trigger về kích thước mong muốn: (C, img_size, img_size)
+        # Resize trigger nếu kích thước không khớp
         # Giả sử trigger có shape (C, H, W)
-        self.trigger = F.interpolate(self.trigger.unsqueeze(0), size=(self.img_size, self.img_size), mode='bilinear', align_corners=False).squeeze(0)
+        if trigger.shape[-2:] != (img_size, img_size):
+            trigger = F.interpolate(trigger.unsqueeze(0), size=(img_size, img_size), mode='bilinear', align_corners=False).squeeze(0)
+        self.trigger = trigger
+
+        # number of images
+        self.num_img = len(dataset)
 
     def generate_poisoned_training_set(self):
         # random sampling
@@ -82,7 +84,7 @@ class poison_generator():
             if ct < num_cover and cover_indices[ct] == i:
                 cover_id.append(cnt)
                 mask = get_trigger_mask(self.img_size, self.pieces, self.masked_pieces)
-                # Nếu ảnh có nhiều channel, ta tự động broadcast mask theo kênh
+                # mask có shape (img_size, img_size) -> tự broadcast cho channel
                 img = img + self.alpha * mask * (self.trigger - img)
                 ct += 1
 
@@ -105,7 +107,7 @@ class poison_generator():
         print("Poison indices:", poison_indices)
         print("Cover indices:", cover_indices)
 
-        # Demo: lưu ảnh demo trigger
+        # demo
         img, gt = self.dataset[0]
         mask = get_trigger_mask(self.img_size, self.pieces, self.masked_pieces)
         img = img + self.alpha * mask * (self.trigger - img)
@@ -118,12 +120,13 @@ class poison_transform():
         self.img_size = img_size
         self.target_class = target_class
         self.alpha = alpha
-        # Resize trigger tương tự như trên
-        self.trigger = F.interpolate(trigger.unsqueeze(0), size=(self.img_size, self.img_size), mode='bilinear', align_corners=False).squeeze(0)
+        # Resize trigger nếu cần
+        if trigger.shape[-2:] != (img_size, img_size):
+            trigger = F.interpolate(trigger.unsqueeze(0), size=(img_size, img_size), mode='bilinear', align_corners=False).squeeze(0)
+        self.trigger = trigger
 
     def transform(self, data, labels):
         data, labels = data.clone(), labels.clone()
         data = data + self.alpha * (self.trigger.to(data.device) - data)
         labels[:] = self.target_class
-
         return data, labels
