@@ -22,7 +22,7 @@ triggers= {
     'badnet': 'badnet_patch_256.png',
     # 'blend' : 'random_224.png',
     # 'blend' : 'random_256.png',
-    'blend' : 'hellokitty_224.png',
+    'blend' : 'hellokitty_256.png',
     'trojan' : 'trojan_watermark_224.png',
     'SRA': 'phoenix_corner_256.png',
     'none': 'none'
