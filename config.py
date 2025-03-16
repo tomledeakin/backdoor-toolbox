@@ -88,6 +88,7 @@ trigger_default = {
         'adaptive_blend': 'hellokitty_256.png',
         'adaptive_patch': 'none',
         'trojan' : 'trojan_watermark_256.png',
+        'WaNet': 'none',
         'SRA': 'phoenix_corner_224.png',
     },
 }
