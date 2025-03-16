@@ -165,6 +165,10 @@ adaptive_patch_test_trigger_names = {
         'firefox_corner_32.png',
         'trojan_square_32.png',
     ],
+    'imagenet200': [
+        'firefox_corner_256.png',
+        'trojan_square_256.png',
+    ],
 }
 
 adaptive_patch_test_trigger_alphas = {
@@ -173,6 +177,10 @@ adaptive_patch_test_trigger_alphas = {
         1,
     ],
     'gtsrb': [
+        1,
+        1,
+    ],
+    'imagenet200': [
         1,
         1,
     ],
