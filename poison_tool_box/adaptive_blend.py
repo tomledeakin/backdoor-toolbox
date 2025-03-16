@@ -7,6 +7,7 @@ import numpy as np
 import config
 from torchvision import transforms
 from math import sqrt
+import torch.nn.functional as F
 
 """Adaptive Mask backdoor attack
 - Keep the original labels for some (say 50%) poisoned samples.
@@ -84,7 +85,8 @@ class poison_generator():
             if ct < num_cover and cover_indices[ct] == i:
                 cover_id.append(cnt)
                 mask = get_trigger_mask(self.img_size, self.pieces, self.masked_pieces)
-                print(f"img shape: {img.shape}")  # (C, H, W)
+                mask = F.interpolate(mask.unsqueeze(0).unsqueeze(0), size=(256, 256), mode='bilinear',align_corners=False).squeeze(0).squeeze(0)
+                mask = mask.unsqueeze(0)
                 print(f"trigger shape: {self.trigger.shape}")  # (C, H, W)
                 print(f"mask shape: {mask.shape}")  # (H, W)
                 print(f"alpha: {self.alpha}")  # scalar
@@ -99,6 +101,8 @@ class poison_generator():
                 poison_id.append(cnt)
                 gt = self.target_class  # change the label to the target class
                 mask = get_trigger_mask(self.img_size, self.pieces, self.masked_pieces)
+                mask = F.interpolate(mask.unsqueeze(0).unsqueeze(0), size=(256, 256), mode='bilinear',align_corners=False).squeeze(0).squeeze(0)
+                mask = mask.unsqueeze(0)
                 print(f"img shape: {img.shape}")  # (C, H, W)
                 print(f"trigger shape: {self.trigger.shape}")  # (C, H, W)
                 print(f"mask shape: {mask.shape}")  # (H, W)
