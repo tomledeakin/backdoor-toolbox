@@ -148,6 +148,12 @@ adaptive_patch_train_trigger_alphas = {
         0.5,
         0.3,
     ],
+    'imagenet200': [
+        0.5,
+        0.2,
+        0.5,
+        0.3,
+    ],
 }
 
 adaptive_patch_test_trigger_names = {
