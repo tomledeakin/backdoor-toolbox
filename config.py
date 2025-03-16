@@ -127,6 +127,12 @@ adaptive_patch_train_trigger_names = {
         'badnet_patch4_32.png',
         'trojan_square_32.png',
     ],
+    'imagenet200': [
+        'phoenix_corner_256.png',
+        'firefox_corner_256.png',
+        'badnet_patch_256.png',
+        'trojan_square_256.png',
+    ],
 }
 
 adaptive_patch_train_trigger_alphas = {
