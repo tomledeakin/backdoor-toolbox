@@ -618,7 +618,7 @@ class TED(BackdoorDefense):
             h_c_c[c] = h_c
         return h_c_c
 
-    def get_dis_sort(self, item, destinations, batch_size=10):
+    def get_dis_sort(self, item, destinations, batch_size=1):
         """
         Tính khoảng cách giữa 'item' và 'destinations' theo từng batch,
         sau đó hợp nhất và sắp xếp kết quả.
