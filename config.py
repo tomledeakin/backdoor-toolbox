@@ -81,6 +81,16 @@ trigger_default = {
         'trojan' : 'trojan_watermark_224.png',
         'SRA': 'phoenix_corner_256.png',
     },
+    'imagenet100': {
+        'none': 'none',
+        'badnet': 'badnet_patch_256.png',
+        'blend' : 'hellokitty_256.png',
+        'adaptive_blend': 'hellokitty_256.png',
+        'adaptive_patch': 'none',
+        'trojan' : 'trojan_watermark_256.png',
+        'WaNet': 'none',
+        'SRA': 'phoenix_corner_224.png',
+    },
     'imagenet200': {
         'none': 'none',
         'badnet': 'badnet_patch_256.png',
