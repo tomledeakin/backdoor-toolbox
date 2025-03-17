@@ -439,6 +439,8 @@ class TED(BackdoorDefense):
             Sử dụng cùng một subset test để tạo ra Clean set và Poison set (VD: 500 mẫu).
             """
             all_indices = np.arange(len(self.testset))
+            print(len(all_indices))
+            print(self.NUM_SAMPLES)
             if len(all_indices) < self.NUM_SAMPLES:
                 print(f"Warning: testset size < {self.NUM_SAMPLES}, adjusting.")
                 chosen = all_indices
