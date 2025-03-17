@@ -618,37 +618,18 @@ class TED(BackdoorDefense):
             h_c_c[c] = h_c
         return h_c_c
 
-    def get_dis_sort(self, item, destinations, batch_size=1):
+    def get_dis_sort(self, item, destinations):
         """
-        Tính khoảng cách giữa 'item' và 'destinations' theo từng batch trên CPU,
-        tránh sử dụng GPU cho phần này nhằm giảm nguy cơ OOM.
         Trả về (khoảng cách đã sắp xếp tăng dần, chỉ mục tương ứng).
+        Chúng ta sẽ dùng khoảng cách này thay vì "thứ hạng".
         """
-        # Chuyển item về CPU
-        item_ = item.reshape(1, -1).cpu()
-
-        distances_list = []
-        indices_list = []
-        total = destinations.shape[0]
-        for start in range(0, total, batch_size):
-            end = min(start + batch_size, total)
-            # Lấy batch trên CPU
-            batch = destinations[start:end].cpu()
-            # Tính khoảng cách trên CPU
-            batch_distance = pairwise_euclidean_distance(item_, batch)
-            batch_distance = batch_distance.squeeze(0)
-            distances_list.append(batch_distance)
-            indices_list.append(torch.arange(start, end))
-
-        # Hợp nhất kết quả
-        all_distances = torch.cat(distances_list)
-        all_indices = torch.cat(indices_list)
-
-        # Sắp xếp các khoảng cách
-        sorted_distances, sort_indices = torch.sort(all_distances)
-        sorted_indices = all_indices[sort_indices]
-
-        return sorted_distances, sorted_indices
+        # print(f'destinations: {destinations}')
+        # print(f'destinations shape: {destinations.shape}')  # destinations shape: torch.Size([100, 10])
+        item_ = item.reshape(1, item.shape[0])
+        dev = self.device
+        new_dis = pairwise_euclidean_distance(item_.to(dev), destinations.to(dev))  # shape: (1, destinations.size(0))
+        sorted_dis, indices_individual = torch.sort(new_dis.squeeze(0))  # sort theo chiều 1-D
+        return sorted_dis.to("cpu"), indices_individual.to("cpu")
 
     def getDefenseRegion(self, final_prediction, h_defense_activation, processing_label, layer,
                          layer_test_region_individual):
