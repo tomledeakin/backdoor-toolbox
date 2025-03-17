@@ -620,34 +620,31 @@ class TED(BackdoorDefense):
 
     def get_dis_sort(self, item, destinations, batch_size=1):
         """
-        Tính khoảng cách giữa 'item' và 'destinations' theo từng batch,
-        sau đó hợp nhất và sắp xếp kết quả.
+        Tính khoảng cách giữa 'item' và 'destinations' theo từng batch trên CPU,
+        tránh sử dụng GPU cho phần này nhằm giảm nguy cơ OOM.
         Trả về (khoảng cách đã sắp xếp tăng dần, chỉ mục tương ứng).
         """
-        dev = self.device
-        item_ = item.reshape(1, -1).to(dev)
+        # Chuyển item về CPU
+        item_ = item.reshape(1, -1).cpu()
 
-        # Danh sách lưu khoảng cách và chỉ mục
         distances_list = []
         indices_list = []
-
         total = destinations.shape[0]
         for start in range(0, total, batch_size):
             end = min(start + batch_size, total)
-            # Lấy một batch của destinations
-            batch = destinations[start:end].to(dev)
-            # Tính khoảng cách cho batch này
-            batch_distance = pairwise_euclidean_distance(item_, batch)  # shape: (1, batch_size)
-            batch_distance = batch_distance.squeeze(0).cpu()
-            # Lưu lại khoảng cách và chỉ mục tương ứng (chú ý: các chỉ mục phải tính offset)
+            # Lấy batch trên CPU
+            batch = destinations[start:end].cpu()
+            # Tính khoảng cách trên CPU
+            batch_distance = pairwise_euclidean_distance(item_, batch)
+            batch_distance = batch_distance.squeeze(0)
             distances_list.append(batch_distance)
             indices_list.append(torch.arange(start, end))
 
-        # Hợp nhất các batch
+        # Hợp nhất kết quả
         all_distances = torch.cat(distances_list)
         all_indices = torch.cat(indices_list)
 
-        # Sắp xếp toàn bộ khoảng cách
+        # Sắp xếp các khoảng cách
         sorted_distances, sort_indices = torch.sort(all_distances)
         sorted_indices = all_indices[sort_indices]
 
