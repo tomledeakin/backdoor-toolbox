@@ -144,15 +144,15 @@ class TED(BackdoorDefense):
         defense_indices, test_indices = train_test_split(all_indices, test_size=0.1, random_state=42)
 
         # Create subsets for defense and test sets
-        defense_subset = data.Subset(self.testset, defense_indices)
-        test_subset = data.Subset(self.testset, test_indices)
+        self.defense_subset = data.Subset(self.testset, defense_indices)
+        self.testset = data.Subset(self.testset, test_indices)
 
         # Create DataLoaders for defense and test sets
-        self.defense_loader = data.DataLoader(defense_subset, batch_size=50, shuffle=True, num_workers=0)
-        self.test_loader = data.DataLoader(test_subset, batch_size=50, shuffle=False, num_workers=0)
+        self.defense_loader = data.DataLoader(self.defense_subset, batch_size=50, shuffle=True, num_workers=0)
+        self.test_loader = data.DataLoader(self.testset, batch_size=50, shuffle=False, num_workers=0)
 
-        print(f"Number of samples in defense set (90% of test): {len(defense_subset)}")
-        print(f"Number of samples in final test set (10% of test): {len(test_subset)}")
+        print(f"Number of samples in defense set (90% of test): {len(self.defense_subset)}")
+        print(f"Number of samples in final test set (10% of test): {len(self.testset)}")
 
         # 5) Determine unique classes by scanning the defense set
         all_labels = []
@@ -175,7 +175,7 @@ class TED(BackdoorDefense):
 
         # 8) Create defense subset from the defense set using only correctly predicted samples
         # Use the defense_subset (10% of test) instead of the training set
-        defense_set = defense_subset  # Alias for clarity
+        defense_set = self.defense_subset  # Alias for clarity
         if isinstance(defense_set, data.Subset):
             underlying_dataset = defense_set.dataset
             subset_indices = defense_set.indices
