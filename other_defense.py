@@ -295,10 +295,10 @@ elif args.defense == 'TED':
     from other_defenses_tool_box.TED import TED
     defense = TED(args)
     defense.detect()
-# elif args.defense == 'TED_plus':
-#     from other_defenses_tool_box.TED_plus import TED_plus
-#     defense = TED_plus(args)
-#     defense.detect()
+elif args.defense == 'TEDPLUS':
+    from other_defenses_tool_box.TEDPLUS import TEDPLUS
+    defense = TEDPLUS(args)
+    defense.detect()
 elif args.defense == 'FOLD':
     from other_defenses_tool_box.FOLD import FOLD
     defense = FOLD(args)
