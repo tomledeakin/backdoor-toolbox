@@ -609,7 +609,7 @@ def main(k):
     elif opt.dataset == "gtsrb":
         opt.num_classes = 43
     elif opt.dataset == "imagenet":
-        opt.num_classes = 100
+        opt.num_classes = 200
     else:
         raise Exception("Invalid Dataset")
 
@@ -645,8 +645,8 @@ def main(k):
         opt.input_width = 28
         opt.input_channel = 1
     elif opt.dataset == "imagenet":
-        opt.input_height = 64
-        opt.input_width = 64
+        opt.input_height = 224
+        opt.input_width = 224
         opt.input_channel = 3
     else:
         raise Exception("Invalid Dataset")
@@ -659,7 +659,7 @@ if __name__ == "__main__":
         "gtsrb": 43,
         "cifar10": 10,
         "mnist": 10,
-        "imagenet": 100,
+        "imagenet": 200,
     }
 
     opt = config_ted.get_arguments().parse_args()
