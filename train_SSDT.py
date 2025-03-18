@@ -282,7 +282,12 @@ def eval(
             total += bs
             avg_acc_clean = total_correct_clean * 100.0 / total
             avg_acc_cross = total_correct_cross * 100.0 / total
-            avg_acc_bd = total_correct_bd * 100.0 / total_victim
+            # avg_acc_bd = total_correct_bd * 100.0 / total_victim
+            if total_victim > 0:
+                avg_acc_bd = total_correct_bd * 100.0 / total_victim
+            else:
+                avg_acc_bd = 0.0
+
             avg_acc_nvt = total_correct_nvt * 100.0 / total_non_victim
             batch_acc_bd = correct_bd / len(victim_labels1) * 100.0
 
