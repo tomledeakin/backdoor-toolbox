@@ -83,7 +83,7 @@ class FOLD(BackdoorDefense):
             self.testset = self.test_loader.dataset
 
         print(f"Number of samples in full test set: {len(self.testset)}")
-        self.SELECTED_CLASSES = 10
+        self.SELECTED_CLASSES = 50
 
         ########################################################################
         # BỔ SUNG: CHỈ LỰA CHỌN NGẪU NHIÊN 30 CLASSES (BAO GỒM TARGET CLASS)
@@ -141,7 +141,7 @@ class FOLD(BackdoorDefense):
 
         # 4) Split the full test set into 10% (defense/validation) and 90% (final test)
         all_indices = np.arange(len(self.testset))
-        defense_indices, test_indices = train_test_split(all_indices, test_size=0.1, random_state=42)
+        defense_indices, test_indices = train_test_split(all_indices, test_size=0.2, random_state=42)
 
         # Create subsets for defense and test sets
         self.defense_subset = data.Subset(self.testset, defense_indices)
@@ -151,8 +151,8 @@ class FOLD(BackdoorDefense):
         self.defense_loader = data.DataLoader(self.defense_subset, batch_size=50, shuffle=True, num_workers=0)
         self.test_loader = data.DataLoader(self.testset, batch_size=50, shuffle=False, num_workers=0)
 
-        print(f"Number of samples in defense set (90% of test): {len(self.defense_subset)}")
-        print(f"Number of samples in final test set (10% of test): {len(self.testset)}")
+        print(f"Number of samples in defense set (80% of test): {len(self.defense_subset)}")
+        print(f"Number of samples in final test set (20% of test): {len(self.testset)}")
 
         # 5) Determine unique classes by scanning the defense set
         all_labels = []

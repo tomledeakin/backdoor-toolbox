@@ -277,18 +277,18 @@ def generate_dataloader(dataset='cifar10', dataset_path='./data/', batch_size=12
             # test_loader = torch.utils.data.DataLoader(test_set, batch_size=batch_size, shuffle=True,
             #                                           drop_last=drop_last, num_workers=32, pin_memory=True)
 
-            # from torch.utils.data import ConcatDataset, DataLoader
-            #
-            # test_data = datasets.ImageFolder(os.path.join(dataset_path, 'test'), data_transform)
-            # val_data = datasets.ImageFolder(os.path.join(dataset_path, 'val'), data_transform)
-            #
-            # merged_data = ConcatDataset([test_data, val_data])
-            # test_loader = DataLoader(dataset=merged_data, batch_size=batch_size, shuffle=shuffle,
-            #                            drop_last=drop_last, num_workers=32, pin_memory=True)
+            from torch.utils.data import ConcatDataset, DataLoader
 
             test_data = datasets.ImageFolder(os.path.join(dataset_path, 'test'), data_transform)
-            test_loader = DataLoader(dataset=test_data, batch_size=batch_size, shuffle=shuffle,
-                                          drop_last=drop_last, num_workers=32, pin_memory=True)
+            val_data = datasets.ImageFolder(os.path.join(dataset_path, 'val'), data_transform)
+
+            merged_data = ConcatDataset([test_data, val_data])
+            test_loader = DataLoader(dataset=merged_data, batch_size=batch_size, shuffle=shuffle,
+                                       drop_last=drop_last, num_workers=32, pin_memory=True)
+
+            # test_data = datasets.ImageFolder(os.path.join(dataset_path, 'test'), data_transform)
+            # test_loader = DataLoader(dataset=test_data, batch_size=batch_size, shuffle=shuffle,
+            #                               drop_last=drop_last, num_workers=32, pin_memory=True)
 
             return test_loader
 
