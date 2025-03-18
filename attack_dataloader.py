@@ -48,7 +48,9 @@ def get_transform(opt, train=True, c=0, k=0):
             transforms.RandomCrop(224, padding=4) if train else transforms.CenterCrop(224),
             transforms.RandomHorizontalFlip() if train else transforms.Lambda(lambda x: x),
             transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4) if train else transforms.Lambda(lambda x: x),
-            transforms.ToTensor()
+            transforms.ToTensor(),
+            transforms.Normalize([0.485, 0.456, 0.406],
+                                 [0.229, 0.224, 0.225])
         ]
         return transforms.Compose(transform_list)
 
