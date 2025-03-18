@@ -116,7 +116,7 @@ arch = {
     'imagenet200': resnet.ResNet18,
     'ember': ember_nn.EmberNN,
     # 'imagenet' : resnet.ResNet18,
-    'imagenet' : torchvision.models.resnet18,
+    'imagenet' : resnet.ResNet18,
     # 'imagenet': torchvision.models.vit_b_16,
     # 'abl':  resnet.ResNet18,
     'abl':  wresnet.WideResNet,
