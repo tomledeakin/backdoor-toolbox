@@ -22,7 +22,7 @@ def get_transform(opt, train=True):
     if opt.dataset == "imagenet200":
         # Resize về 256 và sau đó center crop 264 cho ImageNet
         transforms_list.append(transforms.Resize(256))
-        transforms_list.append(transforms.CenterCrop(264))
+        transforms_list.append(transforms.CenterCrop(224))
     else:
         transforms_list.append(transforms.Resize((opt.input_height, opt.input_width)))
 
