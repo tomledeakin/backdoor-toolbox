@@ -8,8 +8,9 @@ import torchvision
 import torchvision.transforms as transforms
 from PIL import Image
 from torch.utils.tensorboard import SummaryWriter
+from torchvision import datasets
 
-
+# Các lớp chuyển đổi bổ sung
 class ColorDepthShrinking(object):
     def __init__(self, c=3):
         self.t = 1 << int(8 - c)
@@ -38,7 +39,19 @@ class Smoothing(object):
         return self.__class__.__name__ + "(k={})".format(self.k)
 
 
+# Cập nhật hàm get_transform, thêm nhánh xử lý cho imagenet
 def get_transform(opt, train=True, c=0, k=0):
+    if opt.dataset == "imagenet200":
+        # Pipeline xử lý ImageNet theo yêu cầu
+        transform_list = [
+            transforms.Resize(256),
+            transforms.RandomCrop(224, padding=4) if train else transforms.CenterCrop(224),
+            transforms.RandomHorizontalFlip() if train else transforms.Lambda(lambda x: x),
+            transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4) if train else transforms.Lambda(lambda x: x),
+            transforms.ToTensor()
+        ]
+        return transforms.Compose(transform_list)
+
     transforms_list = []
     transforms_list.append(transforms.Resize((opt.input_height, opt.input_width)))
     if train:
@@ -58,12 +71,14 @@ def get_transform(opt, train=True, c=0, k=0):
     elif opt.dataset == "mnist":
         transforms_list.append(transforms.Normalize([0.5], [0.5]))
     elif opt.dataset == "gtsrb":
+        # Nếu cần normalize cho GTSRB, bạn có thể thêm vào đây
         pass
     else:
         raise Exception("Invalid Dataset")
     return transforms.Compose(transforms_list)
 
 
+# Định nghĩa dataset GTSRB (giữ nguyên)
 class GTSRB(data.Dataset):
     def __init__(self, opt, train, transforms):
         super(GTSRB, self).__init__()
@@ -80,26 +95,26 @@ class GTSRB(data.Dataset):
         images = []
         labels = []
         for c in range(0, 43):
-            prefix = self.data_folder + "/" + format(c, "05d") + "/"
-            gtFile = open(prefix + "GT-" + format(c, "05d") + ".csv")
-            gtReader = csv.reader(gtFile, delimiter=";")
-            next(gtReader)
-            for row in gtReader:
-                images.append(prefix + row[0])
-                labels.append(int(row[7]))
-            gtFile.close()
+            prefix = os.path.join(self.data_folder, format(c, "05d"))
+            gt_path = os.path.join(prefix, "GT-" + format(c, "05d") + ".csv")
+            with open(gt_path) as gtFile:
+                gtReader = csv.reader(gtFile, delimiter=";")
+                next(gtReader)
+                for row in gtReader:
+                    images.append(os.path.join(prefix, row[0]))
+                    labels.append(int(row[7]))
         return images, labels
 
     def _get_data_test_list(self):
         images = []
         labels = []
-        prefix = os.path.join(self.data_folder, "GT-final_test.csv")
-        gtFile = open(prefix)
-        gtReader = csv.reader(gtFile, delimiter=";")
-        next(gtReader)
-        for row in gtReader:
-            images.append(self.data_folder + "/" + row[0])
-            labels.append(int(row[7]))
+        gt_path = os.path.join(self.data_folder, "GT-final_test.csv")
+        with open(gt_path) as gtFile:
+            gtReader = csv.reader(gtFile, delimiter=";")
+            next(gtReader)
+            for row in gtReader:
+                images.append(os.path.join(self.data_folder, row[0]))
+                labels.append(int(row[7]))
         return images, labels
 
     def __len__(self):
@@ -112,6 +127,29 @@ class GTSRB(data.Dataset):
         return image, label
 
 
+# Thêm định nghĩa dataset ImageNet cho attack_loader
+class ImageNet(data.Dataset):
+    def __init__(self, opt, train=True, transform=None):
+        super(ImageNet, self).__init__()
+        dataset_dir = os.path.join(opt.data_root, opt.dataset)
+        if train:
+            # Giả sử folder 'train' chứa dữ liệu train
+            self.data_folder = os.path.join(dataset_dir, 'train')
+        else:
+            # Sử dụng folder 'test' nếu đang test; bạn có thể chỉnh sửa thành 'val' nếu cần
+            self.data_folder = os.path.join(dataset_dir, 'test')
+        # Sử dụng ImageFolder để load dữ liệu theo cấu trúc thư mục
+        self.data = datasets.ImageFolder(self.data_folder, transform=transform)
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, index):
+        image, label = self.data[index]
+        return image, label
+
+
+# Cập nhật hàm get_dataloader, thêm nhánh xử lý cho imagenet
 def get_dataloader(opt, train=True, c=0, k=0):
     transform = get_transform(opt, train, c=c, k=k)
     if opt.dataset == "gtsrb":
@@ -120,6 +158,8 @@ def get_dataloader(opt, train=True, c=0, k=0):
         dataset = torchvision.datasets.MNIST(opt.data_root, train, transform, download=True)
     elif opt.dataset == "cifar10":
         dataset = torchvision.datasets.CIFAR10(opt.data_root, train, transform, download=True)
+    elif opt.dataset == "imagenet200":
+        dataset = ImageNet(opt, train, transform)
     else:
         raise Exception("Invalid dataset")
     dataloader = torch.utils.data.DataLoader(

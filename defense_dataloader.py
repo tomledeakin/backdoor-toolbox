@@ -19,8 +19,13 @@ class ToNumpy:
 
 def get_transform(opt, train=True):
     transforms_list = []
-    transforms_list.append(transforms.Resize(
-        (opt.input_height, opt.input_width)))
+    if opt.dataset == "imagenet200":
+        # Resize về 256 và sau đó center crop 264 cho ImageNet
+        transforms_list.append(transforms.Resize(256))
+        transforms_list.append(transforms.CenterCrop(264))
+    else:
+        transforms_list.append(transforms.Resize((opt.input_height, opt.input_width)))
+
     transforms_list.append(transforms.ToTensor())
 
     if opt.dataset == "mnist":
@@ -30,8 +35,9 @@ def get_transform(opt, train=True):
             [0.4914, 0.4822, 0.4465], [0.247, 0.243, 0.261]))
     elif opt.dataset == "gtsrb":
         print("GTSRB dataset does not need normalization")
-    elif opt.dataset == "imagenet":
-        print("ImageNet dataset does not need normalization")
+    elif opt.dataset == "imagenet200":
+        transforms_list.append(transforms.Normalize([0.485, 0.456, 0.406],
+                                                    [0.229, 0.224, 0.225]))
     elif opt.dataset == "pubfig":
         print("PubFig dataset does not need normalization")
     else:
@@ -97,7 +103,7 @@ class ImageNet(data.Dataset):
             self.data_folder = os.path.join(dataset_dir, 'train')
             self.data = datasets.ImageFolder(self.data_folder, transform=transform)
         else:
-            self.data_folder = os.path.join(dataset_dir, 'val', 'images')
+            self.data_folder = os.path.join(dataset_dir, 'val')
             self.data = datasets.ImageFolder(self.data_folder, transform=transform)
             
         self.transform = transform
@@ -137,7 +143,7 @@ def get_dataloader(opt, train=True):
     elif opt.dataset == "cifar10":
         dataset = torchvision.datasets.CIFAR10(
             opt.data_root, train, transform, download=True)
-    elif opt.dataset == "imagenet":
+    elif opt.dataset == "imagenet200":
         dataset = ImageNet(opt, train, transform)
     elif opt.dataset == "pubfig":
         dataset = PubFig(opt, train, transform)
@@ -158,7 +164,7 @@ def get_dataset(opt, train=True):
     elif opt.dataset == "cifar10":
         dataset = torchvision.datasets.CIFAR10(
             opt.data_root, train, transform, download=True)
-    elif opt.dataset == "imagenet":
+    elif opt.dataset == "imagenet200":
         dataset = ImageNet(opt, train, transform)
     elif opt.dataset == "pubfig":
         dataset = PubFig(opt, train, transform)

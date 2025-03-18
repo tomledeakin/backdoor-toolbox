@@ -83,7 +83,7 @@ args.defense_train_size = {
 print(args.poison_type)
 
 # Thiết lập các tham số dữ liệu
-args.data_root = "./data_ted/"
+args.data_root = "./data/"
 args.bs = 50
 args.num_workers = 2
 
