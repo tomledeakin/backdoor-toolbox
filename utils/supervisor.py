@@ -673,22 +673,41 @@ def get_poison_transform(poison_type, dataset_name, target_class, source_class=1
 
         if trigger_name != 'none':  # none for SIG
             trigger_path = os.path.join(config.triggers_dir, trigger_name)
-            # print('trigger : ', trigger_path)
-            trigger = Image.open(trigger_path).convert("RGB")
+            print('Trigger path:', trigger_path)
+
+            # Nếu dataset là MNIST, chuyển trigger thành grayscale (1 channel), ngược lại giữ RGB (3 channels)
+            if dataset_name == 'mnist':
+                trigger = Image.open(trigger_path).convert("L")  # Chuyển về ảnh grayscale
+                trigger_transform = transforms.Compose([
+                    transforms.Grayscale(num_output_channels=1),  # Đảm bảo vẫn là ảnh 1 kênh
+                    transforms.ToTensor()
+                ])
+            else:
+                trigger = Image.open(trigger_path).convert("RGB")  # Giữ nguyên RGB cho các dataset khác
+                trigger_transform = transforms.Compose([
+                    transforms.ToTensor()
+                ])
 
             trigger_mask_path = os.path.join(config.triggers_dir, 'mask_%s' % trigger_name)
 
-            if os.path.exists(trigger_mask_path):  # if there explicitly exists a trigger mask (with the same name)
-                trigger_mask = Image.open(trigger_mask_path).convert("RGB")
-                trigger_mask = trigger_mask_transform(trigger_mask)[0]  # only use 1 channel
-            else:  # by default, all black pixels are masked with 0's
-                trigger_map = trigger_mask_transform(trigger)
-                trigger_mask = torch.logical_or(torch.logical_or(trigger_map[0] > 0, trigger_map[1] > 0),
-                                                trigger_map[2] > 0).float()
+            if os.path.exists(trigger_mask_path):  # Nếu tồn tại mask riêng cho trigger
+                trigger_mask = Image.open(trigger_mask_path)
+                if dataset_name == 'mnist':
+                    trigger_mask = trigger_mask.convert("L")  # Đảm bảo mask cũng là grayscale cho MNIST
+                    trigger_mask = transforms.ToTensor()(trigger_mask)[0:1]  # Chỉ lấy 1 channel
+                else:
+                    trigger_mask = trigger_mask.convert("RGB")  # Giữ nguyên cho các dataset khác
+                    trigger_mask = transforms.ToTensor()(trigger_mask)[0]  # Chỉ lấy 1 channel của mask
+            else:  # Mặc định, tất cả pixel đen (0) sẽ bị masked
+                trigger_map = trigger_transform(trigger)
+                if dataset_name == 'mnist':
+                    trigger_mask = (trigger_map > 0).float()  # Xử lý cho ảnh grayscale
+                else:
+                    trigger_mask = torch.logical_or(torch.logical_or(trigger_map[0] > 0, trigger_map[1] > 0),
+                                                    trigger_map[2] > 0).float()
 
-            trigger = trigger_transform(trigger)
-            # print('trigger_shape: ', trigger.shape)
-            trigger_mask = trigger_mask
+            trigger = trigger_transform(trigger)  # Áp dụng transform phù hợp với dataset
+            print('Trigger shape:', trigger.shape)
 
         if poison_type == 'basic':
             from poison_tool_box import basic
