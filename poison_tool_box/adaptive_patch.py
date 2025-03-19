@@ -14,12 +14,10 @@ Just keep the original labels for some (say 50%) poisoned samples...
 Poison with k triggers.
 """
 
-
 def issquare(x):
     tmp = sqrt(x)
     tmp2 = round(tmp)
     return abs(tmp - tmp2) <= 1e-8
-
 
 def get_trigger_mask(img_size, total_pieces, masked_pieces):
     div_num = sqrt(total_pieces)
@@ -33,15 +31,14 @@ def get_trigger_mask(img_size, total_pieces, masked_pieces):
         mask[y * step: (y + 1) * step, x * step: (x + 1) * step] = 0
     return mask
 
-
 class poison_generator():
-    def __init__(self, img_size, dataset, poison_rate, path, trigger_names, alphas, target_class=0, cover_rate=0.01):
+    def __init__(self, img_size, dataset, poison_rate, cover_rate, path, trigger_names, alphas, target_class=0):
         self.img_size = img_size
         self.dataset = dataset
         self.poison_rate = poison_rate
+        self.cover_rate = cover_rate
         self.path = path  # path to save the dataset
         self.target_class = target_class  # by default: target_class = 0
-        self.cover_rate = cover_rate
 
         # number of images
         self.num_img = len(dataset)
@@ -57,7 +54,7 @@ class poison_generator():
             trigger_path = os.path.join(config.triggers_dir, trigger_names[i])
             trigger_mask_path = os.path.join(config.triggers_dir, 'mask_%s' % trigger_names[i])
 
-            # Load trigger and convert to tensor (mặc định load dưới dạng RGB)
+            # Load trigger và convert về tensor (mặc định load dưới dạng RGB)
             trigger = Image.open(trigger_path).convert("RGB")
             trigger = trigger_transform(trigger)
             # Resize trigger nếu kích thước không bằng img_size
@@ -65,19 +62,31 @@ class poison_generator():
                 trigger = F.interpolate(trigger.unsqueeze(0), size=(self.img_size, self.img_size),
                                         mode='bilinear', align_corners=False)[0]
             # [ADDED/MODIFIED FOR 1-CHANNEL]:
-            # Nếu dataset là ảnh một kênh, chuyển trigger thành grayscale bằng cách lấy trung bình các kênh
+            # Nếu dataset là ảnh 1 kênh, chuyển trigger thành grayscale bằng cách lấy mean các kênh
             sample_img, _ = dataset[0]
             if sample_img.shape[0] == 1 and trigger.shape[0] != 1:
                 trigger = trigger.mean(dim=0, keepdim=True)
+                print(f"[DEBUG] Trigger {trigger_names[i]} adjusted for grayscale: shape {trigger.shape}")
 
-            # Trigger mask: nếu có file mask, dùng nó, nếu không thì tự tạo
+            # Trigger mask: nếu có file mask, dùng nó; nếu không, tự tạo
             if os.path.exists(trigger_mask_path):
                 trigger_mask = Image.open(trigger_mask_path).convert("RGB")
-                trigger_mask = transforms.ToTensor()(trigger_mask)[0]  # dùng 1 channel
+                trigger_mask = transforms.ToTensor()(trigger_mask)
+                # Nếu trigger_mask có nhiều kênh, chuyển về 1 kênh (chọn channel 0)
+                if trigger_mask.shape[0] > 1:
+                    trigger_mask = trigger_mask[0]
             else:
-                trigger_mask = torch.logical_or(torch.logical_or(trigger[0] > 0, trigger[1] > 0),
-                                                trigger[2] > 0).float()
-            # Resize mask: note mask ban đầu có shape (H, W); cần resize về (img_size, img_size)
+                # [MODIFIED FOR 1-CHANNEL]:
+                if trigger.shape[0] == 1:
+                    trigger_mask = (trigger[0] > 0).float()
+                elif trigger.shape[0] >= 3:
+                    trigger_mask = torch.logical_or(
+                        torch.logical_or(trigger[0] > 0, trigger[1] > 0),
+                        trigger[2] > 0
+                    ).float()
+                else:
+                    raise ValueError(f"Unexpected number of channels in trigger: {trigger.shape[0]}")
+            # Resize mask: mask ban đầu có shape (H, W); cần resize về (img_size, img_size)
             if trigger_mask.shape != (self.img_size, self.img_size):
                 trigger_mask = F.interpolate(trigger_mask.unsqueeze(0).unsqueeze(0),
                                              size=(self.img_size, self.img_size),
@@ -108,31 +117,26 @@ class poison_generator():
 
         for i in range(self.num_img):
             img, gt = self.dataset[i]
-            # Resize img nếu cần (đảm bảo có shape (C, img_size, img_size))
+            # Resize img nếu cần (đảm bảo shape (C, img_size, img_size))
             if img.shape[-2:] != (self.img_size, self.img_size):
                 img = F.interpolate(img.unsqueeze(0), size=(self.img_size, self.img_size),
                                     mode='bilinear', align_corners=True)[0]
-
             # [ADDED FOR 1-CHANNEL]:
-            # Nếu ảnh là một kênh mà trigger (trigger_marks) có nhiều kênh, điều chỉnh trigger
-            if img.shape[0] == 1:
-                adjusted_trigger = self.trigger_marks[0].mean(dim=0, keepdim=True)
-            else:
-                adjusted_trigger = self.trigger_marks[0]
-            # Lưu ý: trong vòng lặp dưới, mỗi branch (cover/poison) sẽ chọn trigger theo chỉ số j
+            # Nếu dataset là grayscale mà img có nhiều kênh (do transform nào đó), chuyển về 1 kênh.
+            if self.dataset[0][0].shape[0] == 1 and img.shape[0] != 1:
+                img = img.mean(dim=0, keepdim=True)
+                print(f"[DEBUG] Converted image {i} to grayscale: new shape = {img.shape}")
 
             # Ảnh cover: áp dụng trigger theo phân chia k triggers
             if ct < num_cover and cover_indices[ct] == i:
                 cover_id.append(cnt)
                 for j in range(k):
                     if ct < (j + 1) * (num_cover / k):
-                        # Nếu cần, điều chỉnh trigger theo kênh (cho trường hợp ảnh 1 kênh)
                         if img.shape[0] == 1 and self.trigger_marks[j].shape[0] != 1:
                             t_mark = self.trigger_marks[j].mean(dim=0, keepdim=True)
                         else:
                             t_mark = self.trigger_marks[j]
-                        img = img + self.alphas[j] * self.trigger_masks[j].to(img.device) * (
-                                    t_mark.to(img.device) - img)
+                        img = img + self.alphas[j] * self.trigger_masks[j].to(img.device) * (t_mark.to(img.device) - img)
                         break
                 ct += 1
 
@@ -146,8 +150,7 @@ class poison_generator():
                             t_mark = self.trigger_marks[j].mean(dim=0, keepdim=True)
                         else:
                             t_mark = self.trigger_marks[j]
-                        img = img + self.alphas[j] * self.trigger_masks[j].to(img.device) * (
-                                    t_mark.to(img.device) - img)
+                        img = img + self.alphas[j] * self.trigger_masks[j].to(img.device) * (t_mark.to(img.device) - img)
                         break
                 pt += 1
 
@@ -159,6 +162,8 @@ class poison_generator():
         label_set = torch.LongTensor(label_set)
         poison_indices = poison_id
         cover_indices = cover_id
+        print("[DEBUG] Final Poison indices:", poison_indices)
+        print("[DEBUG] Final Cover indices:", cover_indices)
 
         # Demo: xử lý ảnh đầu tiên với tất cả các trigger
         img, gt = self.dataset[0]
@@ -174,7 +179,6 @@ class poison_generator():
         save_image(img, os.path.join(self.path, 'demo.png'))
 
         return img_set, poison_indices, cover_indices, label_set
-
 
 class poison_transform():
     def __init__(self, img_size, test_trigger_names, test_alphas, target_class=0, denormalizer=None, normalizer=None):
@@ -199,19 +203,24 @@ class poison_transform():
                 trigger = F.interpolate(trigger.unsqueeze(0), size=(self.img_size, self.img_size),
                                         mode='bilinear', align_corners=False)[0]
             # [ADDED FOR 1-CHANNEL]:
-            # Nếu dataset cần 1 kênh và trigger có nhiều kênh, chuyển trigger thành grayscale
-            # Giả sử nếu normalizer có 1 channel thì dataset là grayscale.
             if self.normalizer is not None:
-                # Kiểm tra số kênh của ảnh được normalizer (nếu có), ta giả định rằng nếu normalizer có mean là tuple có 1 phần tử thì dùng 1 kênh.
-                if isinstance(self.normalizer.transforms[0].mean, (tuple, list)) and len(
-                        self.normalizer.transforms[0].mean) == 1:
+                # Nếu normalizer có mean chỉ chứa 1 phần tử, ta giả định dataset là grayscale.
+                if isinstance(self.normalizer.transforms[0].mean, (tuple, list)) and len(self.normalizer.transforms[0].mean) == 1:
                     trigger = trigger.mean(dim=0, keepdim=True)
+                    print(f"[DEBUG] Test trigger {test_trigger_names[i]} adjusted for grayscale: {trigger.shape}")
             if os.path.exists(trigger_mask_path):
                 trigger_mask = Image.open(trigger_mask_path).convert("RGB")
-                trigger_mask = transforms.ToTensor()(trigger_mask)[0]
+                trigger_mask = transforms.ToTensor()(trigger_mask)
+                if trigger_mask.shape[0] > 1:
+                    trigger_mask = trigger_mask[0]
             else:
-                trigger_mask = torch.logical_or(torch.logical_or(trigger[0] > 0, trigger[1] > 0),
-                                                trigger[2] > 0).float()
+                if trigger.shape[0] == 1:
+                    trigger_mask = (trigger[0] > 0).float()
+                else:
+                    trigger_mask = torch.logical_or(
+                        torch.logical_or(trigger[0] > 0, trigger[1] > 0),
+                        trigger[2] > 0
+                    ).float()
             if trigger_mask.shape != (self.img_size, self.img_size):
                 trigger_mask = F.interpolate(trigger_mask.unsqueeze(0).unsqueeze(0),
                                              size=(self.img_size, self.img_size),
@@ -225,18 +234,17 @@ class poison_transform():
         # Giả sử data có shape (B, C, img_size, img_size)
         data = self.denormalizer(data)
         for j in range(len(self.trigger_marks)):
-            # [ADDED FOR 1-CHANNEL]:
-            # Nếu data là ảnh 1 kênh mà trigger có nhiều kênh, điều chỉnh trigger
             if data.shape[1] == 1 and self.trigger_marks[j].shape[0] != 1:
                 adjusted_trigger = self.trigger_marks[j].mean(dim=0, keepdim=True)
-
+                print(f"[DEBUG] Transform: Adjusting trigger shape from {self.trigger_marks[j].shape} to {adjusted_trigger.shape}")
             else:
                 adjusted_trigger = self.trigger_marks[j]
-            data = data + self.alphas[j] * self.trigger_masks[j].to(data.device) * (
-                        adjusted_trigger.to(data.device) - data)
+            data = data + self.alphas[j] * self.trigger_masks[j].to(data.device) * (adjusted_trigger.to(data.device) - data)
         data = self.normalizer(data)
         labels[:] = self.target_class
         return data, labels
+
+
 
 # import os
 # from sklearn import config_context
