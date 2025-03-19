@@ -569,6 +569,8 @@ def get_poison_transform(poison_type, dataset_name, target_class, source_class=1
 
     if dataset_name in ['gtsrb', 'cifar10', 'cifar100']:
         img_size = 32
+    elif dataset_name in ['mnist']:
+        img_size = 28
     elif dataset_name in ['imagenette', 'imagenet', 'imagenet50', 'imagenet100', 'imagenet200']:
         img_size = 224
     else:
