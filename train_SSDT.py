@@ -247,10 +247,10 @@ def eval(
             victim_inputs1, victim_labels1 = filter_victim_inputs_and_targets(
                 inputs1, labels1, opt)
 
+            correct_bd = 0  # Initialize before the if block
             if len(victim_inputs1) > 0:
                 inputs_bd, labels_bd, patterns1, masks1 = create_bd(
                     victim_inputs1, victim_labels1, netG, netM, opt)
-
                 total_victim += len(victim_labels1)
                 preds_bd = netC(inputs_bd)
                 preds_bd_label = torch.argmax(preds_bd, 1)
