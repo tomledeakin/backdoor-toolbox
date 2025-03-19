@@ -7,6 +7,7 @@ import argparse
 import random
 import config
 from utils import default_args, tools
+from torchvision.transforms.functional import to_pil_image
 
 """
 <Datasets>
@@ -199,9 +200,10 @@ if args.dataset != 'ember' and args.dataset != 'imagenet':
 
     for i in range(num):
         img, gt = clean_split_set[i]
+        pil_img = to_pil_image(img)
         img_file_name = '%d.png' % i
         img_file_path = os.path.join(clean_split_img_dir, img_file_name)
-        save_image(img, img_file_path)
+        pil_img.save(img_file_path)
         print('[Generate Clean Split] Save %s' % img_file_path)
         clean_label_set.append(gt)
 
@@ -217,11 +219,13 @@ if args.dataset != 'ember' and args.dataset != 'imagenet':
 
     for i in range(num):
         img, gt = test_set[i]
+        pil_img = to_pil_image(img)
         img_file_name = '%d.png' % i
         img_file_path = os.path.join(test_split_img_dir, img_file_name)
-        save_image(img, img_file_path)
+        pil_img.save(img_file_path)
         print('[Generate Test Set] Save %s' % img_file_path)
         label_set.append(gt)
+    
 
     label_set = torch.LongTensor(label_set)
     label_path = os.path.join(test_split_dir, 'labels')

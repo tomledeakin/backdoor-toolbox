@@ -1,18 +1,22 @@
-import torch
+from PIL import Image
+import numpy as np
 
-file_path = "C:/Users/Admin/Downloads/imgs"  # đường dẫn đầy đủ đến file
+# Đường dẫn đến ảnh cần kiểm tra (CẬP NHẬT LẠI CHO ĐÚNG)
+image_path = "C:\\Users\\Admin\\Downloads\\99.png"
 
-data = torch.load(file_path)
-print(type(data))
+# Mở ảnh
+img = Image.open(image_path)
 
-# Nếu data là một Tensor:
-if isinstance(data, torch.Tensor):
-    print("Tensor shape:", data.shape)
+# Chuyển ảnh thành numpy array để kiểm tra shape
+img_array = np.array(img)
 
-# Nếu data là dictionary hoặc list:
-elif isinstance(data, dict):
-    print("Keys:", data.keys())
-elif isinstance(data, list):
-    print("List length:", len(data))
-else:
-    print("Dạng dữ liệu khác:", type(data))
+# In thông tin về ảnh
+print(f"Ảnh: {image_path}")
+print(f"Mode: {img.mode}")  # Kiểm tra kiểu ảnh (RGB, L, RGBA, v.v.)
+print(f"Shape: {img_array.shape}")  # In kích thước ảnh dưới dạng numpy array
+
+# Kiểm tra số kênh ảnh
+if len(img_array.shape) == 2:
+    print("✅ Ảnh này là grayscale (1 kênh).")
+elif len(img_array.shape) == 3:
+    print(f"⚠️ Ảnh này có {img_array.shape[2]} kênh (Có thể là RGB hoặc RGBA).")
