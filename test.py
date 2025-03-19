@@ -1,22 +1,25 @@
-from PIL import Image
-import numpy as np
+import cv2
+import os
 
-# Đường dẫn đến ảnh cần kiểm tra (CẬP NHẬT LẠI CHO ĐÚNG)
-image_path = "C:\\Users\\Admin\\Downloads\\99.png"
 
-# Mở ảnh
-img = Image.open(image_path)
+def convert_to_grayscale(image_path):
+    # Đọc ảnh màu
+    image = cv2.imread(image_path)
+    if image is None:
+        raise ValueError("Không thể đọc ảnh. Hãy kiểm tra đường dẫn.")
 
-# Chuyển ảnh thành numpy array để kiểm tra shape
-img_array = np.array(img)
+    # Chuyển đổi sang ảnh xám
+    gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
-# In thông tin về ảnh
-print(f"Ảnh: {image_path}")
-print(f"Mode: {img.mode}")  # Kiểm tra kiểu ảnh (RGB, L, RGBA, v.v.)
-print(f"Shape: {img_array.shape}")  # In kích thước ảnh dưới dạng numpy array
+    # Tạo tên file mới
+    base, ext = os.path.splitext(image_path)
+    new_image_path = f"{base}_gray{ext}"
 
-# Kiểm tra số kênh ảnh
-if len(img_array.shape) == 2:
-    print("✅ Ảnh này là grayscale (1 kênh).")
-elif len(img_array.shape) == 3:
-    print(f"⚠️ Ảnh này có {img_array.shape[2]} kênh (Có thể là RGB hoặc RGBA).")
+    # Lưu ảnh mới
+    cv2.imwrite(new_image_path, gray_image)
+    print(f"Ảnh đã được lưu tại: {new_image_path}")
+
+    return new_image_path
+
+# Ví dụ sử dụng:
+convert_to_grayscale("E:\\backdoor-toolbox\\triggers\\mask_badnet_patch4_28.png")

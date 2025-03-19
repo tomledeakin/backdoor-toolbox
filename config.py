@@ -33,7 +33,7 @@ trigger_default = {
         'none' : 'none',
         'adaptive_blend': 'hellokitty_28_gray.png',
         'adaptive_patch': 'none',
-        'badnet' : 'badnet_patch_28_gray.png',
+        'badnet' : 'mask_badnet_patch4_28_gray.png',
         'blend' : 'hellokitty_28_gray.png',
         'TaCT' : 'trojan_square_28_gray.png',
         'WaNet': 'none',
