@@ -64,6 +64,15 @@ if args.dataset == 'cifar10':
     learning_rate = 0.1
     batch_size = 128
 
+if args.dataset == 'mnist':
+    num_classes = 10
+    momentum = 0.9
+    weight_decay = 1e-4
+    epochs = 200
+    milestones = torch.tensor([100, 150])
+    learning_rate = 0.1
+    batch_size = 128
+
 elif args.dataset == 'cifar100':
     num_classes = 100
     raise NotImplementedError('<To Be Implemented> Dataset = %s' % args.dataset)
