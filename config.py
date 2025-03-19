@@ -203,6 +203,10 @@ adaptive_patch_test_trigger_alphas = {
         1,
         1,
     ],
+    'mnist': [
+        1,
+        1,
+    ],
     'imagenet200': [
         1,
         1,
