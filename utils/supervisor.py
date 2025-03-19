@@ -544,6 +544,53 @@ def get_transforms(args):
                 transforms.Normalize([-0.485 / 0.229, -0.456 / 0.224, -0.406 / 0.225],
                                      [1 / 0.229, 1 / 0.224, 1 / 0.225])
             ])
+    elif args.dataset == 'tinyimagenet200':
+        if args.no_normalize:
+            data_transform_aug = transforms.Compose([
+                transforms.RandomCrop(64, padding=4),  # Crop ngẫu nhiên với padding cho ảnh 64x64
+                transforms.RandomHorizontalFlip(),  # Lật ngang
+                transforms.RandomRotation(15),  # Xoay ngẫu nhiên ±15 độ
+                transforms.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.3),  # Biến đổi màu sắc
+                transforms.ToTensor(),
+            ])
+            data_transform = transforms.Compose([
+                transforms.CenterCrop(64),  # Cắt trung tâm
+                transforms.ToTensor(),
+            ])
+            trigger_transform = transforms.Compose([
+                transforms.CenterCrop(64),
+                transforms.ToTensor(),
+            ])
+            normalizer = transforms.Compose([])
+            denormalizer = transforms.Compose([])
+        else:
+            data_transform_aug = transforms.Compose([
+                transforms.RandomCrop(64, padding=4),
+                transforms.RandomHorizontalFlip(),
+                transforms.RandomRotation(15),
+                transforms.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.3),
+                transforms.ToTensor(),
+                transforms.Normalize((0.480, 0.448, 0.397), (0.276, 0.268, 0.281))
+            ])
+            data_transform = transforms.Compose([
+                transforms.CenterCrop(64),
+                transforms.ToTensor(),
+                transforms.Normalize((0.480, 0.448, 0.397), (0.276, 0.268, 0.281))
+            ])
+            trigger_transform = transforms.Compose([
+                transforms.CenterCrop(64),
+                transforms.ToTensor(),
+                transforms.Normalize((0.480, 0.448, 0.397), (0.276, 0.268, 0.281))
+            ])
+            normalizer = transforms.Compose([
+                transforms.Normalize((0.480, 0.448, 0.397), (0.276, 0.268, 0.281))
+            ])
+            denormalizer = transforms.Compose([
+                transforms.Normalize(
+                    (-0.480 / 0.276, -0.448 / 0.268, -0.397 / 0.281),
+                    (1 / 0.276, 1 / 0.268, 1 / 0.281)
+                )
+            ])
 
     elif args.dataset == 'ember':
         data_transform_aug = data_transform = trigger_transform = normalizer = denormalizer = None
@@ -571,6 +618,8 @@ def get_poison_transform(poison_type, dataset_name, target_class, source_class=1
         img_size = 32
     elif dataset_name in ['mnist']:
         img_size = 28
+    elif dataset_name in ['tinyimagenet200']:
+        img_size = 64
     elif dataset_name in ['imagenette', 'imagenet', 'imagenet50', 'imagenet100', 'imagenet200']:
         img_size = 224
     else:
@@ -647,6 +696,18 @@ def get_poison_transform(poison_type, dataset_name, target_class, source_class=1
                                  (1.0 / 0.229, 1.0 / 0.224, 1.0 / 0.225)),
         ])
         num_classes = 200
+    elif dataset_name == 'tinyimagenet200':
+        normalizer = transforms.Compose([
+            transforms.Normalize((0.480, 0.448, 0.397), (0.276, 0.268, 0.281))
+        ])
+        denormalizer = transforms.Compose([
+            transforms.Normalize(
+                (-0.480 / 0.276, -0.448 / 0.268, -0.397 / 0.281),
+                (1.0 / 0.276, 1.0 / 0.268, 1.0 / 0.281)
+            ),
+        ])
+        num_classes = 200
+
     else:
         raise Exception("Invalid Dataset")
 

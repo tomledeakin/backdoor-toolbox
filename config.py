@@ -18,6 +18,7 @@ target_class = {
     'imagenet50': 0,
     'imagenet100': 0,
     'imagenet200': 0,
+    'tinyimagenet200': 0,
     'imagenet' : 0,
 }
 
@@ -113,6 +114,16 @@ trigger_default = {
         'WaNet': 'none',
         'SRA': 'phoenix_corner_224.png',
     },
+    'tinyimagenet200': {
+        'none': 'none',
+        'badnet': 'badnet_patch_64.png',
+        'blend' : 'hellokitty_256.png',
+        'adaptive_blend': 'hellokitty_256.png',
+        'adaptive_patch': 'none',
+        'trojan' : 'trojan_watermark_256.png',
+        'WaNet': 'none',
+        'SRA': 'phoenix_corner_224.png',
+    },
 }
 
 arch = {
@@ -127,6 +138,7 @@ arch = {
     'imagenet50': resnet.ResNet18,
     'imagenet100': resnet.ResNet18,
     'imagenet200': resnet.ResNet18,
+    'tinyimagenet200': resnet.ResNet18,
     'ember': ember_nn.EmberNN,
     # 'imagenet' : resnet.ResNet18,
     'imagenet' : resnet.ResNet18,
@@ -274,6 +286,31 @@ def get_params(args):
         lambs = [20, 20, 20, 20, 20, 20]
         lrs = [0.001, 0.001, 0.001, 0.001, 0.001, 0.001]
         batch_factors = [2, 2, 4, 8, 8, 2] # 2,2,4,8,8,8
+
+
+    elif args.dataset == 'tinyimagenet200':
+
+        num_classes = 200
+
+        # Sử dụng normalization được tính toán từ Tiny ImageNet (mean, std có thể khác với ImageNet-1K)
+
+        data_transform_normalize = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize((0.480, 0.448, 0.397), (0.276, 0.268, 0.281))
+        ])
+
+        data_transform_aug = transforms.Compose([
+            transforms.RandomRotation(15),
+            transforms.ToTensor(),
+            transforms.Normalize((0.480, 0.448, 0.397), (0.276, 0.268, 0.281))
+        ])
+
+        distillation_ratio = [1 / 2, 1 / 5, 1 / 25, 1 / 50, 1 / 100, 1 / 200]  # 6 giá trị, ví dụ: thêm 1/200 ở cuối
+        momentums = [0.7, 0.7, 0.7, 0.7, 0.7, 0.7]
+        lambs = [20, 20, 20, 20, 20, 20]
+        lrs = [0.001, 0.001, 0.001, 0.001, 0.001, 0.001]
+        batch_factors = [2, 2, 4, 8, 8, 8]  # Cập nhật theo chuẩn: 2,2,4,8,8,8
+
 
     elif args.dataset == 'mnist':
         num_classes = 10

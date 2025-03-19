@@ -126,6 +126,17 @@ elif args.dataset == 'imagenet200':
     learning_rate = 0.01
     batch_size = 32
 
+elif args.dataset == 'tinyimagenet200':
+
+    num_classes = 200
+    arch = supervisor.get_arch(args)
+    momentum = 0.9
+    weight_decay = 1e-4
+    epochs = 500
+    milestones = torch.tensor([40, 60])
+    learning_rate = 0.01
+    batch_size = 32
+
 elif args.dataset == 'imagenet':
 
     num_classes = 1000

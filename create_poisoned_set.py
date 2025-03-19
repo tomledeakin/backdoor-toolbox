@@ -191,6 +191,17 @@ else:
                                          data_transform)
         img_size = 224
         num_classes = 200
+
+    elif args.dataset == 'tinyimagenet200':
+
+        data_transform = transforms.Compose([
+            transforms.ToTensor(),
+        ])
+
+        train_set = datasets.ImageFolder(os.path.join(os.path.join(data_dir, 'tinyimagenet200'), 'train'),
+                                         data_transform)
+        img_size = 64
+        num_classes = 200
         
     else:
         raise NotImplementedError('Undefined Dataset')
