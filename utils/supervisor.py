@@ -664,7 +664,7 @@ def get_poison_transform(poison_type, dataset_name, target_class, source_class=1
                 transforms.ToTensor()
             ])
 
-        # trigger mask transform; remove `Normalize`!
+        # Build trigger mask transform by removing Normalize layers from trigger_transform
         trigger_mask_transform_list = []
         for t in trigger_transform.transforms:
             if "Normalize" not in t.__class__.__name__:
@@ -672,43 +672,41 @@ def get_poison_transform(poison_type, dataset_name, target_class, source_class=1
         trigger_mask_transform = transforms.Compose(trigger_mask_transform_list)
 
         if trigger_name != 'none':  # none for SIG
+            # *** Sửa ở đây: nếu dataset là MNIST thì chuyển trigger sang grayscale ***
             trigger_path = os.path.join(config.triggers_dir, trigger_name)
-            print('Trigger path:', trigger_path)
-
-            # Nếu dataset là MNIST, chuyển trigger thành grayscale (1 channel), ngược lại giữ RGB (3 channels)
+            print("[DEBUG] Loading trigger from:", trigger_path)
             if dataset_name == 'mnist':
-                trigger = Image.open(trigger_path).convert("L")  # Chuyển về ảnh grayscale
-                trigger_transform = transforms.Compose([
-                    transforms.Grayscale(num_output_channels=1),  # Đảm bảo vẫn là ảnh 1 kênh
-                    transforms.ToTensor()
-                ])
+                trigger = Image.open(trigger_path).convert("L")  # chuyển về 1 channel
             else:
-                trigger = Image.open(trigger_path).convert("RGB")  # Giữ nguyên RGB cho các dataset khác
-                trigger_transform = transforms.Compose([
-                    transforms.ToTensor()
-                ])
+                trigger = Image.open(trigger_path).convert("RGB")
 
             trigger_mask_path = os.path.join(config.triggers_dir, 'mask_%s' % trigger_name)
 
-            if os.path.exists(trigger_mask_path):  # Nếu tồn tại mask riêng cho trigger
-                trigger_mask = Image.open(trigger_mask_path)
+            if os.path.exists(trigger_mask_path):  # Nếu có mask trigger riêng
+                print("[DEBUG] Loading trigger mask from:", trigger_mask_path)
                 if dataset_name == 'mnist':
-                    trigger_mask = trigger_mask.convert("L")  # Đảm bảo mask cũng là grayscale cho MNIST
-                    trigger_mask = transforms.ToTensor()(trigger_mask)[0:1]  # Chỉ lấy 1 channel
+                    trigger_mask = Image.open(trigger_mask_path).convert("L")
+                    # Đảm bảo trigger_mask chỉ có 1 channel
+                    trigger_mask = transforms.ToTensor()(trigger_mask)[0:1]
                 else:
-                    trigger_mask = trigger_mask.convert("RGB")  # Giữ nguyên cho các dataset khác
-                    trigger_mask = transforms.ToTensor()(trigger_mask)[0]  # Chỉ lấy 1 channel của mask
-            else:  # Mặc định, tất cả pixel đen (0) sẽ bị masked
-                trigger_map = trigger_transform(trigger)
+                    trigger_mask = Image.open(trigger_mask_path).convert("RGB")
+                    trigger_mask = trigger_mask_transform(trigger_mask)[0]  # chỉ lấy 1 channel
+            else:  # Mặc định: tạo mask từ trigger
+                print("[DEBUG] Trigger mask not found, generating default mask")
                 if dataset_name == 'mnist':
-                    trigger_mask = (trigger_map > 0).float()  # Xử lý cho ảnh grayscale
+                    trigger_map = trigger_transform(trigger)
+                    trigger_mask = (trigger_map > 0).float()  # mask mặc định cho grayscale
                 else:
+                    trigger_map = trigger_mask_transform(trigger)
                     trigger_mask = torch.logical_or(torch.logical_or(trigger_map[0] > 0, trigger_map[1] > 0),
                                                     trigger_map[2] > 0).float()
 
-            trigger = trigger_transform(trigger)  # Áp dụng transform phù hợp với dataset
-            print('Trigger shape:', trigger.shape)
+            trigger = trigger_transform(trigger)
+            print("[DEBUG] Trigger shape after transform:", trigger.shape)
+            # Đảm bảo trigger_mask là tensor
+            trigger_mask = trigger_mask
 
+        # --- Các khối xử lý poison khác không thay đổi ---
         if poison_type == 'basic':
             from poison_tool_box import basic
             poison_transform = basic.poison_transform(img_size=img_size, trigger_mark=trigger,
@@ -763,7 +761,6 @@ def get_poison_transform(poison_type, dataset_name, target_class, source_class=1
                                                       target_class=target_class)
 
         elif poison_type == 'adaptive_blend':
-
             from poison_tool_box import adaptive_blend
             poison_transform = adaptive_blend.poison_transform(img_size=img_size, trigger=trigger,
                                                                target_class=target_class, alpha=alpha)
@@ -782,7 +779,6 @@ def get_poison_transform(poison_type, dataset_name, target_class, source_class=1
                                                                denormalizer=denormalizer, normalizer=normalizer, )
 
         elif poison_type == 'SIG':
-
             from poison_tool_box import SIG
             poison_transform = SIG.poison_transform(img_size=img_size, denormalizer=denormalizer, normalizer=normalizer,
                                                     target_class=target_class, delta=30 / 255, f=6,
@@ -802,7 +798,6 @@ def get_poison_transform(poison_type, dataset_name, target_class, source_class=1
         elif poison_type == 'SRA':
             if dataset_name not in ['cifar10', 'imagenet']:
                 raise NotImplementedError()
-
             from other_attacks_tool_box import SRA
             poison_transform = SRA.poison_transform(img_size=img_size, trigger=trigger, mask=trigger_mask,
                                                     target_class=target_class)
@@ -811,7 +806,6 @@ def get_poison_transform(poison_type, dataset_name, target_class, source_class=1
         elif poison_type == 'bpp':
             if dataset_name not in ['cifar10']:
                 raise NotImplementedError()
-
             from other_attacks_tool_box import bpp
             poison_transform = bpp.poison_transform(img_size=img_size, denormalizer=denormalizer, normalizer=normalizer,
                                                     mode="all2one", dithering=True, squeeze_num=8,
@@ -824,41 +818,30 @@ def get_poison_transform(poison_type, dataset_name, target_class, source_class=1
 
         return poison_transform
 
-
     elif poison_type == 'dynamic':
-
         if dataset_name == 'cifar10':
             channel_init = 32
             steps = 3
             input_channel = 3
             ckpt_path = './models/all2one_cifar10_ckpt.pth.tar'
-
             require_normalization = True
-
         elif dataset_name == 'gtsrb':
-            # the situation for gtsrb is inverese
-            # the original implementation of generator does not require normalization
             channel_init = 32
             steps = 3
             input_channel = 3
             ckpt_path = './models/all2one_gtsrb_ckpt.pth.tar'
-
             require_normalization = False
-
         elif dataset_name == 'mnist':
             channel_init = 32
             steps = 3
             input_channel = 1
             ckpt_path = './models/all2one_mnist_ckpt.pth.tar'
             require_normalization = True
-
         else:
             raise Exception("Invalid Dataset")
-
         if not os.path.exists(ckpt_path):
             raise NotImplementedError(
                 '[Dynamic Attack] Download pretrained generator first: https://github.com/VinAIResearch/input-aware-backdoor-attack-release')
-
         from poison_tool_box import dynamic
         poison_transform = dynamic.poison_transform(ckpt_path=ckpt_path, channel_init=channel_init, steps=steps,
                                                     input_channel=input_channel, normalizer=normalizer,
@@ -868,29 +851,22 @@ def get_poison_transform(poison_type, dataset_name, target_class, source_class=1
         return poison_transform
 
     elif poison_type == 'ISSBA':
-
         if dataset_name == 'cifar10':
             ckpt_path = './models/ISSBA_cifar10.pth'
             input_channel = 3
             img_size = 32
-
         elif dataset_name == 'gtsrb':
             ckpt_path = './models/ISSBA_gtsrb.pth'
             input_channel = 3
             img_size = 32
-            raise NotImplementedError(
-                'ISSBA for GTSRB is not implemented! You may implement it yourself it by training a pair of encoder and decoder using the code: https://github.com/THUYimingLi/BackdoorBox/blob/main/core/attacks/ISSBA.py')
-
+            raise NotImplementedError('ISSBA for GTSRB is not implemented!')
         else:
             raise Exception("Invalid Dataset")
-
         if not os.path.exists(ckpt_path):
             raise NotImplementedError(
                 '[ISSBA Attack] Download pretrained encoder and decoder first: https://github.com/')
-
         secret_path = os.path.join(get_poison_set_dir(args), 'secret')
         secret = torch.load(secret_path)
-
         from poison_tool_box import ISSBA
         poison_transform = ISSBA.poison_transform(ckpt_path=ckpt_path, secret=secret, normalizer=normalizer,
                                                   denormalizer=denormalizer,
@@ -901,26 +877,21 @@ def get_poison_transform(poison_type, dataset_name, target_class, source_class=1
     elif poison_type == 'trojannn':
         if dataset_name not in ['cifar10', 'gtsrb']:
             raise NotImplementedError()
-
         trigger_path = os.path.join(config.triggers_dir, f'trojannn_{args.dataset}_seed={args.seed}.png')
-        # print('trigger : ', trigger_path)
+        print("[DEBUG] Loading trojannn trigger from:", trigger_path)
         trigger = Image.open(trigger_path).convert("RGB")
-
         trigger_mask_path = os.path.join(config.triggers_dir, f'mask_trojan_square_{img_size}.png')
-
-        if os.path.exists(trigger_mask_path):  # if there explicitly exists a trigger mask (with the same name)
+        if os.path.exists(trigger_mask_path):
             trigger_mask = Image.open(trigger_mask_path).convert("RGB")
             trigger_mask = transforms.ToTensor()(trigger_mask)[0]  # only use 1 channel
-        else:  # by default, all black pixels are masked with 0's
+        else:
             temp_trans = transforms.ToTensor()
             trigger_map = temp_trans(trigger)
             trigger_mask = torch.logical_or(torch.logical_or(trigger_map[0] > 0, trigger_map[1] > 0),
                                             trigger_map[2] > 0).float()
-
         trigger = trigger_transform(trigger).cuda()
-        print('trigger_shape: ', trigger.shape)
+        print("[DEBUG] trojannn trigger shape:", trigger.shape)
         trigger_mask = trigger_mask.cuda()
-
         from other_attacks_tool_box import trojannn
         poison_transform = trojannn.poison_transform(img_size=img_size, trigger=trigger, mask=trigger_mask,
                                                      target_class=target_class)
@@ -929,28 +900,23 @@ def get_poison_transform(poison_type, dataset_name, target_class, source_class=1
     elif poison_type == 'BadEncoder':
         if dataset_name not in ['gtsrb']:
             raise NotImplementedError()
-
         if args.dataset == 'gtsrb':
             trigger_name = "BadEncoder_32.png"
         trigger_path = os.path.join(config.triggers_dir, trigger_name)
-        # print('trigger : ', trigger_path)
+        print("[DEBUG] Loading BadEncoder trigger from:", trigger_path)
         trigger = Image.open(trigger_path).convert("RGB")
-
         trigger_mask_path = os.path.join(config.triggers_dir, f'mask_{trigger_name}.png')
-
-        if os.path.exists(trigger_mask_path):  # if there explicitly exists a trigger mask (with the same name)
+        if os.path.exists(trigger_mask_path):
             trigger_mask = Image.open(trigger_mask_path).convert("RGB")
-            trigger_mask = transforms.ToTensor()(trigger_mask)[0]  # only use 1 channel
-        else:  # by default, all black pixels are masked with 0's
+            trigger_mask = transforms.ToTensor()(trigger_mask)[0]
+        else:
             temp_trans = transforms.ToTensor()
             trigger_map = temp_trans(trigger)
             trigger_mask = torch.logical_or(torch.logical_or(trigger_map[0] > 0, trigger_map[1] > 0),
                                             trigger_map[2] > 0).float()
-
         trigger = trigger_transform(trigger).cuda()
-        print('trigger_shape: ', trigger.shape)
+        print("[DEBUG] BadEncoder trigger shape:", trigger.shape)
         trigger_mask = trigger_mask.cuda()
-
         from other_attacks_tool_box import BadEncoder
         poison_transform = BadEncoder.poison_transform(img_size=img_size, trigger=trigger, mask=trigger_mask,
                                                        target_class=target_class)
