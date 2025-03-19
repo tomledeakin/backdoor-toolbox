@@ -125,7 +125,50 @@ def generate_dataloader(dataset='cifar10', dataset_path='./data/', batch_size=12
             test_set = IMG_Dataset(data_dir=test_set_img_dir, label_path=test_set_label_path, transforms=data_transform)
             test_loader = torch.utils.data.DataLoader(test_set, batch_size=batch_size, shuffle=True, drop_last=drop_last, num_workers=4, pin_memory=True)
             return test_loader
+    elif dataset == 'mnist':
+        if data_transform is None:
+            data_transform = transforms.Compose([
+                transforms.ToTensor(),
+                transforms.Normalize((0.1307,), (0.3081,))
+            ])
+        dataset_path = os.path.join(dataset_path, 'MNIST')
 
+        if noisy_test:
+            from torch.utils.data import ConcatDataset
+            noisy_test_set_dir = os.path.join('clean_set', 'mnist', 'noisy_test_split')
+            noisy_test_set_img_dir = os.path.join(noisy_test_set_dir, 'data')
+            noisy_test_set_label_path = os.path.join(noisy_test_set_dir, 'labels')
+            noisy_test_set = IMG_Dataset(data_dir=noisy_test_set_img_dir, label_path=noisy_test_set_label_path,
+                                         transforms=data_transform)
+            noisy_test_loader = torch.utils.data.DataLoader(noisy_test_set, batch_size=batch_size, shuffle=True,
+                                                            drop_last=drop_last, num_workers=4, pin_memory=True)
+            return noisy_test_loader
+        if split == 'train':
+            train_data = datasets.MNIST(root=dataset_path, train=True, download=False, transform=data_transform)
+            train_data_loader = DataLoader(dataset=train_data, batch_size=batch_size, shuffle=shuffle,
+                                           drop_last=drop_last, num_workers=4, pin_memory=True)
+            return train_data_loader
+        elif split == 'std_test' or split == 'full_test':
+            test_data = datasets.MNIST(root=dataset_path, train=False, download=False, transform=data_transform)
+            test_data_loader = DataLoader(dataset=test_data, batch_size=batch_size, shuffle=shuffle,
+                                          drop_last=drop_last, num_workers=4, pin_memory=True)
+            return test_data_loader
+        elif split == 'valid' or split == 'val':
+            val_set_dir = os.path.join('clean_set', 'mnist', 'clean_split')
+            val_set_img_dir = os.path.join(val_set_dir, 'data')
+            val_set_label_path = os.path.join(val_set_dir, 'clean_labels')
+            val_set = IMG_Dataset(data_dir=val_set_img_dir, label_path=val_set_label_path, transforms=data_transform)
+            val_loader = torch.utils.data.DataLoader(val_set, batch_size=batch_size, shuffle=shuffle,
+                                                     drop_last=drop_last, num_workers=4, pin_memory=True)
+            return val_loader
+        elif split == 'test':
+            test_set_dir = os.path.join('clean_set', 'mnist', 'test_split')
+            test_set_img_dir = os.path.join(test_set_dir, 'data')
+            test_set_label_path = os.path.join(test_set_dir, 'labels')
+            test_set = IMG_Dataset(data_dir=test_set_img_dir, label_path=test_set_label_path, transforms=data_transform)
+            test_loader = torch.utils.data.DataLoader(test_set, batch_size=batch_size, shuffle=True,
+                                                      drop_last=drop_last, num_workers=4, pin_memory=True)
+            return test_loader
     elif dataset == 'imagenette':
         if data_transform is None:
             data_transform = transforms.Compose([
@@ -423,6 +466,7 @@ def val_atk(args, model, split='test', batch_size=100):
     test_loader = generate_dataloader(dataset=args.dataset, dataset_path=config.data_dir, batch_size=batch_size, split=split, shuffle=False, drop_last=False, data_transform=data_transform)
 
     if args.dataset == 'cifar10': num_classes = 10
+    elif args.dataset == 'mnist': num_classes = 10
     elif args.dataset == 'gtsrb': num_classes = 43
     elif args.dataset == 'imagenet': num_classes = 1000
     elif args.dataset == 'imagenette': num_classes = 10

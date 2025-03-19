@@ -10,7 +10,7 @@ from utils import default_args, tools
 
 """
 <Datasets>
-GTSRB, CIFAR10, Imagenette, Imagenet, Ember
+GTSRB, CIFAR10, MNIST, Imagenette, Imagenet, Ember
 """
 
 parser = argparse.ArgumentParser()
@@ -45,6 +45,14 @@ elif args.dataset == 'cifar10':
     clean_set = datasets.CIFAR10(os.path.join(data_dir, 'cifar10'), train=False,
                                  download=True, transform=data_transform)
     img_size = 32
+    num_classes = 10
+elif args.dataset == 'mnist':
+    data_transform = transforms.Compose([
+        transforms.ToTensor(),
+    ])
+    clean_set = datasets.MNIST(os.path.join(data_dir, 'MNIST'), train=False,
+                               download=True, transform=data_transform)
+    img_size = 28
     num_classes = 10
 
 elif args.dataset == 'imagenette':

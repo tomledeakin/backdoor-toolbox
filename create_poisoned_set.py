@@ -84,6 +84,30 @@ if args.poison_type == 'dynamic':
         normalizer = None
         denormalizer = None
 
+    elif args.dataset == 'mnist':
+        data_transform = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize((0.1307,), (0.3081,))
+        ])
+        train_set = datasets.MNIST(os.path.join(data_dir, 'MNIST'), train=True,
+                                   download=True, transform=data_transform)
+        img_size = 28
+        num_classes = 10
+        channel_init = 32
+        steps = 3
+        input_channel = 1
+
+        ckpt_path = './models/all2one_mnist_ckpt.pth'
+
+        normalizer = transforms.Compose([
+            transforms.Normalize((0.1307,), (0.3081,))
+        ])
+
+        denormalizer = transforms.Compose([
+            transforms.Normalize([-0.1307 / 0.3081], [1 / 0.3081])
+        ])
+
+
     elif args.dataset == 'imagenette':
         raise NotImplementedError('imagenette unsupported for dynamic!')
     else:
@@ -145,6 +169,15 @@ else:
         train_set = datasets.CIFAR10(os.path.join(data_dir, 'cifar10'), train=True,
                                      download=True, transform=data_transform)
         img_size = 32
+        num_classes = 10
+
+    elif args.dataset == 'mnist':
+        data_transform = transforms.Compose([
+            transforms.ToTensor(),
+        ])
+        train_set = datasets.MNIST(os.path.join(data_dir, 'MNIST'), train=True,
+                                   download=True, transform=data_transform)
+        img_size = 28
         num_classes = 10
 
     elif args.dataset == 'imagenet200':

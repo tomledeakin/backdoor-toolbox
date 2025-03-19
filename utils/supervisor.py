@@ -157,6 +157,9 @@ def get_arch(args):
     else:
         if args.dataset == 'imagenet50':
             return config.arch['imagenet50']
+        elif args.dataset == 'mnist':
+            from networks.models import NetC_MNIST
+            return NetC_MNIST
         return config.arch[args.dataset]
 
 
@@ -285,6 +288,41 @@ def get_transforms(args):
                 transforms.Normalize([-0.485 / 0.229, -0.456 / 0.224, -0.406 / 0.225],
                                      [1 / 0.229, 1 / 0.224, 1 / 0.225])
             ])
+    elif args.dataset == 'mnist':
+        if args.no_normalize:
+            data_transform_aug = transforms.Compose([
+                transforms.RandomRotation(15),
+                transforms.ToTensor(),
+            ])
+            data_transform = transforms.Compose([
+                transforms.ToTensor()
+            ])
+            trigger_transform = transforms.Compose([
+                transforms.ToTensor(),
+            ])
+            normalizer = transforms.Compose([])
+            denormalizer = transforms.Compose([])
+        else:
+            data_transform_aug = transforms.Compose([
+                transforms.RandomRotation(15),
+                transforms.ToTensor(),
+                transforms.Normalize((0.1307,), (0.3081,))
+            ])
+            data_transform = transforms.Compose([
+                transforms.ToTensor(),
+                transforms.Normalize((0.1307,), (0.3081,))
+            ])
+            trigger_transform = transforms.Compose([
+                transforms.ToTensor(),
+                transforms.Normalize((0.1307,), (0.3081,))
+            ])
+            normalizer = transforms.Compose([
+                transforms.Normalize((0.1307,), (0.3081,))
+            ])
+            denormalizer = transforms.Compose([
+                transforms.Normalize((-0.1307 / 0.3081,), (1 / 0.3081,))
+            ])
+
     elif args.dataset == 'imagenette':
         if args.no_normalize:
             data_transform_aug = transforms.Compose([
@@ -554,6 +592,14 @@ def get_poison_transform(poison_type, dataset_name, target_class, source_class=1
                                  (1.0 / 0.2672, 1.0 / 0.2564, 1.0 / 0.2629)),
         ])
         num_classes = 43
+    elif dataset_name == 'mnist':
+        normalizer = transforms.Compose([
+            transforms.Normalize((0.1307,), (0.3081,))
+        ])
+        denormalizer = transforms.Compose([
+            transforms.Normalize((-0.1307 / 0.3081,), (1 / 0.3081,))
+        ])
+        num_classes = 10
     elif dataset_name == 'imagenette':
         normalizer = transforms.Compose([
             transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
@@ -777,6 +823,13 @@ def get_poison_transform(poison_type, dataset_name, target_class, source_class=1
             ckpt_path = './models/all2one_gtsrb_ckpt.pth.tar'
 
             require_normalization = False
+
+        elif dataset_name == 'mnist':
+            channel_init = 32
+            steps = 3
+            input_channel = 1
+            ckpt_path = './models/all2one_mnist_ckpt.pth.tar'
+            require_normalization = True
 
         else:
             raise Exception("Invalid Dataset")
