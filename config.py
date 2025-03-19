@@ -121,7 +121,7 @@ arch = {
     # 'cifar10': vgg.vgg16_bn,
     # 'cifar10': mobilenetv2.mobilenetv2,
     'gtsrb' : resnet.ResNet18,
-    'mnist' : NetC_MNIST,
+    'mnist' : NetC_MNIST(),
     #resnet.ResNet18,
     'imagenette': resnet.ResNet18,
     'imagenet50': resnet.ResNet18,
@@ -254,6 +254,23 @@ def get_params(args):
         lambs = [20, 20, 20, 20, 20, 20]
         lrs = [0.001, 0.001, 0.001, 0.001, 0.001, 0.001]
         batch_factors = [2, 2, 4, 8, 8, 2] # 2,2,4,8,8,8
+
+    elif args.dataset == 'mnist':
+        num_classes = 10
+        data_transform_normalize = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize((0.1307,), (0.3081,))  # Giá trị mean và std của MNIST
+        ])
+        data_transform_aug = transforms.Compose([
+            transforms.RandomRotation(15),
+            transforms.ToTensor(),
+            transforms.Normalize((0.1307,), (0.3081,))
+        ])
+        distillation_ratio = [1 / 2, 1 / 5, 1 / 25, 1 / 50, 1 / 100]
+        momentums = [0.7, 0.7, 0.7, 0.7, 0.7, 0.7]
+        lambs = [20, 20, 20, 20, 20, 20]
+        lrs = [0.001, 0.001, 0.001, 0.001, 0.001, 0.001]
+        batch_factors = [2, 2, 4, 8, 8, 2]
 
     elif args.dataset == 'imagenette':
 
