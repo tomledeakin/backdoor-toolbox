@@ -129,7 +129,7 @@ def generate_dataloader(dataset='cifar10', dataset_path='./data/', batch_size=12
         if data_transform is None:
             data_transform = transforms.Compose([
                 transforms.ToTensor(),
-                # transforms.Normalize((0.1307,), (0.3081,))
+                transforms.Normalize((0.1307,), (0.3081,))
             ])
         dataset_path = os.path.join(dataset_path, 'MNIST')
 
