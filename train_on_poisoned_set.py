@@ -179,6 +179,12 @@ if args.dataset != 'ember' and args.dataset != 'imagenet':
         poisoned_set,
         batch_size=batch_size, shuffle=True, worker_init_fn=tools.worker_init, **kwargs)
 
+    # Lấy một batch từ test_set_loader để kiểm tra shape
+    for batch_idx, (data, labels) in enumerate(poisoned_set_loader):
+        print(f"[DEBUG] poisoned_set_loader Batch {batch_idx}: data shape = {data.shape}, labels shape = {labels.shape}")
+        break  # Chỉ in ra 1 batch, tránh in quá nhiều
+
+
 elif args.dataset == 'imagenet':
 
     poison_set_dir = supervisor.get_poison_set_dir(args)
@@ -270,10 +276,6 @@ elif args.dataset == 'imagenet':
     test_set_loader = torch.utils.data.DataLoader(
         test_set,
         batch_size=batch_size, shuffle=False, worker_init_fn=tools.worker_init, **kwargs)
-    # Lấy một batch từ test_set_loader để kiểm tra shape
-    for batch_idx, (data, labels) in enumerate(test_set_loader):
-        print(f"[DEBUG] Batch {batch_idx}: data shape = {data.shape}, labels shape = {labels.shape}")
-        break  # Chỉ in ra 1 batch, tránh in quá nhiều
 
 else:
     normalizer = poisoned_set.normal
@@ -432,6 +434,11 @@ for epoch in range(1, epochs + 1):  # train backdoored base model
     # Test
     if args.dataset != 'ember':
         if True:
+            # Lấy một batch từ test_set_loader để kiểm tra shape
+            for batch_idx, (data, labels) in enumerate(test_set_loader):
+                print(f"[DEBUG] test_set_loader Batch {batch_idx}: data shape = {data.shape}, labels shape = {labels.shape}")
+                break  # Chỉ in ra 1 batch, tránh in quá nhiều
+
             # if epoch % 5 == 0:
             tools.test(model=model, test_loader=test_set_loader,
                        poison_test=True if args.poison_type != 'none' else False,
