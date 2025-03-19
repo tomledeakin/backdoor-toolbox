@@ -121,7 +121,7 @@ arch = {
     # 'cifar10': vgg.vgg16_bn,
     # 'cifar10': mobilenetv2.mobilenetv2,
     'gtsrb' : resnet.ResNet18,
-    'mnist' : NetC_MNIST(),
+    'mnist' : NetC_MNIST,
     #resnet.ResNet18,
     'imagenette': resnet.ResNet18,
     'imagenet50': resnet.ResNet18,

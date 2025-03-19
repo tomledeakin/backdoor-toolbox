@@ -133,7 +133,7 @@ class Generator(nn.Sequential):
 
 
 class NetC_MNIST(nn.Module):
-    def __init__(self):
+    def __init__(self, num_classes=10):
         super(NetC_MNIST, self).__init__()
         self.conv1 = nn.Conv2d(1, 32, (5, 5), 1, 0)
         self.relu2 = nn.ReLU(inplace=True)
@@ -144,12 +144,12 @@ class NetC_MNIST(nn.Module):
         self.relu6 = nn.ReLU(inplace=True)
         self.dropout7 = nn.Dropout(0.1)
 
-        self.maxpool5 = nn.MaxPool2d((2, 2))
+        self.maxpool8 = nn.MaxPool2d((2, 2))
         self.flatten = nn.Flatten()
         self.linear6 = nn.Linear(64 * 4 * 4, 512)
         self.relu7 = nn.ReLU(inplace=True)
         self.dropout8 = nn.Dropout(0.1)
-        self.linear9 = nn.Linear(512, 10)
+        self.linear9 = nn.Linear(512, num_classes)
 
     def forward(self, x):
         for module in self.children():

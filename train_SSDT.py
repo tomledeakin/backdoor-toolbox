@@ -469,10 +469,7 @@ def train(opt):
     # else:
     #     raise Exception("Invalid dataset")
 
-    if opt.dataset == "mnist":
-        netC = NetC_MNIST().to(opt.device)
-    else:
-        netC = config.arch[opt.dataset](num_classes=opt.num_classes).to(opt.device)
+    netC = config.arch[opt.dataset](num_classes=opt.num_classes).to(opt.device)
 
     netG = Generator(opt).to(opt.device)
     optimizerC = torch.optim.SGD(
