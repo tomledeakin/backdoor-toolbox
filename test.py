@@ -1,11 +1,31 @@
-import torch
+import cv2
+import os
 
-# Đường dẫn file labels trên Windows (chú ý dấu '\\' hoặc 'r' để tránh lỗi escape character)
-label_path = r"C:\Users\Admin\Downloads\labels"
 
-# Load file labels
-labels = torch.load(label_path)
+def convert_to_grayscale(image_path):
+    # Đọc ảnh màu
+    image = cv2.imread(image_path)
+    if image is None:
+        raise ValueError("Không thể đọc ảnh. Hãy kiểm tra đường dẫn.")
 
-# In thông tin
-print("Shape of labels:", labels.shape)  # Xem kích thước, số lượng nhãn
-print("First 10 labels:", labels[:10])  # In thử 10 label đầu tiên
+    # Chuyển đổi sang ảnh xám
+    gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
+    # Tạo tên file mới
+    base, ext = os.path.splitext(image_path)
+    new_image_path = f"{base}_gray{ext}"
+
+    # Lưu ảnh mới
+    cv2.imwrite(new_image_path, gray_image)
+    print(f"Ảnh đã được lưu tại: {new_image_path}")
+
+    # Kiểm tra shape của ảnh
+    print(f"Shape của ảnh : {image.shape}")
+    print(f"Shape của ảnh xám: {gray_image.shape}")
+
+    return new_image_path
+
+
+# Ví dụ sử dụng:
+convert_to_grayscale("E:\\backdoor-toolbox\\triggers\\trojan_square_32.png")
+

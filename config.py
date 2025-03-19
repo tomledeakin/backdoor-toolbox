@@ -4,7 +4,7 @@ from utils import tools
 import torch, torchvision
 from torchvision import transforms
 import os
-
+from networks.models import NetC_MNIST
 
 data_dir = './data' # defaul clean dataset directory
 triggers_dir = './triggers' # default triggers directory
@@ -12,6 +12,7 @@ imagenet_dir = './data/imagenet50' # ImageNet dataset directory (USE YOUR OWN!)
 target_class = {
     'cifar10' : 0,
     'gtsrb' : 2,
+    'mnist' : 0,
     # 'gtsrb' : 12, # BadEncoder
     'imagenette': 0,
     'imagenet50': 0,
@@ -28,6 +29,17 @@ record_poison_seed = True
 record_model_arch = False
 
 trigger_default = {
+    'mnist': {
+        'none' : 'none',
+        'adaptive_blend': 'hellokitty_28_gray.png',
+        'adaptive_patch': 'none',
+        'badnet' : 'badnet_patch_28_gray.png',
+        'blend' : 'hellokitty_28_gray.png',
+        'TaCT' : 'trojan_square_28_gray.png',
+        'WaNet': 'none',
+        'dynamic' : 'none',
+        'trojan': 'trojan_square_28_gray.png',
+    },
     'cifar10': {
         'none' : 'none',
         'adaptive_blend': 'hellokitty_32.png',
@@ -109,6 +121,7 @@ arch = {
     # 'cifar10': vgg.vgg16_bn,
     # 'cifar10': mobilenetv2.mobilenetv2,
     'gtsrb' : resnet.ResNet18,
+    'mnist' : NetC_MNIST,
     #resnet.ResNet18,
     'imagenette': resnet.ResNet18,
     'imagenet50': resnet.ResNet18,
