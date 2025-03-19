@@ -270,6 +270,10 @@ elif args.dataset == 'imagenet':
     test_set_loader = torch.utils.data.DataLoader(
         test_set,
         batch_size=batch_size, shuffle=False, worker_init_fn=tools.worker_init, **kwargs)
+    # Lấy một batch từ test_set_loader để kiểm tra shape
+    for batch_idx, (data, labels) in enumerate(test_set_loader):
+        print(f"[DEBUG] Batch {batch_idx}: data shape = {data.shape}, labels shape = {labels.shape}")
+        break  # Chỉ in ra 1 batch, tránh in quá nhiều
 
 else:
     normalizer = poisoned_set.normal
