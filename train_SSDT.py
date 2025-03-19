@@ -289,7 +289,10 @@ def eval(
                 avg_acc_bd = 0.0
 
             avg_acc_nvt = total_correct_nvt * 100.0 / total_non_victim
-            batch_acc_bd = correct_bd / len(victim_labels1) * 100.0
+            if len(victim_labels1) > 0:
+                batch_acc_bd = correct_bd / len(victim_labels1) * 100.0
+            else:
+                batch_acc_bd = 0.0  # or handle appropriately
 
             infor_string = "Clean Acc: {:.3f} | BD Acc: {:.3f} | Cross Acc: {:.3f} | NVT Acc : {:.3f} | Batch BD Acc : {:.3f}".format(
                 avg_acc_clean, avg_acc_bd, avg_acc_cross, avg_acc_nvt, batch_acc_bd
