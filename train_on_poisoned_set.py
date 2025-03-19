@@ -244,6 +244,7 @@ if args.dataset != 'ember' and args.dataset != 'imagenet':
     test_set_label_path = os.path.join(test_set_dir, 'labels')
     test_set = tools.IMG_Dataset(data_dir=test_set_img_dir,
                                  label_path=test_set_label_path, transforms=data_transform)
+    print('hahahaha')
     test_set_loader = torch.utils.data.DataLoader(
         test_set,
         batch_size=batch_size, shuffle=False, worker_init_fn=tools.worker_init, **kwargs)
@@ -293,7 +294,6 @@ else:
     backdoor_test_set_dir = os.path.join('poisoned_train_set', 'ember', args.ember_options)
     backdoor_test_set = tools.EMBER_Dataset(x_path=os.path.join(poison_set_dir, 'watermarked_X_test.npy'),
                                             y_path=None, normalizer=normalizer)
-    print('hahahahhahaha')
     backdoor_test_set_loader = torch.utils.data.DataLoader(
         backdoor_test_set,
         batch_size=batch_size, shuffle=False, worker_init_fn=tools.worker_init, **kwargs)
