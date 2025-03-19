@@ -69,7 +69,6 @@ class poison_generator():
             sample_img, _ = dataset[0]
             if sample_img.shape[0] == 1 and trigger.shape[0] != 1:
                 trigger = trigger.mean(dim=0, keepdim=True)
-                print(f"[DEBUG] Trigger {trigger_names[i]} adjusted for grayscale: shape {trigger.shape}")
 
             # Trigger mask: nếu có file mask, dùng nó, nếu không thì tự tạo
             if os.path.exists(trigger_mask_path):
@@ -86,7 +85,6 @@ class poison_generator():
             self.trigger_marks.append(trigger)
             self.trigger_masks.append(trigger_mask)
             self.alphas.append(alphas[i])
-            print(f"[DEBUG] Loaded Trigger #{i}: {trigger_names[i]} with alpha = {alphas[i]}")
 
     def generate_poisoned_training_set(self):
         # random sampling
@@ -161,8 +159,6 @@ class poison_generator():
         label_set = torch.LongTensor(label_set)
         poison_indices = poison_id
         cover_indices = cover_id
-        print("[DEBUG] Final Poison indices:", poison_indices)
-        print("[DEBUG] Final Cover indices:", cover_indices)
 
         # Demo: xử lý ảnh đầu tiên với tất cả các trigger
         img, gt = self.dataset[0]
@@ -210,7 +206,6 @@ class poison_transform():
                 if isinstance(self.normalizer.transforms[0].mean, (tuple, list)) and len(
                         self.normalizer.transforms[0].mean) == 1:
                     trigger = trigger.mean(dim=0, keepdim=True)
-                    print(f"[DEBUG] Test trigger {test_trigger_names[i]} adjusted for grayscale: {trigger.shape}")
             if os.path.exists(trigger_mask_path):
                 trigger_mask = Image.open(trigger_mask_path).convert("RGB")
                 trigger_mask = transforms.ToTensor()(trigger_mask)[0]
@@ -234,15 +229,13 @@ class poison_transform():
             # Nếu data là ảnh 1 kênh mà trigger có nhiều kênh, điều chỉnh trigger
             if data.shape[1] == 1 and self.trigger_marks[j].shape[0] != 1:
                 adjusted_trigger = self.trigger_marks[j].mean(dim=0, keepdim=True)
-                print(
-                    f"[DEBUG] Transform: Adjusting trigger shape from {self.trigger_marks[j].shape} to {adjusted_trigger.shape}")
+
             else:
                 adjusted_trigger = self.trigger_marks[j]
             data = data + self.alphas[j] * self.trigger_masks[j].to(data.device) * (
                         adjusted_trigger.to(data.device) - data)
         data = self.normalizer(data)
         labels[:] = self.target_class
-        print(f"[DEBUG] After transform: data shape = {data.shape}, labels shape = {labels.shape}")
         return data, labels
 
 # import os
