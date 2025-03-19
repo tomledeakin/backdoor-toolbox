@@ -57,10 +57,6 @@ class poison_generator():
         img_set = torch.cat(img_set, dim=0)
         label_set = torch.LongTensor(label_set)
 
-        # In shape của toàn bộ tập
-        print(f"[DEBUG] Toàn bộ img_set shape = {img_set.shape}")
-        print(f"[DEBUG] Toàn bộ label_set shape = {label_set.shape}")
-
         return img_set, poison_indices, label_set
 
 
@@ -91,5 +87,4 @@ class poison_transform():
 
         data = data + self.alpha * trigger_mask.to(data.device) * (trigger_mark.to(data.device) - data)
         labels[:] = self.target_class
-        print(f"[DEBUG] Sau khi poison: data shape = {data.shape}, labels shape = {labels.shape}")
         return data, labels

@@ -692,7 +692,6 @@ def get_poison_transform(poison_type, dataset_name, target_class, source_class=1
                     trigger_mask = Image.open(trigger_mask_path).convert("RGB")
                     trigger_mask = trigger_mask_transform(trigger_mask)[0]  # chỉ lấy 1 channel
             else:  # Mặc định: tạo mask từ trigger
-                print("[DEBUG] Trigger mask not found, generating default mask")
                 if dataset_name == 'mnist':
                     trigger_map = trigger_transform(trigger)
                     trigger_mask = (trigger_map > 0).float()  # mask mặc định cho grayscale
@@ -702,7 +701,6 @@ def get_poison_transform(poison_type, dataset_name, target_class, source_class=1
                                                     trigger_map[2] > 0).float()
 
             trigger = trigger_transform(trigger)
-            print("[DEBUG] Trigger shape after transform:", trigger.shape)
             # Đảm bảo trigger_mask là tensor
             trigger_mask = trigger_mask
 

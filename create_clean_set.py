@@ -225,7 +225,7 @@ if args.dataset != 'ember' and args.dataset != 'imagenet':
         pil_img.save(img_file_path)
         print('[Generate Test Set] Save %s' % img_file_path)
         label_set.append(gt)
-    
+
 
     label_set = torch.LongTensor(label_set)
     label_path = os.path.join(test_split_dir, 'labels')

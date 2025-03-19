@@ -435,11 +435,6 @@ for epoch in range(1, epochs + 1):  # train backdoored base model
     # Test
     if args.dataset != 'ember':
         if True:
-            # Lấy một batch từ test_set_loader để kiểm tra shape
-            for batch_idx, (data, labels) in enumerate(test_set_loader):
-                print(f"[DEBUG] test_set_loader Batch {batch_idx}: data shape = {data.shape}, labels shape = {labels.shape}")
-                break  # Chỉ in ra 1 batch, tránh in quá nhiều
-
             # if epoch % 5 == 0:
             tools.test(model=model, test_loader=test_set_loader,
                        poison_test=True if args.poison_type != 'none' else False,
