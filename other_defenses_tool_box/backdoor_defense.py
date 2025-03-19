@@ -25,6 +25,14 @@ class BackdoorDefense():
             self.momentum = 0.9
             self.weight_decay = 1e-4
             self.learning_rate = 0.1
+        elif args.dataset == 'mnist':
+            self.img_size = 28
+            self.num_classes = 10
+            self.input_channel = 1
+            self.shape = torch.Size([1, 28, 28])
+            self.momentum = 0.9
+            self.weight_decay = 1e-4
+            self.learning_rate = 0.1
         elif args.dataset == 'cifar100':
             print('<To Be Implemented> Dataset = %s' % args.dataset)
             exit(0)
