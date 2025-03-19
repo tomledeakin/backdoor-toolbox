@@ -8,12 +8,6 @@ from torchvision import transforms
 from math import sqrt
 import torch.nn.functional as F
 
-"""Adaptive Mask backdoor attack
-- Giữ nhãn gốc cho một số (ví dụ 50%) mẫu bị nhiễm.
-- Chia trigger (dấu hiệu) backdoor thành nhiều mảnh, ẩn một số mảnh một cách ngẫu nhiên trong quá trình nhiễm dữ liệu huấn luyện.
-Phiên bản này sử dụng blending backdoor trigger: trộn một dấu hiệu với mask và độ trong suốt `alpha`
-"""
-
 
 def issquare(x):
     tmp = sqrt(x)
@@ -41,8 +35,6 @@ class poison_generator():
         sample_img, _ = dataset[0]
         actual_size = sample_img.shape[1]  # giả sử ảnh vuông (H == W)
         if img_size != actual_size:
-            print(
-                f"Warning: Provided img_size {img_size} does not match actual image size {actual_size}. Using {actual_size}.")
             img_size = actual_size
         self.img_size = img_size
 
@@ -58,7 +50,6 @@ class poison_generator():
         # *** Sửa thêm: Nếu dataset là ảnh 1 kênh (grayscale) mà trigger có nhiều kênh, chuyển trigger về 1 kênh
         if sample_img.shape[0] == 1 and self.trigger.shape[0] != 1:
             self.trigger = self.trigger.mean(dim=0, keepdim=True)
-            print(f"[DEBUG] Adjusted trigger for grayscale: new trigger shape = {self.trigger.shape}")
 
         self.alpha = alpha
         self.cover_rate = cover_rate
@@ -107,9 +98,6 @@ class poison_generator():
             if ct < num_cover and cover_indices[ct] == i:
                 cover_id.append(cnt)
                 mask = get_trigger_mask(self.img_size, self.pieces, self.masked_pieces)
-                print(f"[DEBUG] Cover - img shape: {img.shape}")  # (C, H, W)
-                print(f"[DEBUG] Cover - trigger shape: {adjusted_trigger.shape}")  # (C, H, W)
-                print(f"[DEBUG] Cover - mask shape: {mask.shape}")  # (H, W)
                 img = img + self.alpha * mask.unsqueeze(0) * (adjusted_trigger - img)
                 ct += 1
 
@@ -118,9 +106,6 @@ class poison_generator():
                 poison_id.append(cnt)
                 gt = self.target_class  # đổi nhãn về target_class
                 mask = get_trigger_mask(self.img_size, self.pieces, self.masked_pieces)
-                print(f"[DEBUG] Poison - img shape: {img.shape}")
-                print(f"[DEBUG] Poison - trigger shape: {adjusted_trigger.shape}")
-                print(f"[DEBUG] Poison - mask shape: {mask.shape}")
                 img = img + self.alpha * mask.unsqueeze(0) * (adjusted_trigger - img)
                 pt += 1
 
@@ -132,8 +117,6 @@ class poison_generator():
         label_set = torch.LongTensor(label_set)
         poison_indices = poison_id
         cover_indices = cover_id
-        print("[DEBUG] Final Poison indices:", poison_indices)
-        print("[DEBUG] Final Cover indices:", cover_indices)
 
         # Tạo ảnh demo
         img, gt = self.dataset[0]
@@ -164,7 +147,6 @@ class poison_transform():
         if self.trigger.shape[0] != 1:
             # Nếu dữ liệu cần là 1 kênh (ví dụ MNIST) và trigger có nhiều kênh, chuyển về 1 kênh
             self.trigger = self.trigger.mean(dim=0, keepdim=True)
-            print(f"[DEBUG] poison_transform: Adjusted trigger shape for grayscale: {self.trigger.shape}")
         self.alpha = alpha
 
     def transform(self, data, labels):
@@ -176,13 +158,11 @@ class poison_transform():
         # *** Sửa thêm: Kiểm tra nếu data là 1 kênh nhưng trigger không khớp, điều chỉnh lại trigger
         if data.shape[1] != self.trigger.shape[0]:
             adjusted_trigger = self.trigger.mean(dim=0, keepdim=True)
-            print(f"[DEBUG] transform: Adjusting trigger shape from {self.trigger.shape} to {adjusted_trigger.shape}")
         else:
             adjusted_trigger = self.trigger
 
         data = data + self.alpha * (adjusted_trigger.to(data.device) - data)
         labels[:] = self.target_class
-        print(f"[DEBUG] After transform: data shape = {data.shape}, labels shape = {labels.shape}")
         return data, labels
 
 # import os
