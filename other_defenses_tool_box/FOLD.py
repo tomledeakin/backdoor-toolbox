@@ -630,7 +630,7 @@ class FOLD(BackdoorDefense):
             img = img.squeeze().cpu().numpy()
 
             if img.ndim == 3:
-                plt.imshow(np.transpose(img, (1, 2, 0)))  # RGB
+                plt.imshow(np.transpose(img, (1, 2, 0)))  # 
             else:
                 plt.imshow(img, cmap='gray')  # Grayscale
 

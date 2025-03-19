@@ -1,31 +1,18 @@
-import cv2
-import os
+import torch
 
+file_path = "C:/Users/Admin/Downloads/imgs"  # đường dẫn đầy đủ đến file
 
-def convert_to_grayscale(image_path):
-    # Đọc ảnh màu
-    image = cv2.imread(image_path)
-    if image is None:
-        raise ValueError("Không thể đọc ảnh. Hãy kiểm tra đường dẫn.")
+data = torch.load(file_path)
+print(type(data))
 
-    # Chuyển đổi sang ảnh xám
-    gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+# Nếu data là một Tensor:
+if isinstance(data, torch.Tensor):
+    print("Tensor shape:", data.shape)
 
-    # Tạo tên file mới
-    base, ext = os.path.splitext(image_path)
-    new_image_path = f"{base}_gray{ext}"
-
-    # Lưu ảnh mới
-    cv2.imwrite(new_image_path, gray_image)
-    print(f"Ảnh đã được lưu tại: {new_image_path}")
-
-    # Kiểm tra shape của ảnh
-    print(f"Shape của ảnh : {image.shape}")
-    print(f"Shape của ảnh xám: {gray_image.shape}")
-
-    return new_image_path
-
-
-# Ví dụ sử dụng:
-convert_to_grayscale("E:\\backdoor-toolbox\\triggers\\trojan_square_32.png")
-
+# Nếu data là dictionary hoặc list:
+elif isinstance(data, dict):
+    print("Keys:", data.keys())
+elif isinstance(data, list):
+    print("List length:", len(data))
+else:
+    print("Dạng dữ liệu khác:", type(data))
