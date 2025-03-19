@@ -22,4 +22,4 @@ def convert_to_grayscale(image_path):
     return new_image_path
 
 # Ví dụ sử dụng:
-convert_to_grayscale("E:\\backdoor-toolbox\\triggers\\mask_badnet_patch4_28.png")
+convert_to_grayscale("E:\\backdoor-toolbox\\triggers\\phoenix_corner_28.png")

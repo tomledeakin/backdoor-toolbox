@@ -150,6 +150,12 @@ adaptive_patch_train_trigger_names = {
         'badnet_patch4_32.png',
         'trojan_square_32.png',
     ],
+    'mnist': [
+        'phoenix_corner_28_gray.png',
+        'firefox_corner_28_gray.png',
+        'mask_badnet_patch4_28_gray.png',
+        'trojan_square_28_gray.png',
+    ],
     'imagenet200': [
         'phoenix_corner_256.png',
         'firefox_corner_256.png',
@@ -171,6 +177,12 @@ adaptive_patch_train_trigger_alphas = {
         0.5,
         0.3,
     ],
+    'mnist': [
+        0.5,
+        0.2,
+        0.5,
+        0.3,
+    ],
     'imagenet200': [
         0.5,
         0.2,
@@ -187,6 +199,10 @@ adaptive_patch_test_trigger_names = {
     'gtsrb': [
         'firefox_corner_32.png',
         'trojan_square_32.png',
+    ],
+    'mnist': [
+        'firefox_corner_28_gray.png',
+        'trojan_square_28_gray.png',
     ],
     'imagenet200': [
         'firefox_corner_256.png',
