@@ -569,6 +569,7 @@ class TED(BackdoorDefense):
     # ==============================
     #       HOOK & MAIN TEST
     # ==============================
+
     def fetch_activation(self, loader):
         print("Starting fetch_activation")
         self.model.eval()
@@ -576,7 +577,7 @@ class TED(BackdoorDefense):
         all_h_label, pred_set = [], []
         activation_container = {}
 
-        if self.dataset == 'tinyimagenet200':
+        if self.dataset == 'imagenet200':
             # Dùng phiên bản uncomment (sử dụng torch.no_grad)
             with torch.no_grad():
                 # Khởi tạo hook bằng 1 batch
