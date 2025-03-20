@@ -83,7 +83,7 @@ class FOLD(BackdoorDefense):
             self.testset = self.test_loader.dataset
 
         print(f"Number of samples in full test set: {len(self.testset)}")
-        self.SELECTED_CLASSES = 30
+        self.SELECTED_CLASSES = 20
 
         ########################################################################
         # BỔ SUNG: CHỈ LỰA CHỌN NGẪU NHIÊN 30 CLASSES (BAO GỒM TARGET CLASS)
