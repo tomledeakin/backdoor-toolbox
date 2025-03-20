@@ -170,7 +170,7 @@ class TEDPLUS(BackdoorDefense):
 
         # 7) Define number of neighbors and samples for constructing poison/clean sets
         # self.NUM_NEIGHBORS = args.num_neighbors
-        self.NUM_NEIGHBORS = 3
+        self.NUM_NEIGHBORS = math.ceil(self.SAMPLES_PER_CLASS / 2)
         self.NUM_SAMPLES = args.num_test_samples
 
         # 8) Create defense subset from the defense set using only correctly predicted samples
