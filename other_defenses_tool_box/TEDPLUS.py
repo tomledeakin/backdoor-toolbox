@@ -49,7 +49,7 @@ if torch.cuda.is_available():
 
 # ------------------------------
 
-class FOLD(BackdoorDefense):
+class TEDPLUS(BackdoorDefense):
     def __init__(self, args):
         super().__init__(args)  # Call the constructor of the parent class, BackdoorDefense
         self.args = args
@@ -112,12 +112,13 @@ class FOLD(BackdoorDefense):
         self.DEFENSE_TRAIN_SIZE = self.num_classes * self.SAMPLES_PER_CLASS
 
         # 7) Define number of neighbors and samples for constructing poison/clean sets
-        self.NUM_NEIGHBORS = args.num_neighbors
+        # self.NUM_NEIGHBORS = args.num_neighbors
+        self.NUM_NEIGHBORS = 3
         self.NUM_SAMPLES = args.num_test_samples
 
         # 8) Create defense subset from the defense set using only correctly predicted samples
         # Use the defense_subset (10% of test) instead of the training set
-        defense_set = defense_subset  # Alias for clarity
+        defense_set = self.defense_subset  # Alias for clarity
         if isinstance(defense_set, data.Subset):
             underlying_dataset = defense_set.dataset
             subset_indices = defense_set.indices
