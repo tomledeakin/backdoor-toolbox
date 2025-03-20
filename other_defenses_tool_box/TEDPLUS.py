@@ -514,107 +514,81 @@ class TEDPLUS(BackdoorDefense):
     # ==============================
     #       HOOK & MAIN TEST
     # ==============================
-    # def fetch_activation(self, loader):
-    #     """
-    #     Run the model on the given loader and fetch intermediate activations based on the registered hooks.
-    #     """
-    #     print("Starting fetch_activation")
-    #     self.model.eval()
-    #     all_h_label = []
-    #     pred_set = []
-    #     h_batch = {}
-    #     activation_container = {}
-    #
-    #     # Initialize hooks with one batch
-    #     for (images, labels) in loader:
-    #         print("Running the first batch to init hooks")
-    #         _ = self.model(images.to(self.device))
-    #         break
-    #
-    #     for key in self.activations:
-    #         activation_container[key] = []
-    #
-    #     self.activations.clear()
-    #
-    #     for batch_idx, (images, labels) in enumerate(loader, start=1):
-    #         print(f"Running batch {batch_idx} - Images shape: {images.shape}, Labels shape: {labels.shape}")
-    #         try:
-    #             output = self.model(images.to(self.device))
-    #         except Exception as e:
-    #             print(f"Error running model on batch {batch_idx}: {e}")
-    #             break
-    #         pred_set.append(torch.argmax(output, -1).to(self.device))
-    #
-    #         # Collect activations from hooks
-    #         for key in self.activations:
-    #             h_batch[key] = self.activations[key].view(images.shape[0], -1)
-    #             for h in h_batch[key]:
-    #                 activation_container[key].append(h.to(self.device))
-    #
-    #         # Save original labels
-    #         for label_ in labels:
-    #             all_h_label.append(label_.to(self.device))
-    #
-    #         self.activations.clear()
-    #
-    #         if batch_idx % 10 == 0:
-    #             print(f"Processed {batch_idx} batches")
-    #
-    #     # Stack everything
-    #     for key in activation_container:
-    #         activation_container[key] = torch.stack(activation_container[key])
-    #     all_h_label = torch.stack(all_h_label)
-    #     pred_set = torch.cat(pred_set)
-    #
-    #     print("Finished fetch_activation")
-    #     return all_h_label, activation_container, pred_set
-
     def fetch_activation(self, loader):
         print("Starting fetch_activation")
         self.model.eval()
 
-        all_h_label = []
-        pred_set = []
-        h_batch = {}
+        all_h_label, pred_set = [], []
         activation_container = {}
 
-        # Khởi tạo hook (nếu cần)
-        with torch.no_grad():
-            for (images, labels) in loader:
+        if self.dataset == 'tinyimagenet200':
+            # Dùng phiên bản uncomment (sử dụng torch.no_grad)
+            with torch.no_grad():
+                # Khởi tạo hook bằng 1 batch
+                for images, labels in loader:
+                    _ = self.model(images.to(self.device))
+                    break
+                for key in self.activations:
+                    activation_container[key] = []
+                self.activations.clear()
+
+                for batch_idx, (images, labels) in enumerate(loader, start=1):
+                    images = images.to(self.device)
+                    output = self.model(images)
+                    pred_set.append(torch.argmax(output, dim=1).cpu())
+
+                    for key in self.activations:
+                        h_batch = self.activations[key].view(images.shape[0], -1).cpu()
+                        activation_container[key].append(h_batch)
+
+                    all_h_label.append(labels.cpu())
+                    self.activations.clear()
+                    del images, labels, output
+                    torch.cuda.empty_cache()
+
+                    if batch_idx % 10 == 0:
+                        print(f"Processed {batch_idx} batches")
+
+            for key in activation_container:
+                activation_container[key] = torch.cat(activation_container[key], dim=0)
+            all_h_label = torch.cat(all_h_label, dim=0)
+            pred_set = torch.cat(pred_set, dim=0)
+        else:
+            # Dùng phiên bản commented
+            # Khởi tạo hook bằng 1 batch
+            for images, labels in loader:
+                print("Running the first batch to init hooks")
                 _ = self.model(images.to(self.device))
                 break
-
             for key in self.activations:
                 activation_container[key] = []
             self.activations.clear()
 
             for batch_idx, (images, labels) in enumerate(loader, start=1):
-                images = images.to(self.device)
+                print(f"Running batch {batch_idx} - Images shape: {images.shape}, Labels shape: {labels.shape}")
+                try:
+                    output = self.model(images.to(self.device))
+                except Exception as e:
+                    print(f"Error running model on batch {batch_idx}: {e}")
+                    break
+                pred_set.append(torch.argmax(output, -1).to(self.device))
 
-                output = self.model(images)
-                pred_set.append(torch.argmax(output, dim=1).cpu())
-
-                # Thu thập activation
                 for key in self.activations:
-                    h_batch[key] = self.activations[key].view(images.shape[0], -1).cpu()
-                    activation_container[key].append(h_batch[key])
+                    h_batch = self.activations[key].view(images.shape[0], -1)
+                    for h in h_batch:
+                        activation_container[key].append(h.to(self.device))
 
-                # Lưu labels về CPU
-                all_h_label.append(labels.cpu())
-
-                # Clear
+                for label in labels:
+                    all_h_label.append(label.to(self.device))
                 self.activations.clear()
-                del images, labels, output
-                torch.cuda.empty_cache()
 
                 if batch_idx % 10 == 0:
                     print(f"Processed {batch_idx} batches")
 
-        # Gộp tất cả batch
-        for key in activation_container:
-            activation_container[key] = torch.cat(activation_container[key], dim=0)
-        all_h_label = torch.cat(all_h_label, dim=0)
-        pred_set = torch.cat(pred_set, dim=0)
+            for key in activation_container:
+                activation_container[key] = torch.stack(activation_container[key])
+            all_h_label = torch.stack(all_h_label)
+            pred_set = torch.cat(pred_set)
 
         print("Finished fetch_activation")
         return all_h_label, activation_container, pred_set
