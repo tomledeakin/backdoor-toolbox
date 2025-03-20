@@ -31,7 +31,6 @@ from other_defenses_tool_box.tools import generate_dataloader
 from other_defenses_tool_box.backdoor_defense import BackdoorDefense
 from networks.models import Generator, NetC_MNIST
 from defense_dataloader import get_dataset, get_dataloader
-import math
 
 # ------------------------------
 # Seed settings for reproducibility
@@ -83,77 +82,22 @@ class TEDPLUS(BackdoorDefense):
             self.testset = self.test_loader.dataset
 
         print(f"Number of samples in full test set: {len(self.testset)}")
-        self.SELECTED_CLASSES = 20
-
-        ########################################################################
-        # BỔ SUNG: CHỈ LỰA CHỌN NGẪU NHIÊN 30 CLASSES (BAO GỒM TARGET CLASS)
-        # và chỉ giữ lại những samples có prediction nằm trong các selected labels.
-        ########################################################################
-        if self.dataset == 'tinyimagenet200':
-            # 1. Lấy danh sách các ground truth labels từ testset
-            all_test_labels = []
-            for i in range(len(self.testset)):
-                _, lb = self.testset[i]
-                all_test_labels.append(lb)
-
-            unique_test_labels = list(set(all_test_labels))
-            print(f"[INFO] Tổng số lớp ban đầu trong testset: {len(unique_test_labels)}")
-
-            if len(unique_test_labels) > 50:
-                # Kiểm tra target_class có nằm trong testset không
-                if self.target_class not in unique_test_labels:
-                    print(f"[WARNING] Target class {self.target_class} không có trong tập test!")
-                else:
-                    print(f"[INFO] Target class {self.target_class} có trong test set.")
-
-                # Chọn 29 lớp ngẫu nhiên khác với target_class
-                temp_labels = [lbl for lbl in unique_test_labels if lbl != self.target_class]
-                selected_classes = random.sample(temp_labels, self.SELECTED_CLASSES - 1)  # Lấy 29 lớp khác target_class
-                selected_classes.append(self.target_class)  # Thêm target_class vào danh sách
-                print(f"[INFO] Lựa chọn ngẫu nhiên 30 classes (bao gồm target class): {selected_classes}")
-
-                # Lọc dựa trên ground truth: giữ lại các sample có label thuộc selected_classes
-                filtered_indices = [i for i, lab in enumerate(all_test_labels) if lab in selected_classes]
-                self.testset = data.Subset(self.testset, filtered_indices)
-                print(f"[INFO] Sau khi lọc theo ground truth, testset còn {len(self.testset)} samples.")
-
-                # 2. Lọc thêm dựa trên dự đoán của model: chỉ giữ lại các sample có prediction thuộc selected_classes
-                # Lấy underlying dataset và các chỉ mục hiện có từ testset (là Subset)
-                if hasattr(self.testset, 'indices'):
-                    underlying_dataset = self.testset.dataset
-                    current_indices = self.testset.indices
-                else:
-                    underlying_dataset = self.testset
-                    current_indices = list(range(len(self.testset)))
-
-                self.model.eval()
-                filtered_pred_indices = []
-                with torch.no_grad():
-                    for i in current_indices:
-                        sample = underlying_dataset[i]  # (image, label)
-                        image = sample[0].unsqueeze(0).to(self.device)  # shape: (1, C, H, W)
-                        output = self.model(image)
-                        pred_label = torch.argmax(output, dim=1).item()
-                        if pred_label in selected_classes:
-                            filtered_pred_indices.append(i)
-                self.testset = data.Subset(underlying_dataset, filtered_pred_indices)
-                print(f"[INFO] Sau khi lọc theo prediction, testset còn {len(self.testset)} samples.")
-        ########################################################################
 
         # 4) Split the full test set into 10% (defense/validation) and 90% (final test)
         all_indices = np.arange(len(self.testset))
+        from sklearn.model_selection import train_test_split
         defense_indices, test_indices = train_test_split(all_indices, test_size=0.1, random_state=42)
 
         # Create subsets for defense and test sets
-        self.defense_subset = data.Subset(self.testset, defense_indices)
-        self.testset = data.Subset(self.testset, test_indices)
+        defense_subset = data.Subset(self.testset, defense_indices)
+        test_subset = data.Subset(self.testset, test_indices)
 
         # Create DataLoaders for defense and test sets
-        self.defense_loader = data.DataLoader(self.defense_subset, batch_size=50, shuffle=True, num_workers=0)
-        self.test_loader = data.DataLoader(self.testset, batch_size=50, shuffle=False, num_workers=0)
+        self.defense_loader = data.DataLoader(defense_subset, batch_size=50, shuffle=True, num_workers=0)
+        self.test_loader = data.DataLoader(test_subset, batch_size=50, shuffle=False, num_workers=0)
 
-        print(f"Number of samples in defense set (90% of test): {len(self.defense_subset)}")
-        print(f"Number of samples in final test set (10% of test): {len(self.testset)}")
+        print(f"Number of samples in defense set (90% of test): {len(defense_subset)}")
+        print(f"Number of samples in final test set (10% of test): {len(test_subset)}")
 
         # 5) Determine unique classes by scanning the defense set
         all_labels = []
@@ -169,13 +113,12 @@ class TEDPLUS(BackdoorDefense):
         self.DEFENSE_TRAIN_SIZE = self.num_classes * self.SAMPLES_PER_CLASS
 
         # 7) Define number of neighbors and samples for constructing poison/clean sets
-        # self.NUM_NEIGHBORS = args.num_neighbors
-        self.NUM_NEIGHBORS = 3
+        self.NUM_NEIGHBORS = args.num_neighbors
         self.NUM_SAMPLES = args.num_test_samples
 
         # 8) Create defense subset from the defense set using only correctly predicted samples
         # Use the defense_subset (10% of test) instead of the training set
-        defense_set = self.defense_subset  # Alias for clarity
+        defense_set = defense_subset  # Alias for clarity
         if isinstance(defense_set, data.Subset):
             underlying_dataset = defense_set.dataset
             subset_indices = defense_set.indices
