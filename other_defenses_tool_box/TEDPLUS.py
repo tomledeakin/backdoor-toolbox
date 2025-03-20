@@ -873,8 +873,8 @@ class TEDPLUS(BackdoorDefense):
                     layer_test_region_individual=self.topological_representation
                 )
                 topo_rep_array = np.array(self.topological_representation[layer][label])
-                print(f"Topological Representation Label [{label}] & layer [{layer}]: {topo_rep_array}")
-                print(f"Mean: {np.mean(topo_rep_array)}\n")
+                # print(f"Topological Representation Label [{label}] & layer [{layer}]: {topo_rep_array}")
+                # print(f"Mean: {np.mean(topo_rep_array)}\n")
 
         for layer_ in self.h_poison_activations:
             self.topological_representation = self.getLayerRegionDistance(
