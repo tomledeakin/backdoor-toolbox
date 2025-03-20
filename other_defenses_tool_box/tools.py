@@ -342,7 +342,7 @@ def generate_dataloader(dataset='cifar10', dataset_path='./data/', batch_size=12
                 transforms.Normalize((0.480, 0.448, 0.397), (0.276, 0.268, 0.281))
             ])
 
-        dataset_path = os.path.join(dataset_path, 'imagenet200')
+        dataset_path = os.path.join(dataset_path, 'tinyimagenet200')
 
         if split == 'train':
             train_data = datasets.ImageFolder(os.path.join(dataset_path, 'train'), data_transform)
@@ -355,7 +355,7 @@ def generate_dataloader(dataset='cifar10', dataset_path='./data/', batch_size=12
                                           drop_last=drop_last, num_workers=32, pin_memory=True)
             return test_data_loader
         elif split == 'valid' or split == 'val':
-            val_set_dir = os.path.join('clean_set', 'imagenet200', 'clean_split')
+            val_set_dir = os.path.join('clean_set', 'tinyimagenet200', 'clean_split')
             val_set_img_dir = os.path.join(val_set_dir, 'data')
             val_set_label_path = os.path.join(val_set_dir, 'clean_labels')
             val_set = IMG_Dataset(data_dir=val_set_img_dir, label_path=val_set_label_path, transforms=data_transform)
