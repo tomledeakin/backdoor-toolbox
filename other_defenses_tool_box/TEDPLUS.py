@@ -694,13 +694,14 @@ class TEDPLUS(BackdoorDefense):
                         sorted_dis_validation, sorted_indices_validation = self.get_dis_sort(h_defense_activation[idx], processing_label_h_defense_activation[mask])
                         threshold = torch.max(sorted_dis_validation[:math.ceil(self.SAMPLES_PER_CLASS / 2)])
                         distance_value = sorted_dis[i].item()
+                        distance_value = distance_value / threshold
 
-                        if distance_value > threshold:
-                            distance_value_index = self.DEFENSE_TRAIN_SIZE - 1
-                        else:
-                            distance_value_index = i - 1
+                        # if distance_value > threshold:
+                        #     distance_value_index = self.DEFENSE_TRAIN_SIZE - 1
+                        # else:
+                        #     distance_value_index = i - 1
 
-                        layer_test_region_individual[layer][processing_label].append(distance_value_index)
+                        layer_test_region_individual[layer][processing_label].append(distance_value)
                         break
 
         return layer_test_region_individual
@@ -734,13 +735,14 @@ class TEDPLUS(BackdoorDefense):
                         sorted_dis_validation, sorted_indices_validation = self.get_dis_sort(h_defense_activation[idx], processing_label_h_defense_activation[mask])
                         threshold = torch.max(sorted_dis_validation[:math.ceil(self.SAMPLES_PER_CLASS / 2)])
                         distance_value = sorted_dis[i].item()
+                        distance_value = distance_value / threshold
 
-                        if distance_value > threshold:
-                            distance_value_index = self.DEFENSE_TRAIN_SIZE - 1
-                        else:
-                            distance_value_index = i
+                        # if distance_value > threshold:
+                        #     distance_value_index = self.DEFENSE_TRAIN_SIZE - 1
+                        # else:
+                        #     distance_value_index = i
 
-                        layer_test_region_individual[layer][new_temp_label].append(distance_value_index)
+                        layer_test_region_individual[layer][new_temp_label].append(distance_value)
                         break
 
         return layer_test_region_individual
