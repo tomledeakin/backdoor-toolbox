@@ -548,9 +548,10 @@ def train(opt):
     test_dl1 = get_dataloader(opt, train=False)
     test_dl2 = get_dataloader(opt, train=False)
 
-    if epoch < 25:
+    num_epochs = 10
+    if epoch < num_epochs:
         netM.train()
-        for i in range(25):
+        for i in range(num_epochs):
             print(
                 "Epoch {} - {} - {} | mask_density: {} - lambda_div: {}  - lambda_norm: {}:".format(
                     epoch, opt.dataset, opt.attack_mode, opt.mask_density, opt.lambda_div, opt.lambda_norm
