@@ -83,7 +83,7 @@ class FOLD(BackdoorDefense):
             self.testset = self.test_loader.dataset
 
         print(f"Number of samples in full test set: {len(self.testset)}")
-        self.SELECTED_CLASSES = 10
+        self.SELECTED_CLASSES = 20
 
         ########################################################################
         # BỔ SUNG: CHỈ LỰA CHỌN NGẪU NHIÊN 30 CLASSES (BAO GỒM TARGET CLASS)
@@ -166,7 +166,7 @@ class FOLD(BackdoorDefense):
         # 6) Set defense training parameters
         self.SAMPLES_PER_CLASS = args.validation_per_class
 
-        if self.dataset == "imagenet200":
+        if self.dataset == "tinyimagenet200":
             self.DEFENSE_TRAIN_SIZE = self.SELECTED_CLASSES * self.SAMPLES_PER_CLASS
         else:
             self.DEFENSE_TRAIN_SIZE = self.num_classes * self.SAMPLES_PER_CLASS
