@@ -259,7 +259,7 @@ class FOLD(BackdoorDefense):
             "Poison": 101,
             "Clean": 102
         }
-        self.NUM_NEIGHBORS = 1
+        self.NUM_NEIGHBORS = 3
         # Initialize counters and temporary containers for Poison and Clean sets
         self.poison_count = 0
         self.clean_count = 0
@@ -270,7 +270,7 @@ class FOLD(BackdoorDefense):
         self.temp_clean_labels_set = []
         self.temp_clean_pred_set = []
         self.nnb_distance_dictionary = {}
-        
+
         # 11) Set up hooks for activation extraction
         self.hook_handles = []
         self.activations = {}
