@@ -548,7 +548,7 @@ def train(opt):
     test_dl1 = get_dataloader(opt, train=False)
     test_dl2 = get_dataloader(opt, train=False)
 
-    num_epochs = 13
+    num_epochs = 25
     if epoch < num_epochs:
         netM.train()
         for i in range(num_epochs):
