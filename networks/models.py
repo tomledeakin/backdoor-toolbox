@@ -92,6 +92,8 @@ class Generator(nn.Sequential):
             denormalizer = None
         elif opt.dataset == "imagenet200":
             denormalizer = Denormalize(opt, [0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+        elif opt.dataset == "tinyimagenet200":
+            denormalizer = Denormalize(opt, [0.480, 0.448, 0.397], [0.276, 0.268, 0.281])
         else:
             raise Exception("Invalid dataset")
         return denormalizer
@@ -105,6 +107,8 @@ class Generator(nn.Sequential):
             normalizer = None
         elif opt.dataset == "imagenet200":
             normalizer = Normalize(opt, [0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+        elif opt.dataset == "tinyimagenet200":
+            normalizer = Normalize(opt, [0.480, 0.448, 0.397], [0.276, 0.268, 0.281])
         else:
             raise Exception("Invalid dataset")
         return normalizer

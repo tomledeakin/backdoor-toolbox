@@ -122,6 +122,7 @@ trigger_default = {
         'adaptive_patch': 'none',
         'trojan' : 'trojan_watermark_64.png',
         'WaNet': 'none',
+        'TaCT' : 'trojan_square_64.png',
         'SRA': 'phoenix_corner_64.png',
     },
 }

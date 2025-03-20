@@ -618,6 +618,8 @@ def main(k):
         opt.num_classes = 43
     elif opt.dataset == "imagenet200":
         opt.num_classes = 200
+    elif opt.dataset == "tinyimagenet200":
+        opt.num_classes = 200
     else:
         raise Exception("Invalid Dataset")
 
@@ -632,6 +634,7 @@ def main(k):
         'gtsrb': 2,  # hoặc 12 nếu sử dụng BadEncoder
         'imagenette': 0,
         'imagenet200': 0,
+        'tinyimagenet200': 0,
         'mnist': 0
     }
 
@@ -656,6 +659,10 @@ def main(k):
         opt.input_height = 224
         opt.input_width = 224
         opt.input_channel = 3
+    elif opt.dataset == "tinyimagenet200":
+        opt.input_height = 64
+        opt.input_width = 64
+        opt.input_channel = 3
     else:
         raise Exception("Invalid Dataset")
     train(opt)
@@ -668,6 +675,7 @@ if __name__ == "__main__":
         "cifar10": 10,
         "mnist": 10,
         "imagenet200": 200,
+        "tinyimagenet200": 200,
     }
 
     opt = config_ted.get_arguments().parse_args()
