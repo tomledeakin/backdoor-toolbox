@@ -117,12 +117,12 @@ trigger_default = {
     'tinyimagenet200': {
         'none': 'none',
         'badnet': 'badnet_patch_64.png',
-        'blend' : 'hellokitty_256.png',
-        'adaptive_blend': 'hellokitty_256.png',
+        'blend' : 'hellokitty_64.png',
+        'adaptive_blend': 'hellokitty_64.png',
         'adaptive_patch': 'none',
-        'trojan' : 'trojan_watermark_256.png',
+        'trojan' : 'trojan_watermark_64.png',
         'WaNet': 'none',
-        'SRA': 'phoenix_corner_224.png',
+        'SRA': 'phoenix_corner_64.png',
     },
 }
 
@@ -174,6 +174,12 @@ adaptive_patch_train_trigger_names = {
         'badnet_patch_256.png',
         'trojan_square_256.png',
     ],
+    'tinyimagenet200': [
+        'phoenix_corner_64.png',
+        'firefox_corner_64.png',
+        'badnet_patch_64.png',
+        'trojan_square_64.png',
+    ],
 }
 
 adaptive_patch_train_trigger_alphas = {
@@ -201,6 +207,12 @@ adaptive_patch_train_trigger_alphas = {
         0.5,
         0.3,
     ],
+    'tinyimagenet200': [
+        0.5,
+        0.2,
+        0.5,
+        0.3,
+    ],
 }
 
 adaptive_patch_test_trigger_names = {
@@ -220,6 +232,10 @@ adaptive_patch_test_trigger_names = {
         'firefox_corner_256.png',
         'trojan_square_256.png',
     ],
+    'tinyimagenet200': [
+        'firefox_corner_64.png',
+        'trojan_square_64.png',
+    ],
 }
 
 adaptive_patch_test_trigger_alphas = {
@@ -236,6 +252,10 @@ adaptive_patch_test_trigger_alphas = {
         1,
     ],
     'imagenet200': [
+        1,
+        1,
+    ],
+    'tinyimagenet200': [
         1,
         1,
     ],

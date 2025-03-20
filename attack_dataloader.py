@@ -53,7 +53,17 @@ def get_transform(opt, train=True, c=0, k=0):
                                  [0.229, 0.224, 0.225])
         ]
         return transforms.Compose(transform_list)
-
+    elif opt.dataset == "tinyimagenet200":
+        # Pipeline xử lý ImageNet theo yêu cầu
+        transform_list = [
+            transforms.RandomCrop(64, padding=4),
+            transforms.RandomHorizontalFlip(),
+            transforms.RandomRotation(15),
+            transforms.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.3),
+            transforms.ToTensor(),
+            transforms.Normalize((0.480, 0.448, 0.397), (0.276, 0.268, 0.281))
+        ]
+        return transforms.Compose(transform_list)
     transforms_list = []
     transforms_list.append(transforms.Resize((opt.input_height, opt.input_width)))
     if train:
@@ -161,6 +171,8 @@ def get_dataloader(opt, train=True, c=0, k=0):
     elif opt.dataset == "cifar10":
         dataset = torchvision.datasets.CIFAR10(opt.data_root, train, transform, download=True)
     elif opt.dataset == "imagenet200":
+        dataset = ImageNet(opt, train, transform)
+    elif opt.dataset == "tinyimagenet200":
         dataset = ImageNet(opt, train, transform)
     else:
         raise Exception("Invalid dataset")
