@@ -30,6 +30,7 @@ clean_set/imagenet/*
 
 logs/*
 !logs/.dummy
+!*.log
 
 cleansers_tool_box/spectre/output/*
 !cleansers_tool_box/spectre/output/.dummy
