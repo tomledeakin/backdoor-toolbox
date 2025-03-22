@@ -359,7 +359,7 @@ class IBD_PSC(BackdoorDefense):
                     labels = labels.cuda()
 
                     # Xác định các sample có label bằng self.config.source_class
-                    source_mask = (labels == self.config.source_class)
+                    source_mask = (labels == config.source_class)
 
                     # Clone clean_img sang poison_imgs, chỉ áp dụng trigger với các sample có source_mask = True
                     poison_imgs = clean_img.clone()
