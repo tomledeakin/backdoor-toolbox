@@ -108,7 +108,7 @@ echo "cifar10 - TaCT | START"
 # python other_defense.py -defense=IBD_PSC -dataset=cifar10 -poison_type=TaCT -poison_rate=0.02 -cover_rate=0.01
 # python other_defense.py -defense=IBD_PSC -dataset=cifar10 -poison_type=TaCT -poison_rate=0.01
 # python all_layers_resnet18_layer_visualize.py -dataset=cifar10 -poison_type=TaCT -poison_rate=0.02 -cover_rate=0.01 -data_ratio=0.3
-python other_defense.py -defense=TED -dataset=cifar10 -poison_type=TaCT -poison_rate=0.02 -cover_rate=0.01 -validation_per_class=20 -num_test_samples=50 
+python other_defense.py -defense=TED -dataset=cifar10 -poison_type=TaCT -poison_rate=0.02 -cover_rate=0.01 -validation_per_class=100 -num_test_samples=50 
 # echo "TED | cifar10 - TaCT | COMPLETE"
 # python other_defense.py -defense=TEDPLUS -dataset=cifar10 -poison_type=TaCT -poison_rate=0.02 -cover_rate=0.01 -validation_per_class=20 -num_test_samples=50 -num_neighbors=3
 # echo "TEDPLUS | cifar10 - TaCT | COMPLETE"
