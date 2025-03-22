@@ -316,7 +316,7 @@ class IBD_PSC(BackdoorDefense):
         # If no break condition met, return full length
         return layer_num
 
-    def test(self, inspect_correct_predition_only=True):
+    def test(self, inspect_correct_predition_only=False):
         print(f'inspect_correct_predition_only: {inspect_correct_predition_only}')
         # This method calculates PSC scores and evaluates detection performance
         args = self.args
