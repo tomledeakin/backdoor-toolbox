@@ -349,8 +349,8 @@ class IBD_PSC(BackdoorDefense):
                 y_score_poison = []
                 total_clean = 0
                 total_poison = 0
-                desired_clean = 500
-                desired_poison = 500
+                desired_clean = 100
+                desired_poison = 100
 
                 for idx, batch in enumerate(self.test_loader):
                     clean_img = batch[0]
