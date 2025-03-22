@@ -347,12 +347,14 @@ class IBD_PSC(BackdoorDefense):
                 # Khởi tạo danh sách lưu trữ score của từng batch cho clean và poison
                 y_score_clean = []
                 y_score_poison = []
-                total_num = 0
+                total_clean = 0
+                total_poison = 0
+                desired_clean = 50
+                desired_poison = 50
 
                 for idx, batch in enumerate(self.test_loader):
                     clean_img = batch[0]
                     labels = batch[1]
-                    total_num += labels.shape[0]
 
                     # Chuyển dữ liệu lên GPU
                     clean_img = clean_img.cuda()
@@ -361,7 +363,7 @@ class IBD_PSC(BackdoorDefense):
                     # Xác định các sample có label bằng config.source_class (sẽ nhận trigger)
                     source_mask = (labels == config.source_class)
 
-                    # Tạo bản sao của clean_img để biến đổi thành poison_imgs, chỉ thay đổi những sample theo source_mask
+                    # Tạo bản sao ảnh gốc để tạo poison_imgs; chỉ áp dụng trigger với các sample có source_mask = True
                     poison_imgs = clean_img.clone()
                     if source_mask.sum() > 0:
                         poison_imgs[source_mask], _ = self.poison_transform.transform(
@@ -369,30 +371,30 @@ class IBD_PSC(BackdoorDefense):
                             labels[source_mask]
                         )
 
-                    # Tính dự đoán cho cả ảnh gốc và ảnh có trigger
+                    # Tính dự đoán cho cả ảnh gốc (clean) và ảnh có trigger (poison)
                     poison_pred = torch.argmax(self.model(poison_imgs), dim=1)
                     clean_pred = torch.argmax(self.model(clean_img), dim=1)
 
-                    # Khởi tạo tensor lưu score cho từng sample của batch
+                    # Khởi tạo tensor lưu score cho từng sample trong batch
                     spc_poison = torch.zeros(poison_imgs.shape[0])
                     spc_clean = torch.zeros(labels.shape[0])
                     scale_count = 0
 
-                    # Tính score qua nhiều layers (scale) và cộng dồn kết quả
+                    # Tính score qua các scale layers
                     for layer_index in range(self.start_index, self.start_index + self.n):
                         layers = self.sorted_indices[:layer_index + 1]
                         smodel = self.scale_var_index(layers, scale=self.scale)
                         scale_count += 1
                         smodel.eval()
 
-                        # Tính score cho clean samples
+                        # Score cho clean images
                         logits_clean = smodel(clean_img).detach().cpu()
                         logits_clean = torch.nn.functional.softmax(logits_clean, dim=1)
                         device = logits_clean.device
                         clean_pred_device = clean_pred.to(device)
                         spc_clean += logits_clean[torch.arange(logits_clean.size(0), device=device), clean_pred_device]
 
-                        # Tính score cho poison samples
+                        # Score cho poison images
                         logits_poison = smodel(poison_imgs).detach().cpu()
                         logits_poison = torch.nn.functional.softmax(logits_poison, dim=1)
                         poison_pred_device = poison_pred.to(device)
@@ -403,19 +405,37 @@ class IBD_PSC(BackdoorDefense):
                     spc_poison /= scale_count
                     spc_clean /= scale_count
 
-                    # Tách riêng score:
-                    # - y_score_poison lưu các score của các sample mà label == config.source_class
-                    # - y_score_clean lưu các score của các sample mà label != config.source_class
+                    # Tách riêng score theo từng nhóm dựa trên mask
                     source_mask_cpu = source_mask.cpu()
                     non_source_mask_cpu = (~source_mask).cpu()
+
+                    # Xử lý nhóm poison: chỉ lấy những mẫu có label == config.source_class
                     if source_mask_cpu.sum() > 0:
-                        y_score_poison.append(spc_poison[source_mask_cpu])
+                        poison_scores_batch = spc_poison[source_mask_cpu]
+                        # Lấy đủ số mẫu còn thiếu nếu batch có nhiều hơn yêu cầu
+                        remaining_poison = desired_poison - total_poison
+                        if remaining_poison > 0:
+                            poison_scores_batch = poison_scores_batch[:remaining_poison]
+                            y_score_poison.append(poison_scores_batch)
+                            total_poison += poison_scores_batch.size(0)
+
+                    # Xử lý nhóm clean: chỉ lấy những mẫu có label khác config.source_class
                     if non_source_mask_cpu.sum() > 0:
-                        y_score_clean.append(spc_clean[non_source_mask_cpu])
+                        clean_scores_batch = spc_clean[non_source_mask_cpu]
+                        remaining_clean = desired_clean - total_clean
+                        if remaining_clean > 0:
+                            clean_scores_batch = clean_scores_batch[:remaining_clean]
+                            y_score_clean.append(clean_scores_batch)
+                            total_clean += clean_scores_batch.size(0)
+
+                    # Nếu đủ cả 50 clean và 50 poison thì dừng vòng lặp
+                    if total_clean >= desired_clean and total_poison >= desired_poison:
+                        break
 
                 # Nối các tensor score của tất cả các batch lại
-                y_score_poison = torch.cat(y_score_poison, dim=0)
                 y_score_clean = torch.cat(y_score_clean, dim=0)
+                y_score_poison = torch.cat(y_score_poison, dim=0)
+
 
         else:
             with torch.no_grad():
