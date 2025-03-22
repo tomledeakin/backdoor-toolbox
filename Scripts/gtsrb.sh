@@ -105,7 +105,7 @@ echo "cifar10 - TaCT | START"
 # python train_on_poisoned_set.py -dataset=cifar10 -poison_type=TaCT -poison_rate=0.01 -cover_rate=0.005
 # python test_model.py -dataset=cifar10 -poison_type=TaCT -poison_rate=0.02 -cover_rate=0.01
 # python other_defense.py -defense=IBD_PSC -dataset=cifar10 -poison_type=badnet -poison_rate=0.1
-python other_defense.py -defense=IBD_PSC -dataset=cifar10 -poison_type=TaCT -poison_rate=0.02 -cover_rate=0.01
+python other_defense.py -defense=IBD_PSC -dataset=cifar10 -poison_type=TaCT -poison_rate=0.02 -cover_rate=0.01 -validation_per_class=200
 # python other_defense.py -defense=IBD_PSC -dataset=cifar10 -poison_type=TaCT -poison_rate=0.01
 # python all_layers_resnet18_layer_visualize.py -dataset=cifar10 -poison_type=TaCT -poison_rate=0.02 -cover_rate=0.01 -data_ratio=0.3
 # python other_defense.py -defense=TED -dataset=cifar10 -poison_type=TaCT -poison_rate=0.02 -cover_rate=0.01 -validation_per_class=20 -num_test_samples=50 
