@@ -366,10 +366,12 @@ class IBD_PSC(BackdoorDefense):
                     # Tạo bản sao ảnh gốc để tạo poison_imgs; chỉ áp dụng trigger với các sample có source_mask = True
                     poison_imgs = clean_img.clone()
                     if source_mask.sum() > 0:
-                        poison_imgs[source_mask], _ = self.poison_transform.transform(
-                            clean_img[source_mask],
-                            labels[source_mask]
-                        )
+                        if self.poison_type == 'SSDT':
+                            poison_imgs[source_mask] = self.create_bd(clean_img[source_mask])  # Tạo backdoor
+                        else:
+                            poison_imgs[source_mask], _ = self.poison_transform.transform(
+                                clean_img[source_mask], labels[source_mask]
+                            )
 
                     # Tính dự đoán cho cả ảnh gốc (clean) và ảnh có trigger (poison)
                     poison_pred = torch.argmax(self.model(poison_imgs), dim=1)
