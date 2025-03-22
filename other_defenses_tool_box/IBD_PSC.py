@@ -227,43 +227,60 @@ class IBD_PSC(BackdoorDefense):
         clean_predicts = []
 
         # Process test dataset to understand baseline performance
-        for idx, batch in enumerate(self.test_loader):
-            clean_img = batch[0]
-            labels = batch[1]
-
-            total_num += labels.shape[0]
-            clean_img = clean_img.cuda()
-            labels = labels.cuda()
-
-            target_flag = labels != 0
-            poison_imgs, poison_labels = self.poison_transform.transform(clean_img[target_flag], labels[target_flag])
-
-            bd_logits = self.model(poison_imgs)
-            clean_logits = self.model(clean_img)
-
-            clean_pred = torch.argmax(clean_logits, dim=1)
-            poison_pred = torch.argmax(bd_logits, dim=1)
-
-            clean_predicts.extend(clean_pred.cpu().tolist())
-            bd_predicts.extend(poison_pred.cpu().tolist())
-
-            # Depending on poison_type, determine correct counting method
-            if self.args.poison_type == 'TaCT':
-                mask = torch.eq(labels[target_flag], config.source_class)
-                plabels = poison_labels[mask.clone()]
-                ppred = poison_pred[mask.clone()]
-                bd_correct += torch.sum(plabels == ppred)
-                bd_all += plabels.size(0)
-            else:
-                bd_correct += torch.sum(poison_labels == poison_pred)
-                bd_all += poison_labels.shape[0]
-
-            clean_correct += torch.sum(labels == clean_pred)
-
-        print(f'ba: {clean_correct * 100. / total_num}')  # Benign accuracy
-        print(f'asr: {bd_correct * 100. / bd_all}')       # Attack success rate
-        print(f'target label: {poison_labels[0:1]}')
+        # for idx, batch in enumerate(self.test_loader):
+        #     clean_img = batch[0]
+        #     labels = batch[1]
+        #
+        #     total_num += labels.shape[0]
+        #     clean_img = clean_img.cuda()
+        #     labels = labels.cuda()
+        #
+        #     target_flag = labels != 0
+        #     poison_imgs, poison_labels = self.poison_transform.transform(clean_img[target_flag], labels[target_flag])
+        #
+        #     bd_logits = self.model(poison_imgs)
+        #     clean_logits = self.model(clean_img)
+        #
+        #     clean_pred = torch.argmax(clean_logits, dim=1)
+        #     poison_pred = torch.argmax(bd_logits, dim=1)
+        #
+        #     clean_predicts.extend(clean_pred.cpu().tolist())
+        #     bd_predicts.extend(poison_pred.cpu().tolist())
+        #
+        #     # Depending on poison_type, determine correct counting method
+        #     if self.args.poison_type == 'TaCT':
+        #         mask = torch.eq(labels[target_flag], config.source_class)
+        #         plabels = poison_labels[mask.clone()]
+        #         ppred = poison_pred[mask.clone()]
+        #         bd_correct += torch.sum(plabels == ppred)
+        #         bd_all += plabels.size(0)
+        #     else:
+        #         bd_correct += torch.sum(poison_labels == poison_pred)
+        #         bd_all += poison_labels.shape[0]
+        #
+        #     clean_correct += torch.sum(labels == clean_pred)
+        #
+        # print(f'ba: {clean_correct * 100. / total_num}')  # Benign accuracy
+        # print(f'asr: {bd_correct * 100. / bd_all}')       # Attack success rate
+        # print(f'target label: {poison_labels[0:1]}')
         # Here we only processed the dataset once in baseline manner.
+
+    def create_bd(self, inputs):
+        """
+        Tạo backdoor inputs
+        """
+        patterns = self.netG(inputs)
+        patterns = self.netG.normalize_pattern(patterns)
+        masks_output = self.netM.threshold(self.netM(inputs))
+        bd_inputs = inputs + (patterns - inputs) * masks_output
+        return bd_inputs
+
+    def create_targets(self, targets, label):
+        """
+        Assign a new label to targets (e.g., Poison=101, Clean=102).
+        """
+        new_targets = torch.ones_like(targets) * label
+        return new_targets.to(self.device)
 
     def count_BN_layers(self):
         # Count how many BatchNorm2d layers in the model
@@ -336,12 +353,8 @@ class IBD_PSC(BackdoorDefense):
 
                 # transform to poison
                 poison_imgs, poison_labels = self.poison_transform.transform(clean_img, labels)
-                preds_bd = torch.argmax(self.model(poison_imgs), dim=1)
-                print(labels)
-                print(poison_labels)
-                print(preds_bd)
-                print(torch.equal(labels, preds_bd))
-                print(torch.equal(poison_labels, preds_bd))
+
+
                 # Compute predictions for poison and clean
                 poison_pred = torch.argmax(self.model(poison_imgs), dim=1)
                 clean_pred = torch.argmax(self.model(clean_img), dim=1)
