@@ -331,9 +331,7 @@ class IBD_PSC(BackdoorDefense):
         return layer_num
 
 
-    def test(self, inspect_correct_predition_only):
-        print(f'inspect_correct_predition_only: {inspect_correct_predition_only}')
-        # This method calculates PSC scores and evaluates detection performance
+    def test(self):
         args = self.args
         print(f'start_index: {self.start_index}')
 
