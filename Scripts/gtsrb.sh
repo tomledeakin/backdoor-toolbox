@@ -81,7 +81,7 @@ echo "cifar10 - trojan | START"
 # python train_on_poisoned_set.py -dataset=cifar10 -poison_type=trojan -poison_rate=0.1
 # python test_model.py -dataset=cifar10 -poison_type=trojan -poison_rate=0.1
 # python all_layers_resnet18_layer_visualize.py -dataset=cifar10 -poison_type=trojan -poison_rate=0.1 -data_ratio=0.4
-python other_defense.py -defense=TED -dataset=cifar10 -poison_type=trojan -poison_rate=0.1 -validation_per_class=20 -num_test_samples=50  
+python other_defense.py -defense=IBD_PSC -dataset=cifar10 -poison_type=trojan -poison_rate=0.1 -validation_per_class=20 -num_test_samples=50  
 # echo "TED | cifar10 - trojan | COMPLETE"
 # python other_defense.py -defense=TEDPLUS -dataset=cifar10 -poison_type=trojan -poison_rate=0.1 -validation_per_class=20 -num_test_samples=50 -num_neighbors=3
 # echo "TEDPLUS | cifar10 - trojan | COMPLETE"
