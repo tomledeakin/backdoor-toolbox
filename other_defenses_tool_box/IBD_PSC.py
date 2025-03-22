@@ -375,7 +375,8 @@ class IBD_PSC(BackdoorDefense):
                     poison_imgs, _ = self.poison_transform.transform(clean_source_img, clean_source_labels)
 
                 # transform to poison
-                poison_imgs, _ = self.poison_transform.transform(clean_img, labels)
+                else:
+                    poison_imgs, _ = self.poison_transform.transform(clean_img, labels)
 
 
                 # Compute predictions for poison and clean
