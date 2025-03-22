@@ -18,7 +18,7 @@ source "my_env/bin/activate"
 cd "$HOME/BackdoorBox Research/backdoor-toolbox"
 export PYTHONUNBUFFERED=1
 
-python train_SSDT.py --dataset cifar10 --attack_mode SSDT --n_iters 200
+# python train_SSDT.py --dataset cifar10 --attack_mode SSDT --n_iters 200
 python train_SSDT.py --dataset gtsrb --attack_mode SSDT --n_iters 200
 
 # echo "cifar10 - badnet | START"
