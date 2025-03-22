@@ -219,12 +219,12 @@ class IBD_PSC(BackdoorDefense):
         self.start_index = self.prob_start(self.scale, self.sorted_indices)
         print(f"[DEBUG] Start index determined by prob_start: {self.start_index}")
 
-        total_num = 0
-        clean_correct = 0
-        bd_correct = 0
-        bd_all = 0
-        bd_predicts = []
-        clean_predicts = []
+        # total_num = 0
+        # clean_correct = 0
+        # bd_correct = 0
+        # bd_all = 0
+        # bd_predicts = []
+        # clean_predicts = []
 
         # Process test dataset to understand baseline performance
         # for idx, batch in enumerate(self.test_loader):
@@ -330,7 +330,8 @@ class IBD_PSC(BackdoorDefense):
         # If no break condition met, return full length
         return layer_num
 
-    def test(self, inspect_correct_predition_only=False):
+
+    def test(self, inspect_correct_predition_only):
         print(f'inspect_correct_predition_only: {inspect_correct_predition_only}')
         # This method calculates PSC scores and evaluates detection performance
         args = self.args
@@ -351,8 +352,32 @@ class IBD_PSC(BackdoorDefense):
                 clean_img = clean_img.cuda()
                 labels = labels.cuda()
 
+                if args.poison_type in ['TaCT', 'SSDT']:
+                    # Tạo mask cho các mẫu có nhãn bằng config.source_class
+                    source_mask = (labels == config.source_class)
+                    clean_source_img = clean_img[source_mask]
+                    clean_source_labels = labels[source_mask]
+
+                    # Tạo mask cho các mẫu có nhãn khác với config.source_class
+                    non_source_mask = (labels != config.source_class)
+                    clean_non_source_img = clean_img[non_source_mask]
+                    clean_non_source_labels = labels[non_source_mask]
+
+                    # Hàm hỗ trợ: chọn ngẫu nhiên 50 samples nếu số mẫu vượt quá 50
+                    def sample_50(images, labels):
+                        if images.shape[0] > 50:
+                            idx = torch.randperm(images.shape[0])[:50]
+                            return images[idx], labels[idx]
+                        else:
+                            return images, labels
+
+                    clean_source_img, clean_source_labels = sample_50(clean_source_img, clean_source_labels)
+                    clean_img, labels = sample_50(clean_non_source_img, clean_non_source_labels)
+
+                    poison_imgs, _ = self.poison_transform.transform(clean_source_img, clean_source_labels)
+
                 # transform to poison
-                poison_imgs, poison_labels = self.poison_transform.transform(clean_img, labels)
+                poison_imgs, _ = self.poison_transform.transform(clean_img, labels)
 
 
                 # Compute predictions for poison and clean
@@ -393,11 +418,6 @@ class IBD_PSC(BackdoorDefense):
             y_score_clean = torch.cat(y_score_clean, dim=0)
             y_score_poison = torch.cat(y_score_poison, dim=0)
 
-        # Now we have y_score_clean and y_score_poison
-        # Both have length = test_count (e.g., 8000 each)
-        # Combine them: total length = 16000
-        # This explains why tp+tn+fp+fn sum to 16000
-
 
         # Construct labels for detection: 0 for clean, 1 for poison
         y_true = torch.cat((torch.zeros_like(y_score_clean), torch.ones_like(y_score_poison)))
@@ -416,63 +436,12 @@ class IBD_PSC(BackdoorDefense):
         print("FPR: {:.2f}".format(fp / (tn + fp) * 100))
         print("AUC: {:.4f}".format(auc))
         print(f"f1 score: {myf1:.4f}")
+        print(f'TN: {tn}')
+        print(f'FP: {fp}')
+        print(f'FN: {fn}')
+        print(f'TP: {tp}')
 
-        if inspect_correct_predition_only:
-            print(f'inspect_correct_predition_only: {inspect_correct_predition_only}')
-            # Only consider correct-clean and successfully attacked-poison samples
-            clean_pred_correct_mask = []
-            poison_source_mask = []
-            poison_attack_success_mask = []
 
-            # This loop checks conditions again
-            for batch_idx, batch in enumerate(tqdm(self.test_loader)):
-                data = batch[0]
-                label = batch[1]
-                data, label = data.cuda(), label.cuda()
-
-                clean_output = self.model(data)
-                clean_pred = clean_output.argmax(dim=1)
-                mask = torch.eq(clean_pred, label)
-                clean_pred_correct_mask.append(mask)
-
-                poison_data, poison_target = self.poison_transform.transform(data, label)
-
-                if args.poison_type == 'TaCT':
-                    mask1 = torch.eq(label, config.source_class)
-                else:
-                    # remove backdoor data whose original class == target class
-                    mask1 = torch.not_equal(label, poison_target)
-                poison_source_mask.append(mask1.clone())
-
-                poison_output = self.model(poison_data)
-                poison_pred = poison_output.argmax(dim=1)
-
-                mask2 = torch.logical_and(torch.eq(poison_pred, poison_target), mask1)
-                poison_attack_success_mask.append(mask2)
-
-            clean_pred_correct_mask = torch.cat(clean_pred_correct_mask, dim=0)
-            poison_source_mask = torch.cat(poison_source_mask, dim=0)
-            poison_attack_success_mask = torch.cat(poison_attack_success_mask, dim=0)
-            if args.poison_type == 'TaCT':
-                clean_pred_correct_mask[torch.sum(poison_attack_success_mask).item():] = False
-
-            mask = torch.cat((clean_pred_correct_mask, poison_attack_success_mask), dim=0)
-            mask = mask.cpu()  # Đảm bảo mask ở CPU
-            y_true = y_true[mask]
-            y_pred = y_pred[mask]
-            y_score = y_score[mask]
-
-            print('==========================partial testset results=========================')
-            fpr, tpr, thresholds = metrics.roc_curve(y_true, y_score)
-            auc = metrics.auc(fpr, tpr)
-            tn, fp, fn, tp = metrics.confusion_matrix(y_true, y_pred).ravel()
-            myf1 = metrics.f1_score(y_true, y_pred)
-            print("[DEBUG] Partial set Confusion Matrix:")
-            print(f"TN={tn}, FP={fp}, FN={fn}, TP={tp}")
-            print("TPR: {:.2f}".format(tp / (tp + fn) * 100))
-            print("FPR: {:.2f}".format(fp / (tn + fp) * 100))
-            print("AUC: {:.4f}".format(auc))
-            print(f"f1 score: {myf1:.4f}")
 
     def _detect(self, inputs):
         # Detect function to classify given inputs as malicious or not
