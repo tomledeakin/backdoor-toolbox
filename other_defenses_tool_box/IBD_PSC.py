@@ -1,6 +1,3 @@
-# This is the test code of IBD-PSC defense.
-# IBD-PSC: Input-level Backdoor Detection via Parameter-oriented Scaling Consistency [ICML, 2024] (https://arxiv.org/abs/2405.09786)
-
 import os
 import pdb
 import torch
@@ -16,23 +13,21 @@ from collections import Counter
 import torch.nn as nn
 import numpy as np
 import random
+import torch.utils.data as data
+from sklearn.model_selection import train_test_split
+
 from other_defenses_tool_box.backdoor_defense import BackdoorDefense
 from other_defenses_tool_box.tools import generate_dataloader
 from utils.supervisor import get_transforms
 from utils import supervisor, tools
-import torch.utils.data as data
 from defense_dataloader import get_dataset, get_dataloader
-from sklearn.model_selection import train_test_split
+
 # ------------------------------
 # Seed settings for reproducibility
 # ------------------------------
-# Set seed for Python
 random.seed(42)
-# Set seed for NumPy
 np.random.seed(42)
-# Set seed for PyTorch
 torch.manual_seed(42)
-# Optionally set the CUDA seed if a GPU is used
 if torch.cuda.is_available():
     torch.cuda.manual_seed(42)
     torch.cuda.manual_seed_all(42)
@@ -78,6 +73,7 @@ class IBD_PSC(BackdoorDefense):
             os.makedirs('debug_data')
 
         #############################################
+        # 1) Tạo testset ban đầu
         if self.poison_type == 'SSDT':
             self.test_loader = get_dataloader(args, train=False)
             self.testset = get_dataset(args, train=False)
@@ -96,22 +92,20 @@ class IBD_PSC(BackdoorDefense):
 
         print(f"Number of samples in full test set: {len(self.testset)}")
 
-        # 4) Split the full test set into 10% (defense/validation) and 90% (final test)
+        # 2) Chia full test set: 90% (valsubset) và 10% (testset)
         all_indices = np.arange(len(self.testset))
         defense_indices, test_indices = train_test_split(all_indices, test_size=0.1, random_state=42)
 
-        # Create subsets for defense and test sets
         self.valsubset = data.Subset(self.testset, defense_indices)
-        self.testset = data.Subset(self.testset, test_indices)
+        self.testset   = data.Subset(self.testset, test_indices)
 
-        # Create DataLoaders for defense and test sets
         self.val_loader = data.DataLoader(self.valsubset, batch_size=50, shuffle=True, num_workers=0)
-        self.test_loader = data.DataLoader(self.testset, batch_size=50, shuffle=False, num_workers=0)
+        self.test_loader= data.DataLoader(self.testset,  batch_size=50, shuffle=False,num_workers=0)
 
         print(f"Number of samples in defense set (90% of test): {len(self.valsubset)}")
         print(f"Number of samples in final test set (10% of test): {len(self.testset)}")
 
-        # 5) Determine unique classes by scanning the defense set
+        # 3) Tạo val_loader ~ "defense set"
         all_labels = []
         for _, labels in self.val_loader:
             all_labels.extend(labels.tolist())
@@ -120,9 +114,8 @@ class IBD_PSC(BackdoorDefense):
         print(f"Number of unique classes (from defense set): {num_classes}")
         print(f"Expected number of classes from args: {self.num_classes}")
 
-        # 8) Create defense subset from the defense set using only correctly predicted samples
-        # Use the defense_subset (10% of test) instead of the training set
-        defense_set = self.valsubset  # Alias for clarity
+        # 4) Tạo valsubset chỉ gồm các mẫu mô hình dự đoán đúng
+        defense_set = self.valsubset
         if isinstance(defense_set, data.Subset):
             underlying_dataset = defense_set.dataset
             subset_indices = defense_set.indices
@@ -139,33 +132,29 @@ class IBD_PSC(BackdoorDefense):
             except FileNotFoundError:
                 print(f"Warning: File {idx}.png does not exist.")
 
-        # Dictionary to store correctly predicted indices per class
         correct_indices_per_class = defaultdict(list)
-        # Create a DataLoader for the defense set without shuffling to maintain index order
-        defense_loader_no_shuffle = data.DataLoader(defense_set, batch_size=50, num_workers=0, shuffle=False)
+        defense_loader_no_shuffle = data.DataLoader(defense_set, batch_size=50, shuffle=False, num_workers=0)
         current_idx = 0
 
-        # Evaluate the defense set to collect correctly predicted samples
+        # Xác định các mẫu được mô hình dự đoán đúng (trên defense set)
         with torch.no_grad():
-            for inputs, labels in tqdm(defense_loader_no_shuffle,
-                                       desc="Evaluating defense set for correct predictions"):
+            for inputs, labels in tqdm(defense_loader_no_shuffle, desc="Evaluating defense set for correct predictions"):
                 inputs, labels = inputs.to(self.device), labels.to(self.device)
                 outputs = self.model(inputs)
                 preds = torch.argmax(outputs, dim=1)
                 correct_mask = preds == labels
 
-                # Loop over batch and record correct sample indices
                 for i in range(len(labels)):
                     if correct_mask[i].item():
                         if isinstance(defense_set, data.Subset):
                             sample_idx = subset_indices[current_idx]
                         else:
                             sample_idx = current_idx
-                        label = labels[i].item()
-                        correct_indices_per_class[label].append(sample_idx)
+                        label_val = labels[i].item()
+                        correct_indices_per_class[label_val].append(sample_idx)
                     current_idx += 1
 
-        # For each class, sample SAMPLES_PER_CLASS correctly predicted samples
+        # Mỗi lớp: chọn SAMPLES_PER_CLASS mẫu (nếu thiếu thì replace=True)
         defense_indices_final = []
         for label in unique_classes:
             correct_indices = correct_indices_per_class[label]
@@ -177,124 +166,72 @@ class IBD_PSC(BackdoorDefense):
                 print(f"Warning: Not enough correctly predicted samples for class {label}. Sampling with replacement.")
             defense_indices_final.extend(sampled)
 
-        # Create a new defense subset using the sampled indices and update the defense_loader
         final_defense_subset = data.Subset(underlying_dataset, defense_indices_final)
         self.val_loader = data.DataLoader(final_defense_subset, batch_size=50, shuffle=True, num_workers=0)
-        #############################################
-        # Generate dataloaders
-        # self.test_loader = generate_dataloader(dataset=self.dataset,
-        #                                        dataset_path=config.data_dir,
-        #                                        batch_size=200,
-        #                                        split='test',
-        #                                        data_transform=self.data_transform,
-        #                                        shuffle=False,
-        #                                        drop_last=False,
-        #                                        noisy_test=False
-        #                                        )
-        #
-        # self.val_loader = generate_dataloader(dataset=self.dataset,
-        #                                       dataset_path=config.data_dir,
-        #                                       batch_size=200,
-        #                                       split='val',
-        #                                       data_transform=self.data_transform,
-        #                                       shuffle=True,
-        #                                       drop_last=False,
-        #                                       noisy_test=False
-        #                                       )
 
-        # Print dataset sizes for debugging
+        # 5) Nếu là TaCT/SSDT → rút gọn testset còn đúng 100 mẫu (50 source + 50 clean)
+        if self.poison_type in ['TaCT','SSDT']:
+            self.testset = self.create_fixed_test_subset(self.testset, config.source_class, n_source=50, n_clean=50)
+            # Tạo lại DataLoader
+            self.test_loader = data.DataLoader(self.testset, batch_size=100, shuffle=False, num_workers=0)
+            print(f"[INFO] TaCT/SSDT: using EXACT 100 test samples (50 source + 50 non-source).")
+        #############################################
+
+        # In thông tin
         print("[DEBUG] Dataset and Loader Information:")
         print(f"Dataset: {self.dataset}")
         val_count = sum([batch[0].shape[0] for batch in self.val_loader])
         test_count = sum([batch[0].shape[0] for batch in self.test_loader])
         print(f"Validation set size: {val_count}")
         print(f"Test set size: {test_count}")
-        # Note: The paper might have trained the model somewhere else, we focus on detection here.
 
         layer_num = self.count_BN_layers()
         print(f"[DEBUG] Number of BN layers: {layer_num}")
         sorted_indices = list(range(layer_num))
-        sorted_indices = list(reversed(sorted_indices))
+        sorted_indices.reverse()
         self.sorted_indices = sorted_indices
         self.start_index = self.prob_start(self.scale, self.sorted_indices)
         print(f"[DEBUG] Start index determined by prob_start: {self.start_index}")
 
-        # total_num = 0
-        # clean_correct = 0
-        # bd_correct = 0
-        # bd_all = 0
-        # bd_predicts = []
-        # clean_predicts = []
+    def create_fixed_test_subset(self, dataset, source_label, n_source=50, n_clean=50):
+        """
+        Từ dataset đầu vào, lấy đúng n_source mẫu có nhãn == source_label
+        và n_clean mẫu có nhãn != source_label, ghép thành 1 subset (tối đa n_source+n_clean).
+        """
+        source_indices = []
+        non_source_indices = []
 
-        # Process test dataset to understand baseline performance
-        # for idx, batch in enumerate(self.test_loader):
-        #     clean_img = batch[0]
-        #     labels = batch[1]
-        #
-        #     total_num += labels.shape[0]
-        #     clean_img = clean_img.cuda()
-        #     labels = labels.cuda()
-        #
-        #     target_flag = labels != 0
-        #     poison_imgs, poison_labels = self.poison_transform.transform(clean_img[target_flag], labels[target_flag])
-        #
-        #     bd_logits = self.model(poison_imgs)
-        #     clean_logits = self.model(clean_img)
-        #
-        #     clean_pred = torch.argmax(clean_logits, dim=1)
-        #     poison_pred = torch.argmax(bd_logits, dim=1)
-        #
-        #     clean_predicts.extend(clean_pred.cpu().tolist())
-        #     bd_predicts.extend(poison_pred.cpu().tolist())
-        #
-        #     # Depending on poison_type, determine correct counting method
-        #     if self.args.poison_type == 'TaCT':
-        #         mask = torch.eq(labels[target_flag], config.source_class)
-        #         plabels = poison_labels[mask.clone()]
-        #         ppred = poison_pred[mask.clone()]
-        #         bd_correct += torch.sum(plabels == ppred)
-        #         bd_all += plabels.size(0)
-        #     else:
-        #         bd_correct += torch.sum(poison_labels == poison_pred)
-        #         bd_all += poison_labels.shape[0]
-        #
-        #     clean_correct += torch.sum(labels == clean_pred)
-        #
-        # print(f'ba: {clean_correct * 100. / total_num}')  # Benign accuracy
-        # print(f'asr: {bd_correct * 100. / bd_all}')       # Attack success rate
-        # print(f'target label: {poison_labels[0:1]}')
-        # Here we only processed the dataset once in baseline manner.
+        # Quét toàn bộ dataset, lưu chỉ số index
+        for i in range(len(dataset)):
+            img, lbl = dataset[i]
+            # Kiểm tra nhãn
+            if lbl == source_label:
+                source_indices.append(i)
+            else:
+                non_source_indices.append(i)
 
-    def create_bd(self, inputs):
-        """
-        Tạo backdoor inputs
-        """
-        patterns = self.netG(inputs)
-        patterns = self.netG.normalize_pattern(patterns)
-        masks_output = self.netM.threshold(self.netM(inputs))
-        bd_inputs = inputs + (patterns - inputs) * masks_output
-        return bd_inputs
+        # Nếu có quá nhiều thì cắt bớt, nếu ít hơn 50 thì dùng tất cả
+        random.shuffle(source_indices)
+        random.shuffle(non_source_indices)
+        source_indices = source_indices[:n_source]
+        non_source_indices = non_source_indices[:n_clean]
 
-    def create_targets(self, targets, label):
-        """
-        Assign a new label to targets (e.g., Poison=101, Clean=102).
-        """
-        new_targets = torch.ones_like(targets) * label
-        return new_targets.to(self.device)
+        final_indices = source_indices + non_source_indices
+        # Tạo subset mới
+        new_subset = data.Subset(dataset, final_indices)
+        return new_subset
 
     def count_BN_layers(self):
-        # Count how many BatchNorm2d layers in the model
         layer_num = 0
-        for (name1, module1) in self.model.named_modules():
+        for (_, module1) in self.model.named_modules():
             if isinstance(module1, torch.nn.BatchNorm2d):
                 layer_num += 1
         return layer_num
 
     def scale_var_index(self, index_bn, scale=1.5):
-        # Create a copy of the model and scale the BN layers specified by index_bn
         copy_model = copy.deepcopy(self.model)
         index = -1
-        for (name1, module1) in copy_model.named_modules():
+        for (_, module1) in copy_model.named_modules():
             if isinstance(module1, torch.nn.BatchNorm2d):
                 index += 1
                 if index in index_bn:
@@ -303,7 +240,7 @@ class IBD_PSC(BackdoorDefense):
         return copy_model
 
     def prob_start(self, scale, sorted_indices):
-        # Determine start_index based on the error rate xi
+        # Xác định start_index dựa vào error rate self.xi trên val_loader
         layer_num = len(sorted_indices)
         for layer_index in range(1, layer_num):
             layers = sorted_indices[:layer_index]
@@ -314,133 +251,116 @@ class IBD_PSC(BackdoorDefense):
             total_num = 0
             clean_wrong = 0
             with torch.no_grad():
-                for idx, batch in enumerate(self.val_loader):
-                    clean_img = batch[0]
-                    labels = batch[1]
+                for _, batch in enumerate(self.val_loader):
+                    clean_img, labels = batch
                     clean_img = clean_img.cuda()
-                    clean_logits = smodel(clean_img).detach().cpu()
-                    clean_pred = torch.argmax(clean_logits, dim=1)
-                    clean_wrong += torch.sum(labels != clean_pred)
+                    logits = smodel(clean_img).detach().cpu()
+                    pred = torch.argmax(logits, dim=1)
+                    clean_wrong += torch.sum(labels != pred)
                     total_num += labels.shape[0]
 
-                wrong_acc = clean_wrong / total_num
-                if wrong_acc > self.xi:
-                    return layer_index
+            wrong_acc = clean_wrong / total_num
+            if wrong_acc > self.xi:
+                return layer_index
 
-        # If no break condition met, return full length
         return layer_num
-
 
     def test(self):
         args = self.args
-        print(f'start_index: {self.start_index}')
+        print(f"start_index: {self.start_index}")
 
-        total_num = 0
         y_score_clean = []
         y_score_poison = []
 
-        # We will store how many samples we processed
+        # Lấy tổng số mẫu (sẽ là 100 nếu TaCT/SSDT)
         test_count = sum([batch[0].shape[0] for batch in self.test_loader])
+        print(f"[TEST] total test samples = {test_count}")
 
         with torch.no_grad():
-            for idx, batch in enumerate(self.test_loader):
-                clean_img = batch[0]
-                labels = batch[1]
-                total_num += labels.shape[0]
+            for _, batch in enumerate(self.test_loader):
+                clean_img, labels = batch
                 clean_img = clean_img.cuda()
                 labels = labels.cuda()
 
-                if args.poison_type in ['TaCT', 'SSDT']:
-                    # Tạo mask cho các mẫu có nhãn bằng config.source_class
-                    source_mask = (labels == config.source_class)
-                    clean_source_img = clean_img[source_mask]
-                    clean_source_labels = labels[source_mask]
+                # Tạo poisoned samples: *chỉ* gắn trigger cho những mẫu có nhãn == config.source_class
+                # => mask
+                source_mask = (labels == config.source_class)
+                poison_img = clean_img[source_mask]
+                poison_labels = labels[source_mask]
 
-                    # Tạo mask cho các mẫu có nhãn khác với config.source_class
-                    non_source_mask = (labels != config.source_class)
-                    clean_non_source_img = clean_img[non_source_mask]
-                    clean_non_source_labels = labels[non_source_mask]
-
-                    # Hàm hỗ trợ: chọn ngẫu nhiên 50 samples nếu số mẫu vượt quá 50
-                    def sample_50(images, labels):
-                        if images.shape[0] > 50:
-                            idx = torch.randperm(images.shape[0])[:50]
-                            return images[idx], labels[idx]
-                        else:
-                            return images, labels
-
-                    clean_source_img, clean_source_labels = sample_50(clean_source_img, clean_source_labels)
-                    clean_img, labels = sample_50(clean_non_source_img, clean_non_source_labels)
-
-                    poison_imgs, _ = self.poison_transform.transform(clean_source_img, clean_source_labels)
-
-                # transform to poison
+                # Thực hiện poison_transform
+                if len(poison_img) > 0:
+                    poison_img, _ = self.poison_transform.transform(poison_img, poison_labels)
                 else:
-                    poison_imgs, _ = self.poison_transform.transform(clean_img, labels)
+                    # Nếu batch này không có sample nào là source_class
+                    poison_img = torch.empty(0, *clean_img.shape[1:], device=clean_img.device)
 
+                # Dự đoán label ban đầu
+                poison_pred = torch.argmax(self.model(poison_img), dim=1) if poison_img.shape[0]>0 else []
+                clean_pred  = torch.argmax(self.model(clean_img), dim=1)
 
-                # Compute predictions for poison and clean
-                poison_pred = torch.argmax(self.model(poison_imgs), dim=1)
-                clean_pred = torch.argmax(self.model(clean_img), dim=1)
-
-                # spc_poison = torch.zeros(labels.shape)
-                spc_poison = torch.zeros(poison_imgs.shape[0])
-                spc_clean = torch.zeros(labels.shape)
+                # Chuẩn bị tensor PSC
+                spc_poison = torch.zeros(poison_img.shape[0])
+                spc_clean  = torch.zeros(clean_img.shape[0])
                 scale_count = 0
 
-                # Scale up layers from start_index to start_index + n
+                # Lặp qua các layer BN
                 for layer_index in range(self.start_index, self.start_index + self.n):
                     layers = self.sorted_indices[:layer_index + 1]
                     smodel = self.scale_var_index(layers, scale=self.scale)
-                    scale_count += 1
                     smodel.eval()
+                    smodel.cuda()
+                    scale_count += 1
 
-                    # For clean samples
+                    # Clean
                     logits_clean = smodel(clean_img).detach().cpu()
-                    logits_clean = torch.nn.functional.softmax(logits_clean, dim=1)
-                    device = logits_clean.device
-                    clean_pred = clean_pred.to(device)
-                    spc_clean += logits_clean[torch.arange(logits_clean.size(0), device=device), clean_pred]
+                    logits_clean = F.softmax(logits_clean, dim=1)
+                    device_clean = logits_clean.device
+                    clean_pred   = clean_pred.to(device_clean)
+                    spc_clean   += logits_clean[torch.arange(logits_clean.size(0)), clean_pred]
 
-                    # For poison samples
-                    logits_poison = smodel(poison_imgs).detach().cpu()
-                    logits_poison = torch.nn.functional.softmax(logits_poison, dim=1)
-                    poison_pred = poison_pred.to(device)
-                    spc_poison += logits_poison[torch.arange(logits_poison.size(0), device=device), poison_pred]
+                    # Poison
+                    if poison_img.shape[0] > 0:
+                        logits_poison = smodel(poison_img).detach().cpu()
+                        logits_poison = F.softmax(logits_poison, dim=1)
+                        device_poison = logits_poison.device
+                        poison_pred   = poison_pred.to(device_poison)
+                        spc_poison   += logits_poison[torch.arange(logits_poison.size(0)), poison_pred]
 
-                spc_poison /= scale_count
-                spc_clean /= scale_count
+                spc_clean  /= scale_count
+                if spc_poison.shape[0] > 0:
+                    spc_poison /= scale_count
 
-                # Append scores
+                # Gom clean & poison score
                 y_score_clean.append(spc_clean)
                 y_score_poison.append(spc_poison)
 
-            y_score_clean = torch.cat(y_score_clean, dim=0)
-            y_score_poison = torch.cat(y_score_poison, dim=0)
+        # Nối tất cả scores
+        y_score_clean = torch.cat(y_score_clean, dim=0)  # tổng clean
+        y_score_poison= torch.cat(y_score_poison,dim=0)  # tổng poison
 
-
-        # Construct labels for detection: 0 for clean, 1 for poison
+        # Xây dựng y_true: 0 cho clean, 1 cho poison
         y_true = torch.cat((torch.zeros_like(y_score_clean), torch.ones_like(y_score_poison)))
+        # Và y_score
         y_score = torch.cat((y_score_clean, y_score_poison), dim=0)
+
+        # Phán đoán
         y_pred = (y_score >= self.T)
 
-        # Compute metrics
+        # Tính các chỉ số
         fpr, tpr, thresholds = metrics.roc_curve(y_true, y_score)
         auc = metrics.auc(fpr, tpr)
         tn, fp, fn, tp = metrics.confusion_matrix(y_true, y_pred).ravel()
-
-        # Print confusion matrix details
-
         myf1 = metrics.f1_score(y_true, y_pred)
+
         print("TPR: {:.2f}".format(tp / (tp + fn) * 100))
         print("FPR: {:.2f}".format(fp / (tn + fp) * 100))
         print("AUC: {:.4f}".format(auc))
         print(f"f1 score: {myf1:.4f}")
-        print(f'TN: {tn}')
-        print(f'FP: {fp}')
-        print(f'FN: {fn}')
-        print(f'TP: {tp}')
-
+        print(f"TN: {tn}")
+        print(f"FP: {fp}")
+        print(f"FN: {fn}")
+        print(f"TP: {tp}")
 
 
     def _detect(self, inputs):
