@@ -231,9 +231,6 @@ class IBD_PSC(BackdoorDefense):
             clean_img = batch[0]
             labels = batch[1]
 
-            # Print batch shape info for debugging
-            print(f"[DEBUG] Batch {idx}: clean_img shape={clean_img.shape}, labels shape={labels.shape}")
-
             total_num += labels.shape[0]
             clean_img = clean_img.cuda()
             labels = labels.cuda()
