@@ -383,7 +383,8 @@ class IBD_PSC(BackdoorDefense):
                 poison_pred = torch.argmax(self.model(poison_imgs), dim=1)
                 clean_pred = torch.argmax(self.model(clean_img), dim=1)
 
-                spc_poison = torch.zeros(labels.shape)
+                # spc_poison = torch.zeros(labels.shape)
+                spc_poison = torch.zeros(poison_imgs.shape[0])
                 spc_clean = torch.zeros(labels.shape)
                 scale_count = 0
 
