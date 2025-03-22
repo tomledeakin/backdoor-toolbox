@@ -31,6 +31,7 @@ from other_defenses_tool_box.tools import generate_dataloader
 from other_defenses_tool_box.backdoor_defense import BackdoorDefense
 from networks.models import Generator, NetC_MNIST
 from defense_dataloader import get_dataset, get_dataloader
+import seaborn as sns
 import math
 
 # ------------------------------
@@ -83,62 +84,6 @@ class TEDPLUS(BackdoorDefense):
             self.testset = self.test_loader.dataset
 
         print(f"Number of samples in full test set: {len(self.testset)}")
-        self.SELECTED_CLASSES = 40
-
-        ########################################################################
-        # BỔ SUNG: CHỈ LỰA CHỌN NGẪU NHIÊN 30 CLASSES (BAO GỒM TARGET CLASS)
-        # và chỉ giữ lại những samples có prediction nằm trong các selected labels.
-        ########################################################################
-        if self.dataset == 'tinyimagenet200':
-            # 1. Lấy danh sách các ground truth labels từ testset
-            all_test_labels = []
-            for i in range(len(self.testset)):
-                _, lb = self.testset[i]
-                all_test_labels.append(lb)
-
-            unique_test_labels = list(set(all_test_labels))
-            print(f"[INFO] Tổng số lớp ban đầu trong testset: {len(unique_test_labels)}")
-
-            if len(unique_test_labels) > 50:
-                # Kiểm tra target_class có nằm trong testset không
-                if self.target_class not in unique_test_labels:
-                    print(f"[WARNING] Target class {self.target_class} không có trong tập test!")
-                else:
-                    print(f"[INFO] Target class {self.target_class} có trong test set.")
-
-                # Chọn 29 lớp ngẫu nhiên khác với target_class
-                temp_labels = [lbl for lbl in unique_test_labels if lbl != self.target_class]
-                selected_classes = random.sample(temp_labels, self.SELECTED_CLASSES - 1)  # Lấy 29 lớp khác target_class
-                selected_classes.append(self.target_class)  # Thêm target_class vào danh sách
-                print(f"[INFO] Lựa chọn ngẫu nhiên 30 classes (bao gồm target class): {selected_classes}")
-
-                # Lọc dựa trên ground truth: giữ lại các sample có label thuộc selected_classes
-                filtered_indices = [i for i, lab in enumerate(all_test_labels) if lab in selected_classes]
-                self.testset = data.Subset(self.testset, filtered_indices)
-                print(f"[INFO] Sau khi lọc theo ground truth, testset còn {len(self.testset)} samples.")
-
-                # 2. Lọc thêm dựa trên dự đoán của model: chỉ giữ lại các sample có prediction thuộc selected_classes
-                # Lấy underlying dataset và các chỉ mục hiện có từ testset (là Subset)
-                if hasattr(self.testset, 'indices'):
-                    underlying_dataset = self.testset.dataset
-                    current_indices = self.testset.indices
-                else:
-                    underlying_dataset = self.testset
-                    current_indices = list(range(len(self.testset)))
-
-                self.model.eval()
-                filtered_pred_indices = []
-                with torch.no_grad():
-                    for i in current_indices:
-                        sample = underlying_dataset[i]  # (image, label)
-                        image = sample[0].unsqueeze(0).to(self.device)  # shape: (1, C, H, W)
-                        output = self.model(image)
-                        pred_label = torch.argmax(output, dim=1).item()
-                        if pred_label in selected_classes:
-                            filtered_pred_indices.append(i)
-                self.testset = data.Subset(underlying_dataset, filtered_pred_indices)
-                print(f"[INFO] Sau khi lọc theo prediction, testset còn {len(self.testset)} samples.")
-        ########################################################################
 
         # 4) Split the full test set into 10% (defense/validation) and 90% (final test)
         all_indices = np.arange(len(self.testset))
@@ -166,14 +111,9 @@ class TEDPLUS(BackdoorDefense):
 
         # 6) Set defense training parameters
         self.SAMPLES_PER_CLASS = args.validation_per_class
-        if self.dataset == "tinyimagenet200":
-            self.DEFENSE_TRAIN_SIZE = self.SELECTED_CLASSES * self.SAMPLES_PER_CLASS
-        else:
-            self.DEFENSE_TRAIN_SIZE = self.num_classes * self.SAMPLES_PER_CLASS
+        self.DEFENSE_TRAIN_SIZE = self.num_classes * self.SAMPLES_PER_CLASS
 
         # 7) Define number of neighbors and samples for constructing poison/clean sets
-        # self.NUM_NEIGHBORS = args.num_neighbors
-        self.NUM_NEIGHBORS = math.ceil(self.SAMPLES_PER_CLASS / 2)
         self.NUM_SAMPLES = args.num_test_samples
 
         # 8) Create defense subset from the defense set using only correctly predicted samples
@@ -278,7 +218,6 @@ class TEDPLUS(BackdoorDefense):
         self.hook_handles = []
         self.activations = {}
         self.register_hooks()
-        self.nnb_distance_dictionary = {}
 
         # 12) Additional intermediate variables and directory for saving visualizations
         self.Test_C = self.num_classes + 2
@@ -286,7 +225,6 @@ class TEDPLUS(BackdoorDefense):
         self.candidate_ = {}
         self.save_dir = f"TED/{self.dataset}/{self.poison_type}"
         os.makedirs(self.save_dir, exist_ok=True)
-
 
     # ==============================
     #     HELPER FUNCTIONS
@@ -561,12 +499,12 @@ class TEDPLUS(BackdoorDefense):
 
         # Create poison_loader
         poison_set = CustomDataset(bd_inputs_set, bd_labels_set)
-        self.poison_loader = data.DataLoader(poison_set, batch_size=50, num_workers=2, shuffle=True)
+        self.poison_loader = data.DataLoader(poison_set, batch_size=50, num_workers=0, shuffle=True)
         print("Poison set size:", len(self.poison_loader))
 
         # Create clean_loader
         clean_set = CustomDataset(clean_inputs_set, clean_labels_set)
-        self.clean_loader = data.DataLoader(clean_set, batch_size=50, num_workers=2, shuffle=True)
+        self.clean_loader = data.DataLoader(clean_set, batch_size=50, num_workers=0, shuffle=True)
         print("Clean set size:", len(self.clean_loader))
 
         # Remove temporary variables
@@ -583,7 +521,7 @@ class TEDPLUS(BackdoorDefense):
         all_h_label, pred_set = [], []
         activation_container = {}
 
-        if self.dataset == 'imagenet200':
+        if self.dataset == 'tinyimagenet200':
             # Dùng phiên bản uncomment (sử dụng torch.no_grad)
             with torch.no_grad():
                 # Khởi tạo hook bằng 1 batch
@@ -727,38 +665,43 @@ class TEDPLUS(BackdoorDefense):
         Thay vì lưu 'ranking' (thứ hạng sample cùng class trong danh sách khoảng cách),
         ta lưu 'khoảng cách' đến sample cùng class đầu tiên trong danh sách đó.
         """
+
+        processing_label_indices = torch.where(final_prediction == processing_label)[0]
+        processing_label_h_defense_activation = h_defense_activation[processing_label_indices]
+
         if layer not in layer_test_region_individual:
             layer_test_region_individual[layer] = {}
         layer_test_region_individual[layer][processing_label] = []
 
         self.candidate_[layer] = self.gather_activation_into_class(final_prediction, h_defense_activation)
 
-        if layer not in self.nnb_distance_dictionary:
-            self.nnb_distance_dictionary[layer] = {}
 
         if np.ndim(self.candidate_[layer][processing_label]) == 0:
             print("No sample in this class for label =", processing_label)
         else:
             for index, item in enumerate(self.candidate_[layer][processing_label]):
-                meadian_nnb_distance, _ = self.average_nearest_neighbor_distance(
-                    self.candidate_[layer][processing_label])
-
-                self.nnb_distance_dictionary[layer][processing_label] = meadian_nnb_distance
 
                 sorted_dis, sorted_indices = self.get_dis_sort(item, h_defense_activation)
-                count = 0
-                result_array = np.array([])
+
                 for i, idx in enumerate(sorted_indices[1:], start=1):
                     if final_prediction[idx] == processing_label:
-                        if count == 0:
+                        """
+                        make a for loop here to compute the distances of "the 
+                        nearest neighbor of the input" to its nearest neighbors 
+                        it self in the validation dataset.
+                        """
+                        mask = ~torch.all(processing_label_h_defense_activation == h_defense_activation[idx], dim=1)
+                        sorted_dis_validation, sorted_indices_validation = self.get_dis_sort(h_defense_activation[idx], processing_label_h_defense_activation[mask])
+                        threshold = torch.max(sorted_dis_validation[:math.ceil(self.SAMPLES_PER_CLASS / 2)])
+                        distance_value = sorted_dis[i].item()
+
+                        if distance_value > threshold:
+                            distance_value_index = self.DEFENSE_TRAIN_SIZE - 1
+                        else:
                             distance_value_index = i - 1
-                            result_array = np.append(result_array, distance_value_index)
-                        distance_value = sorted_dis[i].item() / meadian_nnb_distance
-                        result_array = np.append(result_array, distance_value)
-                        count += 1
-                        if count == self.NUM_NEIGHBORS:
-                            layer_test_region_individual[layer][processing_label].append(result_array)
-                            break
+
+                        layer_test_region_individual[layer][processing_label].append(distance_value_index)
+                        break
 
         return layer_test_region_individual
 
@@ -768,6 +711,7 @@ class TEDPLUS(BackdoorDefense):
         """
         Thay vì lưu 'ranking', ta lưu 'khoảng cách' đến sample cùng class trong tập defense.
         """
+
         if layer not in layer_test_region_individual:
             layer_test_region_individual[layer] = {}
         layer_test_region_individual[layer][new_temp_label] = []
@@ -776,62 +720,30 @@ class TEDPLUS(BackdoorDefense):
         labels = torch.unique(new_prediction)
 
         for processing_label in labels:
-            for index, item in enumerate(candidate__[processing_label]):
 
-                meadian_nnb_distance = self.nnb_distance_dictionary[layer][processing_label.item()]
+            processing_label_indices = torch.where(h_defense_prediction == processing_label)[0]
+            processing_label_h_defense_activation = h_defense_activation[processing_label_indices]
+            for index, item in enumerate(candidate__[processing_label]):
 
                 sorted_dis, sorted_indices = self.get_dis_sort(item, h_defense_activation)
                 # Tìm khoảng cách đầu tiên tới sample trong defense có nhãn = processing_label
-                count = 0
-                result_array = np.array([])
+
                 for i, idx in enumerate(sorted_indices):
                     if h_defense_prediction[idx] == processing_label:
-                        if count == 0:
+                        mask = ~torch.all(processing_label_h_defense_activation == h_defense_activation[idx], dim=1)
+                        sorted_dis_validation, sorted_indices_validation = self.get_dis_sort(h_defense_activation[idx], processing_label_h_defense_activation[mask])
+                        threshold = torch.max(sorted_dis_validation[:math.ceil(self.SAMPLES_PER_CLASS / 2)])
+                        distance_value = sorted_dis[i].item()
+
+                        if distance_value > threshold:
+                            distance_value_index = self.DEFENSE_TRAIN_SIZE - 1
+                        else:
                             distance_value_index = i
-                            result_array = np.append(result_array, distance_value_index)
-                        distance_value = sorted_dis[i].item() / meadian_nnb_distance
-                        result_array = np.append(result_array, distance_value)
-                        count += 1
-                    if count == self.NUM_NEIGHBORS:
-                        layer_test_region_individual[layer][new_temp_label].append(result_array)
+
+                        layer_test_region_individual[layer][new_temp_label].append(distance_value_index)
                         break
 
         return layer_test_region_individual
-
-    def average_nearest_neighbor_distance(self, points):
-        """
-        Tính khoảng cách trung bình nearest neighbor và trả về thứ tự các điểm đã duyệt (path).
-        """
-        points = points if isinstance(points, torch.Tensor) else torch.tensor(points)  # Đảm bảo đầu vào là torch.Tensor
-        n = points.size(0)  # Số lượng điểm (số hàng)
-        if n < 2:
-            return 0, []  # Không thể tính toán nếu có ít hơn 2 điểm
-
-        distances = []  # Danh sách lưu các khoảng cách nearest neighbor
-        visited = set()  # Tập hợp các điểm đã được chọn
-        path = []  # Lưu thứ tự các điểm đã duyệt
-        current_index = 0  # Điểm bắt đầu (chọn ngẫu nhiên hoặc mặc định)
-        visited.add(current_index)  # Đánh dấu điểm bắt đầu
-        path.append(current_index)  # Thêm điểm bắt đầu vào path
-
-        while len(visited) < n:  # Lặp cho đến khi tất cả các điểm được chọn
-            current_point = points[current_index]  # Điểm hiện tại
-            remaining_indices = [i for i in range(n) if i not in visited]  # Chỉ số các điểm chưa chọn
-            remaining_points = points[remaining_indices]  # Các điểm chưa chọn
-
-            # Tính khoảng cách từ current_point đến các điểm còn lại
-            dists = torch.norm(remaining_points - current_point, dim=1)
-            nearest_neighbor_index = remaining_indices[torch.argmin(dists).item()]  # Chỉ số của nearest neighbor
-
-            # Thêm khoảng cách nhỏ nhất vào danh sách
-            distances.append(dists.min().item())
-
-            # Cập nhật current_index và visited
-            current_index = nearest_neighbor_index
-            visited.add(current_index)
-            path.append(current_index)
-
-        return np.median(distances), path
 
     def test(self):
         """
@@ -874,6 +786,40 @@ class TEDPLUS(BackdoorDefense):
             images_to_display.clear()
             predictions_to_display.clear()
 
+        print('DEBUG')
+
+        def print_loader_info(loader, name):
+            print(f"{name} loader info:")
+            print(f"Total samples: {len(loader.dataset)}")
+            for batch in loader:
+                inputs, labels = batch
+                print(f"Batch - Inputs shape: {inputs.shape}, Labels shape: {labels.shape}")
+                print(f"Sample labels: {labels[:5]}")
+                for i in range(3):
+                    img = inputs[i].squeeze().cpu().numpy()
+                    plt.imshow(img.transpose(1, 2, 0) if img.ndim == 3 else img, cmap="gray")
+                    plt.title(f"{name} - Label: {labels[i]}")
+                    plt.axis("off")
+                    sample_path = os.path.join(self.save_dir, f"{name}_sample_{i}.png")
+                    plt.savefig(sample_path, dpi=300)
+                    plt.show()
+                break
+
+        print_loader_info(self.poison_loader, "Poison")
+        print_loader_info(self.clean_loader, "Clean")
+        print_loader_info(self.defense_loader, "Defense")
+
+        try:
+            for images, labels in self.defense_loader:
+                print(f"Images shape: {images.shape}, Labels shape: {labels.shape}")
+                break
+        except Exception as e:
+            print(f"Error loading data from defense_loader: {e}")
+
+        print(f"Using device: {self.device}")
+        print(f"Model is on device: {next(self.model.parameters()).device}")
+
+        print('DEBUG')
         print('STEP 4')
 
         self.h_defense_ori_labels, self.h_defense_activations, self.h_defense_preds = self.fetch_activation(
@@ -882,6 +828,27 @@ class TEDPLUS(BackdoorDefense):
             self.poison_loader)
         self.h_clean_ori_labels, self.h_clean_activations, self.h_clean_preds = self.fetch_activation(
             self.clean_loader)
+
+        print('DEBUG')
+
+        print(f"Poison Original Labels: {self.h_poison_ori_labels.shape}")
+        print(f"Poison Predictions: {self.h_poison_preds.shape}")
+        print(f"Number of Poison Activations Layers: {len(self.h_poison_activations)}")
+        for layer, activation in self.h_poison_activations.items():
+            print(f"Layer: {layer}, Activation Shape: {activation.shape}")
+
+        print(f"Clean Original Labels: {self.h_clean_ori_labels.shape}")
+        print(f"Clean Predictions: {self.h_clean_preds.shape}")
+        print(f"Number of Clean Activations Layers: {len(self.h_clean_activations)}")
+        for layer, activation in self.h_clean_activations.items():
+            print(f"Layer: {layer}, Activation Shape: {activation.shape}")
+
+        print(f"Defense Original Labels: {self.h_defense_ori_labels.shape}")
+        print(f"Defense Predictions: {self.h_defense_preds.shape}")
+        print(f"Number of Defense Activations Layers: {len(self.h_defense_activations)}")
+        for layer, activation in self.h_defense_activations.items():
+            print(f"Layer: {layer}, Activation Shape: {activation.shape}")
+        print('DEBUG')
 
         print('STEP 5')
         accuracy_defense = self.calculate_accuracy(self.h_defense_ori_labels, self.h_defense_preds)
@@ -907,7 +874,7 @@ class TEDPLUS(BackdoorDefense):
                 )
                 topo_rep_array = np.array(self.topological_representation[layer][label])
                 print(f"Topological Representation Label [{label}] & layer [{layer}]: {topo_rep_array}")
-                print(f"Mean: {np.mean(topo_rep_array, axis=0)}\n")
+                print(f"Mean: {np.mean(topo_rep_array)}\n")
 
         for layer_ in self.h_poison_activations:
             self.topological_representation = self.getLayerRegionDistance(
@@ -922,7 +889,7 @@ class TEDPLUS(BackdoorDefense):
             topo_rep_array_poison = np.array(self.topological_representation[layer_][self.POISON_TEMP_LABEL])
             print(
                 f"Topological Representation Label [{self.POISON_TEMP_LABEL}] & layer [{layer_}]: {topo_rep_array_poison}")
-            print(f"Mean: {np.mean(topo_rep_array_poison, axis=0)}\n")
+            print(f"Mean: {np.mean(topo_rep_array_poison)}\n")
 
         for layer_ in self.h_clean_activations:
             self.topological_representation = self.getLayerRegionDistance(
@@ -937,30 +904,21 @@ class TEDPLUS(BackdoorDefense):
             topo_rep_array_clean = np.array(self.topological_representation[layer_][self.CLEAN_TEMP_LABEL])
             print(
                 f"Topological Representation Label [{self.CLEAN_TEMP_LABEL}] - layer [{layer_}]: {topo_rep_array_clean}")
-            print(f"Mean: {np.mean(topo_rep_array_clean, axis=0)}\n")
+            print(f"Mean: {np.mean(topo_rep_array_clean)}\n")
 
         print('STEP 8')
 
         def aggregate_by_all_layers(output_label):
-            """
-            Tổng hợp tất cả các lớp (layers) và xử lý các phần tử trong `numpy array`
-            với số lượng phần tử không cố định.
-            """
             inputs_container = []
             first_key = list(self.topological_representation.keys())[0]
             labels_container = np.repeat(output_label,
                                          len(self.topological_representation[first_key][output_label]))
-
-            num_elements = self.topological_representation[first_key][output_label][self.target].size
-
-            for element_index in range(num_elements):
-                for l in self.topological_representation.keys():
-                    temp = []
-                    for j in range(len(self.topological_representation[l][output_label])):  # Duyệt qua từng sample
-                        if element_index < len(self.topological_representation[l][output_label][j]):
-                            temp.append(self.topological_representation[l][output_label][j][element_index])
-                    if temp:
-                        inputs_container.append(np.array(temp))
+            for l in self.topological_representation.keys():
+                temp = []
+                for j in range(len(self.topological_representation[l][output_label])):
+                    temp.append(self.topological_representation[l][output_label][j])
+                if temp:
+                    inputs_container.append(np.array(temp))
             return np.array(inputs_container).T, np.array(labels_container)
 
         inputs_all_benign = []
@@ -970,9 +928,6 @@ class TEDPLUS(BackdoorDefense):
 
         first_key = list(self.topological_representation.keys())[0]
         class_name = list(self.topological_representation[first_key])
-
-        # print(f'first_key: {first_key}')
-        # print(f'class_name: {class_name}')
 
         for inx in class_name:
             inputs, labels = aggregate_by_all_layers(output_label=inx)
@@ -990,12 +945,6 @@ class TEDPLUS(BackdoorDefense):
         labels_all_unknown = np.concatenate(labels_all_unknown)
 
         print('STEP 9')
-        # ============ ÁP DỤNG SCALING TRƯỚC PCA ============
-        # scaler = StandardScaler()
-        # inputs_all_benign = scaler.fit_transform(inputs_all_benign)
-        # inputs_all_unknown = scaler.transform(inputs_all_unknown)
-
-        # Sau khi scale xong mới đưa vào PCA
         pca_t = sklearn_PCA(n_components=2)
         pca_fit = pca_t.fit(inputs_all_benign)
 
@@ -1009,8 +958,7 @@ class TEDPLUS(BackdoorDefense):
             color_discrete_sequence=px.colors.qualitative.Dark24,
         )
 
-        # PyOD PCA - cũng sẽ hoạt động với dữ liệu đã scale
-        pca = PCA(contamination=0.01, n_components=2)
+        pca = PCA(contamination=0.02, n_components=2)
         pca.fit(inputs_all_benign)
 
         y_train_scores = pca.decision_function(inputs_all_benign)
