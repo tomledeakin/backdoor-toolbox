@@ -412,55 +412,55 @@ class IBD_PSC(BackdoorDefense):
                 y_score_clean = torch.cat(y_score_clean, dim=0)
                 y_score_poison = torch.cat(y_score_poison, dim=0)
         else:
-        with torch.no_grad():
-            for idx, batch in enumerate(self.test_loader):
-                clean_img = batch[0]
-                labels = batch[1]
-                total_num += labels.shape[0]
-                clean_img = clean_img.cuda()
-                labels = labels.cuda()
+            with torch.no_grad():
+                for idx, batch in enumerate(self.test_loader):
+                    clean_img = batch[0]
+                    labels = batch[1]
+                    total_num += labels.shape[0]
+                    clean_img = clean_img.cuda()
+                    labels = labels.cuda()
 
-                poison_imgs, _ = self.poison_transform.transform(clean_img, labels)
+                    poison_imgs, _ = self.poison_transform.transform(clean_img, labels)
 
 
-                # Compute predictions for poison and clean
-                poison_pred = torch.argmax(self.model(poison_imgs), dim=1)
-                clean_pred = torch.argmax(self.model(clean_img), dim=1)
+                    # Compute predictions for poison and clean
+                    poison_pred = torch.argmax(self.model(poison_imgs), dim=1)
+                    clean_pred = torch.argmax(self.model(clean_img), dim=1)
 
-                # spc_poison = torch.zeros(labels.shape)
-                spc_poison = torch.zeros(poison_imgs.shape[0])
-                spc_clean = torch.zeros(labels.shape)
-                scale_count = 0
+                    # spc_poison = torch.zeros(labels.shape)
+                    spc_poison = torch.zeros(poison_imgs.shape[0])
+                    spc_clean = torch.zeros(labels.shape)
+                    scale_count = 0
 
-                # Scale up layers from start_index to start_index + n
-                for layer_index in range(self.start_index, self.start_index + self.n):
-                    layers = self.sorted_indices[:layer_index + 1]
-                    smodel = self.scale_var_index(layers, scale=self.scale)
-                    scale_count += 1
-                    smodel.eval()
+                    # Scale up layers from start_index to start_index + n
+                    for layer_index in range(self.start_index, self.start_index + self.n):
+                        layers = self.sorted_indices[:layer_index + 1]
+                        smodel = self.scale_var_index(layers, scale=self.scale)
+                        scale_count += 1
+                        smodel.eval()
 
-                    # For clean samples
-                    logits_clean = smodel(clean_img).detach().cpu()
-                    logits_clean = torch.nn.functional.softmax(logits_clean, dim=1)
-                    device = logits_clean.device
-                    clean_pred = clean_pred.to(device)
-                    spc_clean += logits_clean[torch.arange(logits_clean.size(0), device=device), clean_pred]
+                        # For clean samples
+                        logits_clean = smodel(clean_img).detach().cpu()
+                        logits_clean = torch.nn.functional.softmax(logits_clean, dim=1)
+                        device = logits_clean.device
+                        clean_pred = clean_pred.to(device)
+                        spc_clean += logits_clean[torch.arange(logits_clean.size(0), device=device), clean_pred]
 
-                    # For poison samples
-                    logits_poison = smodel(poison_imgs).detach().cpu()
-                    logits_poison = torch.nn.functional.softmax(logits_poison, dim=1)
-                    poison_pred = poison_pred.to(device)
-                    spc_poison += logits_poison[torch.arange(logits_poison.size(0), device=device), poison_pred]
+                        # For poison samples
+                        logits_poison = smodel(poison_imgs).detach().cpu()
+                        logits_poison = torch.nn.functional.softmax(logits_poison, dim=1)
+                        poison_pred = poison_pred.to(device)
+                        spc_poison += logits_poison[torch.arange(logits_poison.size(0), device=device), poison_pred]
 
-                spc_poison /= scale_count
-                spc_clean /= scale_count
+                    spc_poison /= scale_count
+                    spc_clean /= scale_count
 
-                # Append scores
-                y_score_clean.append(spc_clean)
-                y_score_poison.append(spc_poison)
+                    # Append scores
+                    y_score_clean.append(spc_clean)
+                    y_score_poison.append(spc_poison)
 
-            y_score_clean = torch.cat(y_score_clean, dim=0)
-            y_score_poison = torch.cat(y_score_poison, dim=0)
+                y_score_clean = torch.cat(y_score_clean, dim=0)
+                y_score_poison = torch.cat(y_score_poison, dim=0)
 
 
         # Construct labels for detection: 0 for clean, 1 for poison
