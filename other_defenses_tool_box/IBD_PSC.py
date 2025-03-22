@@ -339,6 +339,7 @@ class IBD_PSC(BackdoorDefense):
                 preds_bd = torch.argmax(self.model(poison_imgs), dim=1)
                 print(poison_labels)
                 print(preds_bd)
+                print(torch.equal(poison_labels, preds_bd))
                 # Compute predictions for poison and clean
                 poison_pred = torch.argmax(self.model(poison_imgs), dim=1)
                 clean_pred = torch.argmax(self.model(clean_img), dim=1)
