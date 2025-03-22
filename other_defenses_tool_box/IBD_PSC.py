@@ -336,7 +336,9 @@ class IBD_PSC(BackdoorDefense):
 
                 # transform to poison
                 poison_imgs, poison_labels = self.poison_transform.transform(clean_img, labels)
-
+                preds_bd = torch.argmax(self.model(poison_imgs), dim=1)
+                print(poison_labels)
+                print(preds_bd)
                 # Compute predictions for poison and clean
                 poison_pred = torch.argmax(self.model(poison_imgs), dim=1)
                 clean_pred = torch.argmax(self.model(clean_img), dim=1)
@@ -418,9 +420,7 @@ class IBD_PSC(BackdoorDefense):
                 clean_pred_correct_mask.append(mask)
 
                 poison_data, poison_target = self.poison_transform.transform(data, label)
-                preds_bd = torch.argmax(self.model(poison_data), dim=1)
-                print(poison_target)
-                print(preds_bd)
+
                 if args.poison_type == 'TaCT':
                     mask1 = torch.eq(label, config.source_class)
                 else:
