@@ -116,7 +116,7 @@ echo "cifar10 - TaCT | COMPLETE"
 
 echo "cifar10 - SSDT | START"
 # python train_SSDT.py --dataset gtsrb --attack_mode SSDT --n_iters 200
-python other_defense.py -defense=IBD_PSC -dataset=cifar10 -poison_type=SSDT
+# python other_defense.py -defense=IBD_PSC -dataset=cifar10 -poison_type=SSDT
 
 # python other_defense.py -defense=TED -dataset=cifar10 -poison_type=SSDT -validation_per_class=20 -num_test_samples=50 
 # echo "TED - complete"
