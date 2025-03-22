@@ -760,66 +760,6 @@ class TEDPLUS(BackdoorDefense):
         print('STEP 2')
         self.create_poison_clean_dataloaders()
 
-        print('STEP 3')
-        images_to_display = []
-        predictions_to_display = []
-
-        pairs = [
-            (self.poison_loader, 3, "Poison Image"),
-            (self.clean_loader, 9, "Clean Image")
-        ]
-        for loader, limit, prefix in pairs:
-            count = 0
-            for inputs, labels in loader:
-                inputs = inputs.to(self.device)
-                predictions = torch.argmax(self.model(inputs), dim=1).cpu()
-                for input_image, pred_ in zip(inputs, predictions):
-                    if count < limit:
-                        images_to_display.append(input_image.unsqueeze(0))
-                        predictions_to_display.append(pred_)
-                        count += 1
-                    else:
-                        break
-                if count >= limit:
-                    break
-            self.display_images_grid(images_to_display, predictions_to_display, title_prefix=prefix)
-            images_to_display.clear()
-            predictions_to_display.clear()
-
-        print('DEBUG')
-
-        def print_loader_info(loader, name):
-            print(f"{name} loader info:")
-            print(f"Total samples: {len(loader.dataset)}")
-            for batch in loader:
-                inputs, labels = batch
-                print(f"Batch - Inputs shape: {inputs.shape}, Labels shape: {labels.shape}")
-                print(f"Sample labels: {labels[:5]}")
-                for i in range(3):
-                    img = inputs[i].squeeze().cpu().numpy()
-                    plt.imshow(img.transpose(1, 2, 0) if img.ndim == 3 else img, cmap="gray")
-                    plt.title(f"{name} - Label: {labels[i]}")
-                    plt.axis("off")
-                    sample_path = os.path.join(self.save_dir, f"{name}_sample_{i}.png")
-                    plt.savefig(sample_path, dpi=300)
-                    plt.show()
-                break
-
-        print_loader_info(self.poison_loader, "Poison")
-        print_loader_info(self.clean_loader, "Clean")
-        print_loader_info(self.defense_loader, "Defense")
-
-        try:
-            for images, labels in self.defense_loader:
-                print(f"Images shape: {images.shape}, Labels shape: {labels.shape}")
-                break
-        except Exception as e:
-            print(f"Error loading data from defense_loader: {e}")
-
-        print(f"Using device: {self.device}")
-        print(f"Model is on device: {next(self.model.parameters()).device}")
-
-        print('DEBUG')
         print('STEP 4')
 
         self.h_defense_ori_labels, self.h_defense_activations, self.h_defense_preds = self.fetch_activation(
