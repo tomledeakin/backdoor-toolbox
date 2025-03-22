@@ -285,187 +285,187 @@ class TED(BackdoorDefense):
     #   CREATE POISON & CLEAN SETS
     # ==============================
     def generate_poison_clean_sets(self):
-        if self.poison_type == 'TaCT' or self.poison_type == 'SSDT':
-            print(self.poison_type)
-
-            while self.poison_count < self.NUM_SAMPLES or self.clean_count < self.NUM_SAMPLES:
-                for batch_idx, (inputs, labels) in enumerate(self.test_loader):
-                    inputs, labels = inputs.to(self.device), labels.to(self.device)
-
-                    # ---------------------------------------------------------
-                    # 1) Tạo POISON (chỉ áp dụng trigger cho victim_indices)
-                    # ---------------------------------------------------------
-                    if self.poison_count < self.NUM_SAMPLES:
-                        victim_indices = (labels == config.source_class)
-                        if victim_indices.sum().item() > 0:
-                            # Tách victim_inputs và victim_labels
-                            victim_inputs = inputs[victim_indices]
-                            victim_labels = labels[victim_indices]
-
-                            # Tạo trigger
-                            if self.poison_type == 'SSDT':
-                                bd_inputs = self.create_bd(victim_inputs)  # Tạo backdoor
-                            else:
-                                bd_inputs, _ = self.poison_transform.transform(
-                                    victim_inputs, victim_labels
-                                )
-
-                            # Dự đoán
-                            preds_bd = torch.argmax(self.model(bd_inputs), dim=1)
-
-                            # Kiểm tra mẫu nào predict == self.target
-                            correct_pred_indices = (preds_bd == self.target)
-                            if correct_pred_indices.sum().item() > 0:
-                                final_poison = bd_inputs[correct_pred_indices]
-                                # Tạo label tạm "Poison"=101
-                                label_value = self.label_mapping[self.POISON_TEMP_LABEL]
-                                final_poison_targets = self.create_targets(
-                                    victim_labels[correct_pred_indices],
-                                    label_value
-                                )
-                                final_poison_preds = preds_bd[correct_pred_indices]
-
-                                # Thêm vào list
-                                self.temp_poison_inputs_set.append(final_poison.cpu())
-                                self.temp_poison_labels_set.append(final_poison_targets.cpu())
-                                self.temp_poison_pred_set.append(final_poison_preds.cpu())
-
-                                self.poison_count += final_poison.shape[0]
-
-                    # ---------------------------------------------------------
-                    # 2) Tạo CLEAN (các mẫu không phải victim class)
-                    # ---------------------------------------------------------
-                    if self.clean_count < self.NUM_SAMPLES:
-                        non_victim_indices = (labels != config.source_class)
-                        if non_victim_indices.sum().item() > 0:
-                            clean_inputs = inputs[non_victim_indices]
-                            clean_labels_ori = labels[non_victim_indices]
-
-                            # Dùng ảnh gốc => KHÔNG gắn trigger
-                            preds_clean = torch.argmax(self.model(clean_inputs), dim=1)
-
-                            # Tạo label tạm "Clean"=102
-                            label_value = self.label_mapping[self.CLEAN_TEMP_LABEL]
-                            clean_targets = self.create_targets(
-                                clean_labels_ori, label_value
-                            )
-
-                            self.temp_clean_inputs_set.append(clean_inputs.cpu())
-                            self.temp_clean_labels_set.append(clean_targets.cpu())
-                            self.temp_clean_pred_set.append(preds_clean.cpu())
-
-                            self.clean_count += clean_inputs.shape[0]
-
-                    # ---------------------------------------------------------
-                    # 3) Kiểm tra đã đủ số lượng chưa
-                    # ---------------------------------------------------------
-                    if self.poison_count >= self.NUM_SAMPLES and self.clean_count >= self.NUM_SAMPLES:
-                        break
-
-                if self.poison_count >= self.NUM_SAMPLES and self.clean_count >= self.NUM_SAMPLES:
-                    break
-
-            # Giới hạn lại nếu thừa
-            if self.poison_count > self.NUM_SAMPLES:
-                combined_inputs = torch.cat(self.temp_poison_inputs_set, dim=0)[:self.NUM_SAMPLES]
-                combined_labels = torch.cat(self.temp_poison_labels_set, dim=0)[:self.NUM_SAMPLES]
-                combined_preds = torch.cat(self.temp_poison_pred_set, dim=0)[:self.NUM_SAMPLES]
-                self.temp_poison_inputs_set = [combined_inputs]
-                self.temp_poison_labels_set = [combined_labels]
-                self.temp_poison_pred_set = [combined_preds]
-                self.poison_count = self.NUM_SAMPLES
-
-            if self.clean_count > self.NUM_SAMPLES:
-                combined_inputs = torch.cat(self.temp_clean_inputs_set, dim=0)[:self.NUM_SAMPLES]
-                combined_labels = torch.cat(self.temp_clean_labels_set, dim=0)[:self.NUM_SAMPLES]
-                combined_preds = torch.cat(self.temp_clean_pred_set, dim=0)[:self.NUM_SAMPLES]
-                self.temp_clean_inputs_set = [combined_inputs]
-                self.temp_clean_labels_set = [combined_labels]
-                self.temp_clean_pred_set = [combined_preds]
-                self.clean_count = self.NUM_SAMPLES
-
+        # if self.poison_type == 'TaCT' or self.poison_type == 'SSDT':
+        #     print(self.poison_type)
+        #
+        #     while self.poison_count < self.NUM_SAMPLES or self.clean_count < self.NUM_SAMPLES:
+        #         for batch_idx, (inputs, labels) in enumerate(self.test_loader):
+        #             inputs, labels = inputs.to(self.device), labels.to(self.device)
+        #
+        #             # ---------------------------------------------------------
+        #             # 1) Tạo POISON (chỉ áp dụng trigger cho victim_indices)
+        #             # ---------------------------------------------------------
+        #             if self.poison_count < self.NUM_SAMPLES:
+        #                 victim_indices = (labels == config.source_class)
+        #                 if victim_indices.sum().item() > 0:
+        #                     # Tách victim_inputs và victim_labels
+        #                     victim_inputs = inputs[victim_indices]
+        #                     victim_labels = labels[victim_indices]
+        #
+        #                     # Tạo trigger
+        #                     if self.poison_type == 'SSDT':
+        #                         bd_inputs = self.create_bd(victim_inputs)  # Tạo backdoor
+        #                     else:
+        #                         bd_inputs, _ = self.poison_transform.transform(
+        #                             victim_inputs, victim_labels
+        #                         )
+        #
+        #                     # Dự đoán
+        #                     preds_bd = torch.argmax(self.model(bd_inputs), dim=1)
+        #
+        #                     # Kiểm tra mẫu nào predict == self.target
+        #                     correct_pred_indices = (preds_bd == self.target)
+        #                     if correct_pred_indices.sum().item() > 0:
+        #                         final_poison = bd_inputs[correct_pred_indices]
+        #                         # Tạo label tạm "Poison"=101
+        #                         label_value = self.label_mapping[self.POISON_TEMP_LABEL]
+        #                         final_poison_targets = self.create_targets(
+        #                             victim_labels[correct_pred_indices],
+        #                             label_value
+        #                         )
+        #                         final_poison_preds = preds_bd[correct_pred_indices]
+        #
+        #                         # Thêm vào list
+        #                         self.temp_poison_inputs_set.append(final_poison.cpu())
+        #                         self.temp_poison_labels_set.append(final_poison_targets.cpu())
+        #                         self.temp_poison_pred_set.append(final_poison_preds.cpu())
+        #
+        #                         self.poison_count += final_poison.shape[0]
+        #
+        #             # ---------------------------------------------------------
+        #             # 2) Tạo CLEAN (các mẫu không phải victim class)
+        #             # ---------------------------------------------------------
+        #             if self.clean_count < self.NUM_SAMPLES:
+        #                 non_victim_indices = (labels != config.source_class)
+        #                 if non_victim_indices.sum().item() > 0:
+        #                     clean_inputs = inputs[non_victim_indices]
+        #                     clean_labels_ori = labels[non_victim_indices]
+        #
+        #                     # Dùng ảnh gốc => KHÔNG gắn trigger
+        #                     preds_clean = torch.argmax(self.model(clean_inputs), dim=1)
+        #
+        #                     # Tạo label tạm "Clean"=102
+        #                     label_value = self.label_mapping[self.CLEAN_TEMP_LABEL]
+        #                     clean_targets = self.create_targets(
+        #                         clean_labels_ori, label_value
+        #                     )
+        #
+        #                     self.temp_clean_inputs_set.append(clean_inputs.cpu())
+        #                     self.temp_clean_labels_set.append(clean_targets.cpu())
+        #                     self.temp_clean_pred_set.append(preds_clean.cpu())
+        #
+        #                     self.clean_count += clean_inputs.shape[0]
+        #
+        #             # ---------------------------------------------------------
+        #             # 3) Kiểm tra đã đủ số lượng chưa
+        #             # ---------------------------------------------------------
+        #             if self.poison_count >= self.NUM_SAMPLES and self.clean_count >= self.NUM_SAMPLES:
+        #                 break
+        #
+        #         if self.poison_count >= self.NUM_SAMPLES and self.clean_count >= self.NUM_SAMPLES:
+        #             break
+        #
+        #     # Giới hạn lại nếu thừa
+        #     if self.poison_count > self.NUM_SAMPLES:
+        #         combined_inputs = torch.cat(self.temp_poison_inputs_set, dim=0)[:self.NUM_SAMPLES]
+        #         combined_labels = torch.cat(self.temp_poison_labels_set, dim=0)[:self.NUM_SAMPLES]
+        #         combined_preds = torch.cat(self.temp_poison_pred_set, dim=0)[:self.NUM_SAMPLES]
+        #         self.temp_poison_inputs_set = [combined_inputs]
+        #         self.temp_poison_labels_set = [combined_labels]
+        #         self.temp_poison_pred_set = [combined_preds]
+        #         self.poison_count = self.NUM_SAMPLES
+        #
+        #     if self.clean_count > self.NUM_SAMPLES:
+        #         combined_inputs = torch.cat(self.temp_clean_inputs_set, dim=0)[:self.NUM_SAMPLES]
+        #         combined_labels = torch.cat(self.temp_clean_labels_set, dim=0)[:self.NUM_SAMPLES]
+        #         combined_preds = torch.cat(self.temp_clean_pred_set, dim=0)[:self.NUM_SAMPLES]
+        #         self.temp_clean_inputs_set = [combined_inputs]
+        #         self.temp_clean_labels_set = [combined_labels]
+        #         self.temp_clean_pred_set = [combined_preds]
+        #         self.clean_count = self.NUM_SAMPLES
+        #
+        # else:
+        """
+        Sử dụng cùng một subset test để tạo ra Clean set và Poison set (VD: 500 mẫu).
+        """
+        all_indices = np.arange(len(self.testset))
+        if len(all_indices) < self.NUM_SAMPLES:
+            print(f"Warning: testset size < {self.NUM_SAMPLES}, adjusting.")
+            chosen = all_indices
         else:
-            """
-            Sử dụng cùng một subset test để tạo ra Clean set và Poison set (VD: 500 mẫu).
-            """
-            all_indices = np.arange(len(self.testset))
-            if len(all_indices) < self.NUM_SAMPLES:
-                print(f"Warning: testset size < {self.NUM_SAMPLES}, adjusting.")
-                chosen = all_indices
-            else:
-                chosen = np.random.choice(all_indices, size=self.NUM_SAMPLES, replace=False)
+            chosen = np.random.choice(all_indices, size=self.NUM_SAMPLES, replace=False)
 
-            clean_subset = data.Subset(self.testset, chosen)
-            clean_loader = data.DataLoader(clean_subset, batch_size=50, shuffle=False)
+        clean_subset = data.Subset(self.testset, chosen)
+        clean_loader = data.DataLoader(clean_subset, batch_size=50, shuffle=False)
 
-            poison_subset = data.Subset(self.testset, chosen)
-            poison_loader = data.DataLoader(poison_subset, batch_size=50, shuffle=False)
+        poison_subset = data.Subset(self.testset, chosen)
+        poison_loader = data.DataLoader(poison_subset, batch_size=50, shuffle=False)
 
-            # Tạo CLEAN set
-            for (inputs, labels) in clean_loader:
-                inputs, labels = inputs.to(self.device), labels.to(self.device)
-                label_value = self.label_mapping[self.CLEAN_TEMP_LABEL]
-                targets_clean = self.create_targets(labels, label_value)
-                preds = torch.argmax(self.model(inputs), dim=1)
+        # Tạo CLEAN set
+        for (inputs, labels) in clean_loader:
+            inputs, labels = inputs.to(self.device), labels.to(self.device)
+            label_value = self.label_mapping[self.CLEAN_TEMP_LABEL]
+            targets_clean = self.create_targets(labels, label_value)
+            preds = torch.argmax(self.model(inputs), dim=1)
 
-                self.temp_clean_inputs_set.append(inputs.cpu())
-                self.temp_clean_labels_set.append(targets_clean.cpu())
-                self.temp_clean_pred_set.append(preds.cpu())
+            self.temp_clean_inputs_set.append(inputs.cpu())
+            self.temp_clean_labels_set.append(targets_clean.cpu())
+            self.temp_clean_pred_set.append(preds.cpu())
 
-                self.clean_count += labels.size(0)
+            self.clean_count += labels.size(0)
 
-            # Tạo POISON set từ cùng subset
-            for (inputs, labels) in poison_loader:
-                inputs, labels = inputs.to(self.device), labels.to(self.device)
-                poisoned_inputs, poisoned_labels = self.poison_transform.transform(inputs, labels)
-                preds_bd = torch.argmax(self.model(poisoned_inputs), dim=1)
+        # Tạo POISON set từ cùng subset
+        for (inputs, labels) in poison_loader:
+            inputs, labels = inputs.to(self.device), labels.to(self.device)
+            poisoned_inputs, poisoned_labels = self.poison_transform.transform(inputs, labels)
+            preds_bd = torch.argmax(self.model(poisoned_inputs), dim=1)
 
-                label_value = self.label_mapping[self.POISON_TEMP_LABEL]
-                targets_poison = self.create_targets(labels, label_value)
+            label_value = self.label_mapping[self.POISON_TEMP_LABEL]
+            targets_poison = self.create_targets(labels, label_value)
 
-                self.temp_poison_inputs_set.append(poisoned_inputs.cpu())
-                self.temp_poison_labels_set.append(targets_poison.cpu())
-                self.temp_poison_pred_set.append(preds_bd.cpu())
+            self.temp_poison_inputs_set.append(poisoned_inputs.cpu())
+            self.temp_poison_labels_set.append(targets_poison.cpu())
+            self.temp_poison_pred_set.append(preds_bd.cpu())
 
-                self.poison_count += labels.size(0)
+            self.poison_count += labels.size(0)
 
-        ############################################
-        # TÍCH HỢP ĐOẠN CODE LƯU ẢNH (POISON/CLEAN)
-        ############################################
-        # Tạo thư mục lưu
-        poison_save_dir = os.path.join(self.save_dir, "poison_images")
-        clean_save_dir = os.path.join(self.save_dir, "clean_images")
-        os.makedirs(poison_save_dir, exist_ok=True)
-        os.makedirs(clean_save_dir, exist_ok=True)
+    ############################################
+    # TÍCH HỢP ĐOẠN CODE LƯU ẢNH (POISON/CLEAN)
+    ############################################
+    # Tạo thư mục lưu
+    poison_save_dir = os.path.join(self.save_dir, "poison_images")
+    clean_save_dir = os.path.join(self.save_dir, "clean_images")
+    os.makedirs(poison_save_dir, exist_ok=True)
+    os.makedirs(clean_save_dir, exist_ok=True)
 
-        # Gom các tensor lại
-        poison_images = torch.cat(self.temp_poison_inputs_set, dim=0)
-        poison_labels = torch.cat(self.temp_poison_labels_set, dim=0)
+    # Gom các tensor lại
+    poison_images = torch.cat(self.temp_poison_inputs_set, dim=0)
+    poison_labels = torch.cat(self.temp_poison_labels_set, dim=0)
 
-        clean_images = torch.cat(self.temp_clean_inputs_set, dim=0)
-        clean_labels = torch.cat(self.temp_clean_labels_set, dim=0)
+    clean_images = torch.cat(self.temp_clean_inputs_set, dim=0)
+    clean_labels = torch.cat(self.temp_clean_labels_set, dim=0)
 
-        # Lưu poison
-        for idx in range(poison_images.shape[0]):
-            image_tensor = poison_images[idx]
-            label_val = int(poison_labels[idx].item())
-            # Lưu với tên file: poison_{idx}_label_{label_val}.png
-            filename = f"poison_{idx}_label_{label_val}.png"
-            save_path = os.path.join(poison_save_dir, filename)
-            save_image(image_tensor, save_path)
+    # Lưu poison
+    for idx in range(poison_images.shape[0]):
+        image_tensor = poison_images[idx]
+        label_val = int(poison_labels[idx].item())
+        # Lưu với tên file: poison_{idx}_label_{label_val}.png
+        filename = f"poison_{idx}_label_{label_val}.png"
+        save_path = os.path.join(poison_save_dir, filename)
+        save_image(image_tensor, save_path)
 
-        # Lưu clean
-        for idx in range(clean_images.shape[0]):
-            image_tensor = clean_images[idx]
-            label_val = int(clean_labels[idx].item())
-            # Lưu với tên file: clean_{idx}_label_{label_val}.png
-            filename = f"clean_{idx}_label_{label_val}.png"
-            save_path = os.path.join(clean_save_dir, filename)
-            save_image(image_tensor, save_path)
+    # Lưu clean
+    for idx in range(clean_images.shape[0]):
+        image_tensor = clean_images[idx]
+        label_val = int(clean_labels[idx].item())
+        # Lưu với tên file: clean_{idx}_label_{label_val}.png
+        filename = f"clean_{idx}_label_{label_val}.png"
+        save_path = os.path.join(clean_save_dir, filename)
+        save_image(image_tensor, save_path)
 
-        print(
-            f"Finished generate_poison_clean_sets. Clean_count = {self.clean_count}, Poison_count = {self.poison_count}"
-        )
+    print(
+        f"Finished generate_poison_clean_sets. Clean_count = {self.clean_count}, Poison_count = {self.poison_count}"
+    )
 
     def create_poison_clean_dataloaders(self):
         """
