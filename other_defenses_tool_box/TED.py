@@ -944,8 +944,7 @@ class TED(BackdoorDefense):
                                  [embedding[global_idx, 1], embedding[nearest_defense_idx, 1]],
                                  c='red', linestyle='--', linewidth=2, zorder=2)
                         # Vẽ lại poison sample với marker lớn
-                        plt.scatter(embedding[global_idx, 0], embedding[global_idx, 1],
-                                    c=colors[global_idx], s=, zorder=4)
+                        plt.scatter(embedding[global_idx, 0], embedding[global_idx, 1], c=colors[global_idx], s=50, zorder=4)
 
             # --- Draw connection lines cho clean samples có nhãn "Target Clean" ---
             # Ở đây, ta lặp qua các clean sample đã được gán nhãn "Target Clean"
