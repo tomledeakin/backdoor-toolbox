@@ -62,7 +62,7 @@ echo "cifar10 - adaptive_blend | START"
 # python train_on_poisoned_set.py -dataset=cifar10 -poison_type=adaptive_blend -poison_rate=0.1 -cover_rate=0.05
 # python test_model.py -dataset=cifar10 -poison_type=adaptive_blend -poison_rate=0.1 -cover_rate=0.05
 # python other_defense.py -defense=IBD_PSC -dataset=cifar10 -poison_type=adaptive_blend -poison_rate=0.1 -cover_rate=0.05 -validation_per_class=10
-python other_defense.py -defense=TED -dataset=cifar10 -poison_type=adaptive_blend -poison_rate=0.1 -cover_rate=0.05 -validation_per_class=5 -num_test_samples=40
+python other_defense.py -defense=TED -dataset=cifar10 -poison_type=adaptive_blend -poison_rate=0.1 -cover_rate=0.05 -validation_per_class=5 -num_test_samples=50
 echo "TED | cifar10 - adaptive_blend | COMPLETE"
 #python other_defense.py -defense=TEDPLUS -dataset=cifar10 -poison_type=adaptive_blend -poison_rate=0.1 -cover_rate=0.05 -validation_per_class=2 -num_test_samples=50 -num_neighbors=3
 #echo "TEDPLUS | cifar10 - adaptive_blend | COMPLETE"
