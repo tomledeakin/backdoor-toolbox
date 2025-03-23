@@ -857,25 +857,36 @@ class TED(BackdoorDefense):
 
             # --- Process defense labels using self.h_defense_ori_labels ---
             defense_ori_labels = self.h_defense_ori_labels.cpu().detach().numpy()
-            # Nếu nhãn gốc bằng self.target thì gán "Target", ngược lại "Defense"
+            # Nếu nhãn gốc bằng self.target thì gán "Target", ngược lại gán "Defense"
             defense_labels = np.where(defense_ori_labels == self.target, "Target", "Defense")
-
-            # --- Process clean labels using self.h_clean_ori_labels (automatically) ---
-            clean_ori_labels = self.h_clean_ori_labels.cpu().detach().numpy()
-            # Nếu nhãn gốc bằng self.target thì gán "Target Clean", ngược lại "Clean"
-            clean_labels = np.where(clean_ori_labels == self.target, "Target Clean", "Clean")
 
             # --- Create labels for poison samples ---
             poison_labels = np.array(["Poison"] * poison_np.shape[0])
+
+            # --- Automatically assign labels for clean samples based on nearest defense sample ---
+            n_clean = clean_np.shape[0]
+            clean_labels = []
+            # Chuyển defense_np thành tensor một lần để tránh lặp lại
+            defense_tensor = torch.from_numpy(defense_np).to(self.device)
+            for i in range(n_clean):
+                clean_vector = torch.from_numpy(clean_np[i: i + 1]).to(self.device)
+                distances = pairwise_euclidean_distance(clean_vector, defense_tensor)
+                nearest_defense_idx = torch.argmin(distances).item()
+                # Nếu defense sample gần nhất có nhãn "Target" (ranking = 0) thì gán clean sample là "Target Clean"
+                if defense_labels[nearest_defense_idx] == "Target":
+                    clean_labels.append("Target Clean")
+                else:
+                    clean_labels.append("Clean")
+            clean_labels = np.array(clean_labels)
 
             # --- Concatenate activations and labels ---
             all_activations = np.concatenate([defense_np, poison_np, clean_np], axis=0)
             all_labels = np.concatenate([defense_labels, poison_labels, clean_labels], axis=0)
 
-            # Số lượng mẫu của mỗi dataset
+            # Số lượng mẫu của mỗi tập
             n_defense = defense_np.shape[0]
             n_poison = poison_np.shape[0]
-            n_clean = clean_np.shape[0]
+            # n_clean đã có ở trên
 
             # --- Set default color mapping ---
             default_color_map = {
@@ -883,18 +894,17 @@ class TED(BackdoorDefense):
                 "Target": "black",  # defense target
                 "Poison": "red",
                 "Clean": "green",
-                "Target Clean": "blue"  # clean samples có target
+                "Target Clean": "blue"  # clean samples tự động có target
             }
-            # Áp dụng màu dựa trên nhãn
             colors = [default_color_map[label] for label in all_labels]
 
             # --- Set marker sizes (default = 10) ---
             marker_sizes = [10] * len(all_labels)
-            # Với defense samples có nhãn "Target", set marker size lớn hơn
+            # Đối với defense samples có nhãn "Target"
             for i in range(n_defense):
                 if defense_labels[i] == "Target":
                     marker_sizes[i] = 50
-            # Với clean samples có nhãn "Target Clean", set marker size lớn hơn
+            # Đối với clean samples được gán nhãn "Target Clean"
             for i in range(n_clean):
                 if clean_labels[i] == "Target Clean":
                     marker_sizes[n_defense + n_poison + i] = 50
@@ -907,11 +917,10 @@ class TED(BackdoorDefense):
             plt.style.use("seaborn-v0_8-paper")
             plt.figure(figsize=(10, 8))
 
-            # Vẽ scatter plot với zorder cao để các điểm được đặt trên các đường
+            # Vẽ scatter plot
             plt.scatter(embedding[:, 0], embedding[:, 1], c=colors, s=marker_sizes, alpha=0.7, zorder=3)
 
-            # --- Draw connection lines for selected poison samples ---
-            # Tính khoảng cách Euclidean giữa các poison samples để tìm cluster gần nhau
+            # --- Draw connection lines for poison samples (giữ nguyên như cũ) ---
             distance_matrix = squareform(pdist(poison_np, metric='euclidean'))
             best_indices = None
             best_sum = np.inf
@@ -922,38 +931,33 @@ class TED(BackdoorDefense):
                     best_sum = total_distance
                     best_indices = nearest_idxs
 
-            # Với mỗi poison sample trong cluster best_indices, nối đến defense sample gần nhất nếu nhãn defense là "Target"
             for idx in best_indices:
                 if idx < n_poison:
-                    global_idx = n_defense + idx  # index của poison sample trong all_activations
-                    # Lấy vector đặc trưng của poison sample
-                    special_vector_np = poison_np[idx:idx + 1]  # shape (1, dim)
+                    global_idx = n_defense + idx  # poison sample index trong all_activations
+                    special_vector_np = poison_np[idx: idx + 1]
                     special_vector = torch.from_numpy(special_vector_np).to(self.device)
-                    # Chuyển defense_np thành tensor
                     defense_tensor = torch.from_numpy(defense_np).to(self.device)
-                    # Tính khoảng cách Euclidean
                     distances = pairwise_euclidean_distance(special_vector, defense_tensor)
                     nearest_defense_idx = torch.argmin(distances).item()
-                    # Nối đường nếu defense sample gần nhất có nhãn "Target"
                     if defense_labels[nearest_defense_idx] == "Target":
                         plt.plot([embedding[global_idx, 0], embedding[nearest_defense_idx, 0]],
                                  [embedding[global_idx, 1], embedding[nearest_defense_idx, 1]],
                                  c='red', linestyle='--', linewidth=2, zorder=2)
-                        # Vẽ lại poison sample với marker lớn hơn
+                        # Vẽ lại poison sample với marker lớn
                         plt.scatter(embedding[global_idx, 0], embedding[global_idx, 1],
-                                    c=colors[global_idx], s=50, zorder=4)
+                                    c=colors[global_idx], s=, zorder=4)
 
-            # --- Draw connection lines for clean samples with "Target Clean" label ---
-            # Tìm các chỉ số của clean samples có nhãn "Target Clean"
+            # --- Draw connection lines cho clean samples có nhãn "Target Clean" ---
+            # Ở đây, ta lặp qua các clean sample đã được gán nhãn "Target Clean"
             target_clean_indices = np.where(clean_labels == "Target Clean")[0]
             for idx in target_clean_indices:
-                global_idx = n_defense + n_poison + idx  # index của clean target sample trong all_activations
-                special_vector_np = clean_np[idx:idx + 1]  # shape (1, dim)
-                special_vector = torch.from_numpy(special_vector_np).to(self.device)
+                global_idx = n_defense + n_poison + idx
+                clean_vector_np = clean_np[idx: idx + 1]
+                clean_vector = torch.from_numpy(clean_vector_np).to(self.device)
                 defense_tensor = torch.from_numpy(defense_np).to(self.device)
-                distances = pairwise_euclidean_distance(special_vector, defense_tensor)
+                distances = pairwise_euclidean_distance(clean_vector, defense_tensor)
                 nearest_defense_idx = torch.argmin(distances).item()
-                # Chỉ nối đường nếu defense sample gần nhất có nhãn "Target"
+                # Nếu defense gần nhất có nhãn "Target" (tức ranking = 0) thì vẽ đường nối
                 if defense_labels[nearest_defense_idx] == "Target":
                     plt.plot([embedding[global_idx, 0], embedding[nearest_defense_idx, 0]],
                              [embedding[global_idx, 1], embedding[nearest_defense_idx, 1]],
