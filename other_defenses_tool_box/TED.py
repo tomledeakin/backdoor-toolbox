@@ -963,6 +963,7 @@ class TED(BackdoorDefense):
                              c='blue', linestyle='--', linewidth=2, zorder=2)
 
             # --- Customize legend and ticks ---
+            # --- Customize legend and ticks ---
             legend_elements = [
                 Line2D([0], [0], marker='o', color='w', label='Validation Sample', markerfacecolor='purple',
                        markersize=10),
@@ -974,7 +975,7 @@ class TED(BackdoorDefense):
                 Line2D([0], [0], marker='o', color='w', label='Poison Sample', markerfacecolor='red', markersize=10),
                 Line2D([0], [0], linestyle='--', color='gray', label='Ranking = 0', linewidth=2)
             ]
-            plt.legend(handles=legend_elements, loc='best', fontsize=25)
+            plt.legend(handles=legend_elements, loc='upper left', fontsize=25)
             plt.xticks(fontsize=25)
             plt.yticks(fontsize=25)
             plt.tight_layout()
