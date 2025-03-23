@@ -7,6 +7,7 @@ import random
 from collections import Counter, defaultdict
 from tqdm import tqdm
 import numpy as np
+from scipy.spatial.distance import pdist, squareform
 import pandas as pd
 import matplotlib.pyplot as plt
 import pickle
@@ -32,7 +33,7 @@ from other_defenses_tool_box.backdoor_defense import BackdoorDefense
 from networks.models import Generator, NetC_MNIST
 from defense_dataloader import get_dataset, get_dataloader
 import seaborn as sns
-
+from matplotlib.lines import Line2D
 # ------------------------------
 # Seed settings for reproducibility
 # ------------------------------
@@ -52,20 +53,57 @@ if torch.cuda.is_available():
 
 class TED(BackdoorDefense):
     def __init__(self, args):
-        super().__init__(args)  # Call the constructor of the parent class, BackdoorDefense
+        """
+        Initialize the TED Defense, load the model and data, and set up necessary variables.
+        """
+        super().__init__(args)  # Calls the constructor of the parent class, BackdoorDefense
         self.args = args
 
-        # 1) Model configuration
+
+        # 1) Model Configuration
         self.model.eval()
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.model.to(self.device)
+
         print(self.poison_type)
 
         # 2) Define the backdoor target class
         self.target = self.target_class
-        print(f"Target Class: {self.target}")
+        print(f'Target Class: {self.target}')
 
-        # 3) Load the full test set
+        # 3) Create train_loader to scan the training set
+        if self.poison_type == 'SSDT':
+            self.train_loader = get_dataloader(args, train=True)
+        else:
+            self.train_loader = generate_dataloader(
+                dataset=self.dataset,
+                dataset_path=config.data_dir,
+                batch_size=50,
+                split='train',
+                data_transform=self.data_transform,
+                shuffle=True,
+                drop_last=False,
+                noisy_test=False
+            )
+
+        print(f'Number samples of train set: {len(self.train_loader.dataset)}')
+        # 4) Determine unique classes by scanning the training set
+        all_labels = []
+        for _, labels in self.train_loader:
+            all_labels.extend(labels.tolist())
+        unique_classes = set(all_labels)
+        num_classes = len(unique_classes)
+
+        print(f"Number of unique classes in the dataset (scanned from train_loader): {num_classes}")
+        print(f"Number of unique classes from args: {self.num_classes}")
+
+        # 5) Defense training size (for example)
+        self.LAYER_RATIO = 0.3
+        self.NUM_LAYERS = 1
+        self.SAMPLES_PER_CLASS = 20
+        self.DEFENSE_TRAIN_SIZE = self.num_classes * self.SAMPLES_PER_CLASS
+
+        # 6) Create a test_loader
         if self.poison_type == 'SSDT':
             self.test_loader = get_dataloader(args, train=False)
             self.testset = get_dataset(args, train=False)
@@ -82,49 +120,25 @@ class TED(BackdoorDefense):
             )
             self.testset = self.test_loader.dataset
 
-        print(f"Number of samples in full test set: {len(self.testset)}")
+        print(f'Number samples of test set: {len(self.testset)}')
 
-        # 4) Split the full test set into 10% (defense/validation) and 90% (final test)
-        all_indices = np.arange(len(self.testset))
-        defense_indices, test_indices = train_test_split(all_indices, test_size=0.1, random_state=42)
+        # 7) Define NUM_SAMPLES: we take 500 for clean + 500 for poison => total 1000
+        self.DATA_RATIO = 0.005
+        # self.NUM_SAMPLES = 500
+        self.NUM_SAMPLES = int(self.DATA_RATIO * len(self.testset))
 
-        # Create subsets for defense and test sets
-        self.defense_subset = data.Subset(self.testset, defense_indices)
-        self.testset = data.Subset(self.testset, test_indices)
+        # 8) Create defense_loader with self.SAMPLES_PER_CLASS per class, ensuring correct predictions
+        trainset = self.train_loader.dataset
 
-        # Create DataLoaders for defense and test sets
-        self.defense_loader = data.DataLoader(self.defense_subset, batch_size=50, shuffle=True, num_workers=0)
-        self.test_loader = data.DataLoader(self.testset, batch_size=50, shuffle=False, num_workers=0)
-
-        print(f"Number of samples in defense set (90% of test): {len(self.defense_subset)}")
-        print(f"Number of samples in final test set (10% of test): {len(self.testset)}")
-
-        # 5) Determine unique classes by scanning the defense set
-        all_labels = []
-        for _, labels in self.defense_loader:
-            all_labels.extend(labels.tolist())
-        unique_classes = set(all_labels)
-        num_classes = len(unique_classes)
-        print(f"Number of unique classes (from defense set): {num_classes}")
-        print(f"Expected number of classes from args: {self.num_classes}")
-
-        # 6) Set defense training parameters
-        self.SAMPLES_PER_CLASS = args.validation_per_class
-        self.DEFENSE_TRAIN_SIZE = self.num_classes * self.SAMPLES_PER_CLASS
-
-        # 7) Define number of neighbors and samples for constructing poison/clean sets
-        self.NUM_SAMPLES = args.num_test_samples
-
-        # 8) Create defense subset from the defense set using only correctly predicted samples
-        # Use the defense_subset (10% of test) instead of the training set
-        defense_set = self.defense_subset  # Alias for clarity
-        if isinstance(defense_set, data.Subset):
-            underlying_dataset = defense_set.dataset
-            subset_indices = defense_set.indices
+        # Check if trainset is a Subset and get the underlying dataset and indices
+        if isinstance(trainset, data.Subset):
+            underlying_dataset = trainset.dataset
+            subset_indices = trainset.indices
         else:
-            underlying_dataset = defense_set
-            subset_indices = np.arange(len(defense_set))
+            underlying_dataset = trainset
+            subset_indices = np.arange(len(trainset))
 
+        # Organize indices by class
         from collections import defaultdict
         label_to_indices = defaultdict(list)
         for idx in subset_indices:
@@ -132,27 +146,35 @@ class TED(BackdoorDefense):
                 _, label = underlying_dataset[idx]
                 label_to_indices[label].append(idx)
             except FileNotFoundError:
-                print(f"Warning: File {idx}.png does not exist.")
+                print(f"Warning: File {idx}.png not exist.")
 
-        # Dictionary to store correctly predicted indices per class
+        # Initialize a dictionary to hold correctly predicted indices per class
         correct_indices_per_class = defaultdict(list)
-        # Create a DataLoader for the defense set without shuffling to maintain index order
-        defense_loader_no_shuffle = data.DataLoader(defense_set, batch_size=50, num_workers=0, shuffle=False)
+
+        # Create a DataLoader for the training set without shuffling to keep track of indices
+        train_loader_no_shuffle = data.DataLoader(
+            trainset,
+            batch_size=50,
+            num_workers=0,
+            shuffle=False
+        )
+
+        # Initialize a counter to keep track of the current index in the dataset
         current_idx = 0
 
-        # Evaluate the defense set to collect correctly predicted samples
+        # Iterate over the training set and collect correctly predicted samples
         with torch.no_grad():
-            for inputs, labels in tqdm(defense_loader_no_shuffle,
-                                       desc="Evaluating defense set for correct predictions"):
+            for inputs, labels in tqdm(train_loader_no_shuffle, desc="Evaluating trainset for correct predictions"):
                 inputs, labels = inputs.to(self.device), labels.to(self.device)
                 outputs = self.model(inputs)
                 preds = torch.argmax(outputs, dim=1)
                 correct_mask = preds == labels
 
-                # Loop over batch and record correct sample indices
+                # Iterate through the batch to collect correct indices
                 for i in range(len(labels)):
                     if correct_mask[i].item():
-                        if isinstance(defense_set, data.Subset):
+                        if isinstance(trainset, data.Subset):
+                            # Get the original index from the subset
                             sample_idx = subset_indices[current_idx]
                         else:
                             sample_idx = current_idx
@@ -160,25 +182,54 @@ class TED(BackdoorDefense):
                         correct_indices_per_class[label].append(sample_idx)
                     current_idx += 1
 
-        # For each class, sample SAMPLES_PER_CLASS correctly predicted samples
-        defense_indices_final = []
+        # Initialize a list to hold all defense indices
+        defense_indices = []
+
+        # For each class, sample self.SAMPLES_PER_CLASS correctly predicted samples
         for label in unique_classes:
+
             correct_indices = correct_indices_per_class[label]
             num_correct = len(correct_indices)
+
             if num_correct >= self.SAMPLES_PER_CLASS:
+                # If enough correct samples, randomly choose without replacement
                 sampled = np.random.choice(correct_indices, self.SAMPLES_PER_CLASS, replace=False)
             else:
+                # If not enough, sample with replacement to meet the required number
                 sampled = np.random.choice(correct_indices, self.SAMPLES_PER_CLASS, replace=True)
-                print(f"Warning: Not enough correctly predicted samples for class {label}. Sampling with replacement.")
-            defense_indices_final.extend(sampled)
+                print(f"Warning: Not enough correctly predicted samples for class {label}. "
+                      f"Sampling with replacement to meet the required number.")
 
-        # Create a new defense subset using the sampled indices and update the defense_loader
-        final_defense_subset = data.Subset(underlying_dataset, defense_indices_final)
-        self.defense_loader = data.DataLoader(final_defense_subset, batch_size=50, shuffle=True, num_workers=0)
+            defense_indices.extend(sampled)
 
-        # 9) Optionally, filter the defense set further to retain only correctly predicted samples
+        # Create a subset of the training set for defense using the sampled indices
+        defense_subset = data.Subset(trainset, defense_indices)
+
+        # Create a DataLoader for the defense subset
+        self.defense_loader = data.DataLoader(
+            defense_subset,
+            batch_size=50,
+            num_workers=0,
+            shuffle=True
+        )
+
+        # Calculate and print the number of samples per class in the defense subset
+        from collections import Counter
+
+        # Extract labels from the defense_subset
+        defense_labels = [label for _, label in defense_subset]
+
+        # Count the number of samples per class
+        label_counts = Counter(defense_labels)
+
+        # print("Number of samples per class in defense_subset:")
+        # for label, count in label_counts.items():
+        #     print(f"Class {label}: {count} samples")
+
+        # 9) Filter the defense set to keep correctly predicted samples only (optional)
         h_benign_preds = []
         h_benign_ori_labels = []
+
         with torch.no_grad():
             for inputs, labels in self.defense_loader:
                 inputs, labels = inputs.to(self.device), labels.to(self.device)
@@ -186,16 +237,25 @@ class TED(BackdoorDefense):
                 preds = torch.argmax(outputs, dim=1)
                 h_benign_preds.extend(preds.cpu().numpy())
                 h_benign_ori_labels.extend(labels.cpu().numpy())
+
         h_benign_preds = np.array(h_benign_preds)
         h_benign_ori_labels = np.array(h_benign_ori_labels)
+
         benign_mask = h_benign_ori_labels == h_benign_preds
-        benign_indices = np.array(defense_indices_final)[benign_mask]
+        benign_indices = np.array(defense_indices)[benign_mask]
+
         if len(benign_indices) > self.DEFENSE_TRAIN_SIZE:
             benign_indices = np.random.choice(benign_indices, self.DEFENSE_TRAIN_SIZE, replace=False)
-        final_defense_subset = data.Subset(underlying_dataset, benign_indices)
-        self.defense_loader = data.DataLoader(final_defense_subset, batch_size=50, shuffle=True, num_workers=0)
 
-        # 10) Define temporary labels for Poison and Clean samples
+        defense_subset = data.Subset(trainset, benign_indices)
+        self.defense_loader = data.DataLoader(
+            defense_subset,
+            batch_size=50,
+            num_workers=0,
+            shuffle=True
+        )
+
+        # 10) Define two temporary labels: Poison and Clean
         self.POISON_TEMP_LABEL = "Poison"
         self.CLEAN_TEMP_LABEL = "Clean"
         self.label_mapping = {
@@ -203,25 +263,31 @@ class TED(BackdoorDefense):
             "Clean": 102
         }
 
-        # Initialize counters and temporary containers for Poison and Clean sets
+        # Poison and Clean sample counters
         self.poison_count = 0
         self.clean_count = 0
+
+        # Temporary containers for building Poison and Clean sets
         self.temp_poison_inputs_set = []
         self.temp_poison_labels_set = []
         self.temp_poison_pred_set = []
+
         self.temp_clean_inputs_set = []
         self.temp_clean_labels_set = []
         self.temp_clean_pred_set = []
 
-        # 11) Set up hooks for activation extraction
+        # Hooks for activation extraction
         self.hook_handles = []
         self.activations = {}
         self.register_hooks()
+        self.nnb_distance_dictionary = {}
 
-        # 12) Additional intermediate variables and directory for saving visualizations
+        # Additional intermediate variables
         self.Test_C = self.num_classes + 2
         self.topological_representation = {}
         self.candidate_ = {}
+
+        # Directory to save visualizations
         self.save_dir = f"TED/{self.dataset}/{self.poison_type}"
         os.makedirs(self.save_dir, exist_ok=True)
 
@@ -841,6 +907,148 @@ class TED(BackdoorDefense):
 
         inputs_all_unknown = np.concatenate(inputs_all_unknown)
         labels_all_unknown = np.concatenate(labels_all_unknown)
+
+        # --- Loop over each layer for visualization ---
+        for layer_name in self.h_defense_activations.keys():
+            # --- Extract activations for the current layer ---
+            defense_act = self.h_defense_activations[layer_name]  # shape: (n_defense, dim)
+            poison_act = self.h_poison_activations[layer_name]  # shape: (n_poison, dim)
+            clean_act = self.h_clean_activations[layer_name]  # shape: (n_clean, dim)
+
+            # --- Convert tensors to NumPy arrays ---
+            defense_np = defense_act.cpu().detach().numpy()
+            poison_np = poison_act.cpu().detach().numpy()
+            clean_np = clean_act.cpu().detach().numpy()
+
+            # --- Process defense labels using self.h_defense_ori_labels ---
+            defense_ori_labels = self.h_defense_ori_labels.cpu().detach().numpy()
+            # If original label equals self.target then label it as "Target", otherwise "Defense"
+            defense_labels = np.where(defense_ori_labels == self.target, "Target", "Defense")
+
+            # --- Create labels for poison and clean ---
+            poison_labels = np.array(["Poison"] * poison_np.shape[0])
+            clean_labels = np.array(["Clean"] * clean_np.shape[0])
+
+            # --- Concatenate activations and labels ---
+            all_activations = np.concatenate([defense_np, poison_np, clean_np], axis=0)
+            all_labels = np.concatenate([defense_labels, poison_labels, clean_labels], axis=0)
+
+            # Number of samples in each dataset
+            n_defense = defense_np.shape[0]
+            n_poison = poison_np.shape[0]
+            n_clean = clean_np.shape[0]
+
+            # --- Set default color mapping ---
+            default_color_map = {
+                "Defense": "purple",  # defense non-target
+                "Target": "black",  # defense target
+                "Poison": "red",
+                "Clean": "green"
+            }
+            # Apply default colors according to the original labels
+            colors = [default_color_map[label] for label in all_labels]
+
+            # --- Override color and label for clean special samples ---
+            clean_special_idxs = [2, 37, 39]
+            for idx in clean_special_idxs:
+                global_idx = n_defense + n_poison + idx
+                if idx < n_clean:
+                    colors[global_idx] = "blue"  # change color
+                    all_labels[global_idx] = "Target Clean"  # update label
+
+            # --- Set marker sizes (default = 10) ---
+            marker_sizes = [10] * len(all_labels)
+            # For defense samples with "Target" label, set marker size to 30
+            for i in range(n_defense):
+                if defense_labels[i] == "Target":
+                    marker_sizes[i] = 100
+            # For clean special samples, set marker size to 30
+            for idx in clean_special_idxs:
+                global_idx = n_defense + n_poison + idx
+                if idx < n_clean:
+                    marker_sizes[global_idx] = 100
+
+            # --- Apply UMAP to reduce dimensions to 2D ---
+            umap_model = UMAP(n_components=2, random_state=42)
+            embedding = umap_model.fit_transform(all_activations)
+
+            # --- Set a publication-friendly style ---
+            plt.style.use("seaborn-v0_8-paper")
+            plt.figure(figsize=(10, 8))
+
+            # Draw scatter plot with high zorder so that points are on top of lines
+            plt.scatter(embedding[:, 0], embedding[:, 1], c=colors, s=marker_sizes, alpha=0.7, zorder=3)
+
+            # --- Draw connection lines for selected poison samples ---
+            # Compute pairwise Euclidean distances within poison_np to find a cluster of nearby samples
+            distance_matrix = squareform(pdist(poison_np, metric='euclidean'))
+            best_indices = None
+            best_sum = np.inf
+            for i in range(n_poison):
+                nearest_idxs = np.argsort(distance_matrix[i])[:40]
+                total_distance = distance_matrix[i, nearest_idxs].sum()
+                if total_distance < best_sum:
+                    best_sum = total_distance
+                    best_indices = nearest_idxs
+
+            # For each poison sample in the best_indices cluster, connect to the nearest defense sample if its label is "Target"
+            for idx in best_indices:
+                if idx < n_poison:
+                    global_idx = n_defense + idx  # index of poison sample in all_activations
+                    # Get the high-dimensional vector for the poison sample
+                    special_vector_np = poison_np[idx:idx + 1]  # shape (1, dim)
+                    special_vector = torch.from_numpy(special_vector_np).to(self.device)
+                    # Convert defense_np to tensor
+                    defense_tensor = torch.from_numpy(defense_np).to(self.device)
+                    # Compute pairwise Euclidean distances
+                    distances = pairwise_euclidean_distance(special_vector, defense_tensor)
+                    nearest_defense_idx = torch.argmin(distances).item()
+                    # Draw the connection line in red dashed if the nearest defense sample is labeled "Target"
+                    if defense_labels[nearest_defense_idx] == "Target":
+                        plt.plot([embedding[global_idx, 0], embedding[nearest_defense_idx, 0]],
+                                 [embedding[global_idx, 1], embedding[nearest_defense_idx, 1]],
+                                 c='red', linestyle='--', linewidth=2, zorder=2)
+                        # Redraw the poison sample with an enlarged marker (size 30)
+                        plt.scatter(embedding[global_idx, 0], embedding[global_idx, 1],
+                                    c=colors[global_idx], s=100, zorder=4)
+
+            # --- Draw connection lines for clean special samples ---
+            for idx in clean_special_idxs:
+                if idx < n_clean:
+                    global_idx = n_defense + n_poison + idx  # index of clean special sample in all_activations
+                    special_vector_np = clean_np[idx:idx + 1]  # shape (1, dim)
+                    special_vector = torch.from_numpy(special_vector_np).to(self.device)
+                    defense_tensor = torch.from_numpy(defense_np).to(self.device)
+                    distances = pairwise_euclidean_distance(special_vector, defense_tensor)
+                    nearest_defense_idx = torch.argmin(distances).item()
+                    # Only draw the connection if the nearest defense sample has the "Target" label
+                    if defense_labels[nearest_defense_idx] == "Target":
+                        plt.plot([embedding[global_idx, 0], embedding[nearest_defense_idx, 0]],
+                                 [embedding[global_idx, 1], embedding[nearest_defense_idx, 1]],
+                                 c='blue', linestyle='--', linewidth=2, zorder=2)
+
+            # --- Customize legend and ticks ---
+            legend_elements = [
+                Line2D([0], [0], marker='o', color='w', label='Validation Sample', markerfacecolor='purple',
+                       markersize=10),
+                Line2D([0], [0], marker='o', color='w', label='Target Validation Sample', markerfacecolor='black',
+                       markersize=10),
+                Line2D([0], [0], marker='o', color='w', label='Clean Sample', markerfacecolor='green', markersize=10),
+                Line2D([0], [0], marker='o', color='w', label='Target Clean Sample', markerfacecolor='blue',
+                       markersize=10),
+                Line2D([0], [0], marker='o', color='w', label='Poison Sample', markerfacecolor='red', markersize=10),
+                Line2D([0], [0], linestyle='--', color='gray', label='Ranking = 0', linewidth=2)
+            ]
+            plt.legend(handles=legend_elements, loc='best', fontsize=25)
+            plt.xticks(fontsize=25)
+            plt.yticks(fontsize=25)
+            plt.tight_layout()
+
+            # --- Save the figure in PDF format for publication ---
+            plot_save_path = os.path.join(self.save_dir, f"umap_{layer_name}.pdf")
+            plt.savefig(plot_save_path, bbox_inches='tight', format='pdf', dpi=300)
+            plt.close()
+            print(f"UMAP plot for layer '{layer_name}' saved to: {plot_save_path}")
 
         print('STEP 9')
         pca_t = sklearn_PCA(n_components=2)
