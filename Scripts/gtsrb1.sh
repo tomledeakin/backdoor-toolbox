@@ -4,7 +4,7 @@
 #SBATCH --error=error1.log
 #SBATCH --partition=gpu
 #SBATCH --gres=gpu:a100:1   # Yêu cầu 1 GPU A100 trên node radagast
-#SBATCH --nodelist=radagast     # Cấp đủ RAM hệ thống nếu cần
+#SBATCH --nodelist=boromir     # Cấp đủ RAM hệ thống nếu cần
 #SBATCH --time=24:00:00
 #SBATCH --mail-user=tomledeakin@gmail.com
 #SBATCH --mail-type=ALL
