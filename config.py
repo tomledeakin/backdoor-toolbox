@@ -118,7 +118,7 @@ trigger_default = {
     },
     'tinyimagenet200': {
         'none': 'none',
-        'badnet': 'badnet_patch_64.png',
+        'badnet': 'badnet_patch_224.png',
         'blend' : 'hellokitty_64.png',
         'adaptive_blend': 'hellokitty_64.png',
         'adaptive_patch': 'none',
