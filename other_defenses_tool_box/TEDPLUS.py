@@ -55,7 +55,7 @@ class TEDPLUS(BackdoorDefense):
     def __init__(self, args):
         super().__init__(args)  # Call the constructor of the parent class, BackdoorDefense
         self.args = args
-        self.model = self.replace_relu_with_leakyrelu(self.model)
+
         # 1) Model configuration
         self.model.eval()
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -76,7 +76,7 @@ class TEDPLUS(BackdoorDefense):
                 dataset_path=config.data_dir,
                 batch_size=50,
                 split='test',
-                data_transform=self.data_transform,
+                data_transform=None,
                 shuffle=False,
                 drop_last=False,
                 noisy_test=False
@@ -225,20 +225,6 @@ class TEDPLUS(BackdoorDefense):
         self.candidate_ = {}
         self.save_dir = f"TED/{self.dataset}/{self.poison_type}"
         os.makedirs(self.save_dir, exist_ok=True)
-
-    def replace_relu_with_leakyrelu(self, module, negative_slope=0.9):
-        """
-        Hàm đệ quy thay thế tất cả các instance của nn.ReLU thành nn.LeakyReLU
-        trong một module.
-        """
-        for name, child in module.named_children():
-            if isinstance(child, nn.ReLU):
-                # Thay thế ReLU bằng LeakyReLU
-                setattr(module, name, nn.LeakyReLU(negative_slope=negative_slope, inplace=child.inplace))
-            else:
-                # Đệ quy vào các module con
-                self.replace_relu_with_leakyrelu(child, negative_slope)
-        return module
 
     # ==============================
     #     HELPER FUNCTIONS

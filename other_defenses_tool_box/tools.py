@@ -52,7 +52,7 @@ def generate_dataloader(dataset='cifar10', dataset_path='./data/', batch_size=12
         if data_transform is None:
             data_transform = transforms.Compose([
                 transforms.ToTensor(),
-                transforms.Normalize([0.4914, 0.4822, 0.4465], [0.247, 0.243, 0.261]),
+                # transforms.Normalize([0.4914, 0.4822, 0.4465], [0.247, 0.243, 0.261]),
             ])
         dataset_path = os.path.join(dataset_path, 'cifar10')
         
