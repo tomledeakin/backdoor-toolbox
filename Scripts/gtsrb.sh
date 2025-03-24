@@ -3,7 +3,7 @@
 #SBATCH --output=output.log
 #SBATCH --error=error.log
 #SBATCH --partition=gpu
-#SBATCH --gres=gpu:l40s:1   # Yêu cầu 2 GPU A100 (nhưng node radagast có 4 GPU, bạn có thể sử dụng đủ bộ nhớ của GPU0)
+#SBATCH --gres=gpu:a100:1   # Yêu cầu 2 GPU A100 (nhưng node radagast có 4 GPU, bạn có thể sử dụng đủ bộ nhớ của GPU0)
 #SBATCH --mem=200G          # Cấp đủ RAM hệ thống nếu cần
 #SBATCH --time=24:00:00
 #SBATCH --mail-user=your_email@domain.com
