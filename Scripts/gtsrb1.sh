@@ -17,65 +17,68 @@ cd "$HOME/BackdoorBox Research/backdoor-toolbox" || { echo "Directory not found"
 source "my_env/bin/activate"
 cd "$HOME/BackdoorBox Research/backdoor-toolbox"
 
-python other_defense.py -defense=TED -dataset=tinyimagenet200 -poison_type=badnet -poison_rate=0.1 -validation_per_class=5 -num_test_samples=50
-python other_defense.py -defense=TEDPLUS -dataset=tinyimagenet200 -poison_type=badnet -poison_rate=0.1 -validation_per_class=5 -num_test_samples=50
-python other_defense.py -defense=FOLD -dataset=tinyimagenet200 -poison_type=badnet -poison_rate=0.1 -validation_per_class=5 -num_test_samples=50
+python create_poisoned_set.py -dataset=tinyimagenet200 -poison_type=badnet -poison_rate=0.01
+python train_on_poisoned_set.py -dataset=tinyimagenet200 -poison_type=badnet -poison_rate=0.01
 
-python other_defense.py -defense=TED -dataset=tinyimagenet200 -poison_type=blend -poison_rate=0.1 -validation_per_class=5 -num_test_samples=50
-python other_defense.py -defense=TEDPLUS -dataset=tinyimagenet200 -poison_type=blend -poison_rate=0.1 -validation_per_class=5 -num_test_samples=50
-python other_defense.py -defense=FOLD -dataset=tinyimagenet200 -poison_type=blend -poison_rate=0.1 -validation_per_class=5 -num_test_samples=50
-
-python other_defense.py -defense=TED -dataset=tinyimagenet200 -poison_type=adaptive_patch -poison_rate=0.1 -validation_per_class=5 -num_test_samples=50
-python other_defense.py -defense=TEDPLUS -dataset=tinyimagenet200 -poison_type=adaptive_patch -poison_rate=0.1 -validation_per_class=5 -num_test_samples=50
-python other_defense.py -defense=FOLD -dataset=tinyimagenet200 -poison_type=adaptive_patch -poison_rate=0.1 -validation_per_class=5 -num_test_samples=50
-
-python other_defense.py -defense=TED -dataset=tinyimagenet200 -poison_type=WaNet -poison_rate=0.2 -validation_per_class=5 -num_test_samples=50
-python other_defense.py -defense=TEDPLUS -dataset=tinyimagenet200 -poison_type=WaNet -poison_rate=0.2 -validation_per_class=5 -num_test_samples=50
-python other_defense.py -defense=FOLD -dataset=tinyimagenet200 -poison_type=WaNet -poison_rate=0.2 -validation_per_class=5 -num_test_samples=50
-
-python other_defense.py -defense=TED -dataset=tinyimagenet200 -poison_type=trojan -poison_rate=0.1 -validation_per_class=5 -num_test_samples=50
-python other_defense.py -defense=TEDPLUS -dataset=tinyimagenet200 -poison_type=trojan -poison_rate=0.1 -validation_per_class=5 -num_test_samples=50
-python other_defense.py -defense=FOLD -dataset=tinyimagenet200 -poison_type=trojan -poison_rate=0.1 -validation_per_class=5 -num_test_samples=50
-
-python other_defense.py -defense=TED -dataset=tinyimagenet200 -poison_type=badnet -poison_rate=0.1 -validation_per_class=10 -num_test_samples=50
-python other_defense.py -defense=TEDPLUS -dataset=tinyimagenet200 -poison_type=badnet -poison_rate=0.1 -validation_per_class=10 -num_test_samples=50
-python other_defense.py -defense=FOLD -dataset=tinyimagenet200 -poison_type=badnet -poison_rate=0.1 -validation_per_class=10 -num_test_samples=50
-
-python other_defense.py -defense=TED -dataset=tinyimagenet200 -poison_type=blend -poison_rate=0.1 -validation_per_class=10 -num_test_samples=50
-python other_defense.py -defense=TEDPLUS -dataset=tinyimagenet200 -poison_type=blend -poison_rate=0.1 -validation_per_class=10 -num_test_samples=50
-python other_defense.py -defense=FOLD -dataset=tinyimagenet200 -poison_type=blend -poison_rate=0.1 -validation_per_class=10 -num_test_samples=50
-
-python other_defense.py -defense=TED -dataset=tinyimagenet200 -poison_type=adaptive_patch -poison_rate=0.1 -validation_per_class=10 -num_test_samples=50
-python other_defense.py -defense=TEDPLUS -dataset=tinyimagenet200 -poison_type=adaptive_patch -poison_rate=0.1 -validation_per_class=10 -num_test_samples=50
-python other_defense.py -defense=FOLD -dataset=tinyimagenet200 -poison_type=adaptive_patch -poison_rate=0.1 -validation_per_class=10 -num_test_samples=50
-
-python other_defense.py -defense=TED -dataset=tinyimagenet200 -poison_type=WaNet -poison_rate=0.2 -validation_per_class=10 -num_test_samples=50
-python other_defense.py -defense=TEDPLUS -dataset=tinyimagenet200 -poison_type=WaNet -poison_rate=0.2 -validation_per_class=10 -num_test_samples=50
-python other_defense.py -defense=FOLD -dataset=tinyimagenet200 -poison_type=WaNet -poison_rate=0.2 -validation_per_class=10 -num_test_samples=50
-
-python other_defense.py -defense=TED -dataset=tinyimagenet200 -poison_type=trojan -poison_rate=0.1 -validation_per_class=10 -num_test_samples=50
-python other_defense.py -defense=TEDPLUS -dataset=tinyimagenet200 -poison_type=trojan -poison_rate=0.1 -validation_per_class=10 -num_test_samples=50
-python other_defense.py -defense=FOLD -dataset=tinyimagenet200 -poison_type=trojan -poison_rate=0.1 -validation_per_class=10 -num_test_samples=50
-
-python other_defense.py -defense=TED -dataset=tinyimagenet200 -poison_type=badnet -poison_rate=0.1 -validation_per_class=20 -num_test_samples=50
-python other_defense.py -defense=TEDPLUS -dataset=tinyimagenet200 -poison_type=badnet -poison_rate=0.1 -validation_per_class=20 -num_test_samples=50
-python other_defense.py -defense=FOLD -dataset=tinyimagenet200 -poison_type=badnet -poison_rate=0.1 -validation_per_class=20 -num_test_samples=50
-
-python other_defense.py -defense=TED -dataset=tinyimagenet200 -poison_type=blend -poison_rate=0.1 -validation_per_class=20 -num_test_samples=50
-python other_defense.py -defense=TEDPLUS -dataset=tinyimagenet200 -poison_type=blend -poison_rate=0.1 -validation_per_class=20 -num_test_samples=50
-python other_defense.py -defense=FOLD -dataset=tinyimagenet200 -poison_type=blend -poison_rate=0.1 -validation_per_class=20 -num_test_samples=50
-
-python other_defense.py -defense=TED -dataset=tinyimagenet200 -poison_type=adaptive_patch -poison_rate=0.1 -validation_per_class=20 -num_test_samples=50
-python other_defense.py -defense=TEDPLUS -dataset=tinyimagenet200 -poison_type=adaptive_patch -poison_rate=0.1 -validation_per_class=20 -num_test_samples=50
-python other_defense.py -defense=FOLD -dataset=tinyimagenet200 -poison_type=adaptive_patch -poison_rate=0.1 -validation_per_class=20 -num_test_samples=50
-
-python other_defense.py -defense=TED -dataset=tinyimagenet200 -poison_type=WaNet -poison_rate=0.2 -validation_per_class=20 -num_test_samples=50
-python other_defense.py -defense=TEDPLUS -dataset=tinyimagenet200 -poison_type=WaNet -poison_rate=0.2 -validation_per_class=20 -num_test_samples=50
-python other_defense.py -defense=FOLD -dataset=tinyimagenet200 -poison_type=WaNet -poison_rate=0.2 -validation_per_class=20 -num_test_samples=50
-
-python other_defense.py -defense=TED -dataset=tinyimagenet200 -poison_type=trojan -poison_rate=0.1 -validation_per_class=20 -num_test_samples=50
-python other_defense.py -defense=TEDPLUS -dataset=tinyimagenet200 -poison_type=trojan -poison_rate=0.1 -validation_per_class=20 -num_test_samples=50
-python other_defense.py -defense=FOLD -dataset=tinyimagenet200 -poison_type=trojan -poison_rate=0.1 -validation_per_class=20 -num_test_samples=50
+#python other_defense.py -defense=TED -dataset=tinyimagenet200 -poison_type=badnet -poison_rate=0.1 -validation_per_class=5 -num_test_samples=50
+#python other_defense.py -defense=TEDPLUS -dataset=tinyimagenet200 -poison_type=badnet -poison_rate=0.1 -validation_per_class=5 -num_test_samples=50
+#python other_defense.py -defense=FOLD -dataset=tinyimagenet200 -poison_type=badnet -poison_rate=0.1 -validation_per_class=5 -num_test_samples=50
+#
+#python other_defense.py -defense=TED -dataset=tinyimagenet200 -poison_type=blend -poison_rate=0.1 -validation_per_class=5 -num_test_samples=50
+#python other_defense.py -defense=TEDPLUS -dataset=tinyimagenet200 -poison_type=blend -poison_rate=0.1 -validation_per_class=5 -num_test_samples=50
+#python other_defense.py -defense=FOLD -dataset=tinyimagenet200 -poison_type=blend -poison_rate=0.1 -validation_per_class=5 -num_test_samples=50
+#
+#python other_defense.py -defense=TED -dataset=tinyimagenet200 -poison_type=adaptive_patch -poison_rate=0.1 -validation_per_class=5 -num_test_samples=50
+#python other_defense.py -defense=TEDPLUS -dataset=tinyimagenet200 -poison_type=adaptive_patch -poison_rate=0.1 -validation_per_class=5 -num_test_samples=50
+#python other_defense.py -defense=FOLD -dataset=tinyimagenet200 -poison_type=adaptive_patch -poison_rate=0.1 -validation_per_class=5 -num_test_samples=50
+#
+#python other_defense.py -defense=TED -dataset=tinyimagenet200 -poison_type=WaNet -poison_rate=0.2 -validation_per_class=5 -num_test_samples=50
+#python other_defense.py -defense=TEDPLUS -dataset=tinyimagenet200 -poison_type=WaNet -poison_rate=0.2 -validation_per_class=5 -num_test_samples=50
+#python other_defense.py -defense=FOLD -dataset=tinyimagenet200 -poison_type=WaNet -poison_rate=0.2 -validation_per_class=5 -num_test_samples=50
+#
+#python other_defense.py -defense=TED -dataset=tinyimagenet200 -poison_type=trojan -poison_rate=0.1 -validation_per_class=5 -num_test_samples=50
+#python other_defense.py -defense=TEDPLUS -dataset=tinyimagenet200 -poison_type=trojan -poison_rate=0.1 -validation_per_class=5 -num_test_samples=50
+#python other_defense.py -defense=FOLD -dataset=tinyimagenet200 -poison_type=trojan -poison_rate=0.1 -validation_per_class=5 -num_test_samples=50
+#
+#python other_defense.py -defense=TED -dataset=tinyimagenet200 -poison_type=badnet -poison_rate=0.1 -validation_per_class=10 -num_test_samples=50
+#python other_defense.py -defense=TEDPLUS -dataset=tinyimagenet200 -poison_type=badnet -poison_rate=0.1 -validation_per_class=10 -num_test_samples=50
+#python other_defense.py -defense=FOLD -dataset=tinyimagenet200 -poison_type=badnet -poison_rate=0.1 -validation_per_class=10 -num_test_samples=50
+#
+#python other_defense.py -defense=TED -dataset=tinyimagenet200 -poison_type=blend -poison_rate=0.1 -validation_per_class=10 -num_test_samples=50
+#python other_defense.py -defense=TEDPLUS -dataset=tinyimagenet200 -poison_type=blend -poison_rate=0.1 -validation_per_class=10 -num_test_samples=50
+#python other_defense.py -defense=FOLD -dataset=tinyimagenet200 -poison_type=blend -poison_rate=0.1 -validation_per_class=10 -num_test_samples=50
+#
+#python other_defense.py -defense=TED -dataset=tinyimagenet200 -poison_type=adaptive_patch -poison_rate=0.1 -validation_per_class=10 -num_test_samples=50
+#python other_defense.py -defense=TEDPLUS -dataset=tinyimagenet200 -poison_type=adaptive_patch -poison_rate=0.1 -validation_per_class=10 -num_test_samples=50
+#python other_defense.py -defense=FOLD -dataset=tinyimagenet200 -poison_type=adaptive_patch -poison_rate=0.1 -validation_per_class=10 -num_test_samples=50
+#
+#python other_defense.py -defense=TED -dataset=tinyimagenet200 -poison_type=WaNet -poison_rate=0.2 -validation_per_class=10 -num_test_samples=50
+#python other_defense.py -defense=TEDPLUS -dataset=tinyimagenet200 -poison_type=WaNet -poison_rate=0.2 -validation_per_class=10 -num_test_samples=50
+#python other_defense.py -defense=FOLD -dataset=tinyimagenet200 -poison_type=WaNet -poison_rate=0.2 -validation_per_class=10 -num_test_samples=50
+#
+#python other_defense.py -defense=TED -dataset=tinyimagenet200 -poison_type=trojan -poison_rate=0.1 -validation_per_class=10 -num_test_samples=50
+#python other_defense.py -defense=TEDPLUS -dataset=tinyimagenet200 -poison_type=trojan -poison_rate=0.1 -validation_per_class=10 -num_test_samples=50
+#python other_defense.py -defense=FOLD -dataset=tinyimagenet200 -poison_type=trojan -poison_rate=0.1 -validation_per_class=10 -num_test_samples=50
+#
+#python other_defense.py -defense=TED -dataset=tinyimagenet200 -poison_type=badnet -poison_rate=0.1 -validation_per_class=20 -num_test_samples=50
+#python other_defense.py -defense=TEDPLUS -dataset=tinyimagenet200 -poison_type=badnet -poison_rate=0.1 -validation_per_class=20 -num_test_samples=50
+#python other_defense.py -defense=FOLD -dataset=tinyimagenet200 -poison_type=badnet -poison_rate=0.1 -validation_per_class=20 -num_test_samples=50
+#
+#python other_defense.py -defense=TED -dataset=tinyimagenet200 -poison_type=blend -poison_rate=0.1 -validation_per_class=20 -num_test_samples=50
+#python other_defense.py -defense=TEDPLUS -dataset=tinyimagenet200 -poison_type=blend -poison_rate=0.1 -validation_per_class=20 -num_test_samples=50
+#python other_defense.py -defense=FOLD -dataset=tinyimagenet200 -poison_type=blend -poison_rate=0.1 -validation_per_class=20 -num_test_samples=50
+#
+#python other_defense.py -defense=TED -dataset=tinyimagenet200 -poison_type=adaptive_patch -poison_rate=0.1 -validation_per_class=20 -num_test_samples=50
+#python other_defense.py -defense=TEDPLUS -dataset=tinyimagenet200 -poison_type=adaptive_patch -poison_rate=0.1 -validation_per_class=20 -num_test_samples=50
+#python other_defense.py -defense=FOLD -dataset=tinyimagenet200 -poison_type=adaptive_patch -poison_rate=0.1 -validation_per_class=20 -num_test_samples=50
+#
+#python other_defense.py -defense=TED -dataset=tinyimagenet200 -poison_type=WaNet -poison_rate=0.2 -validation_per_class=20 -num_test_samples=50
+#python other_defense.py -defense=TEDPLUS -dataset=tinyimagenet200 -poison_type=WaNet -poison_rate=0.2 -validation_per_class=20 -num_test_samples=50
+#python other_defense.py -defense=FOLD -dataset=tinyimagenet200 -poison_type=WaNet -poison_rate=0.2 -validation_per_class=20 -num_test_samples=50
+#
+#python other_defense.py -defense=TED -dataset=tinyimagenet200 -poison_type=trojan -poison_rate=0.1 -validation_per_class=20 -num_test_samples=50
+#python other_defense.py -defense=TEDPLUS -dataset=tinyimagenet200 -poison_type=trojan -poison_rate=0.1 -validation_per_class=20 -num_test_samples=50
+#python other_defense.py -defense=FOLD -dataset=tinyimagenet200 -poison_type=trojan -poison_rate=0.1 -validation_per_class=20 -num_test_samples=50
 
 # python other_defense.py -defense=TED -dataset=tinyimagenet200 -poison_type=SSDT -validation_per_class=5 -num_test_samples=50
 # python other_defense.py -defense=TEDPLUS -dataset=tinyimagenet200 -poison_type=SSDT -validation_per_class=5 -num_test_samples=50
