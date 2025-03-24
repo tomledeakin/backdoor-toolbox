@@ -4,6 +4,7 @@ import time
 from tqdm import tqdm
 from utils import default_args, imagenet
 from torch.cuda.amp import autocast, GradScaler
+from torch.optim.lr_scheduler import CosineAnnealingLR
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-epochs', type=int, default=None,
@@ -131,11 +132,11 @@ elif args.dataset == 'tinyimagenet200':
     num_classes = 200
     arch = supervisor.get_arch(args)
     momentum = 0.9
-    weight_decay = 1e-4
-    epochs = 100
+    weight_decay = 3e-4
+    epochs = 200
     milestones = torch.tensor([40, 60])
     learning_rate = 0.01
-    batch_size = 32
+    batch_size = 64
 
 elif args.dataset == 'imagenet':
 
@@ -381,8 +382,20 @@ if args.dataset != 'ember':
 else:
     criterion = nn.BCELoss().cuda()
 
-optimizer = torch.optim.SGD(model.parameters(), learning_rate, momentum=momentum, weight_decay=weight_decay)
-scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=milestones)
+# optimizer = torch.optim.SGD(model.parameters(), learning_rate, momentum=momentum, weight_decay=weight_decay)
+# scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=milestones)
+
+
+from torch.optim.lr_scheduler import SequentialLR, LinearLR, CosineAnnealingLR
+if args.dataset == 'tinyimagenet200':
+    optimizer = torch.optim.AdamW(model.parameters(), lr=3e-4, weight_decay=0.05)
+    warmup_scheduler = LinearLR(optimizer, start_factor=0.001, total_iters=5)
+    cosine_scheduler = CosineAnnealingLR(optimizer, T_max=epochs - 5)
+    scheduler = SequentialLR(optimizer, schedulers=[warmup_scheduler, cosine_scheduler], milestones=[5])
+else:
+    optimizer = torch.optim.SGD(model.parameters(), learning_rate, momentum=momentum, weight_decay=weight_decay)
+    scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=milestones)
+
 
 if args.poison_type == 'TaCT' or args.poison_type == 'SleeperAgent':
     source_classes = [config.source_class]
