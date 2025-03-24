@@ -23,7 +23,7 @@ export PYTHONUNBUFFERED=1
 # python create_poisoned_set.py -dataset=cifar10 -poison_type=clean_label -poison_rate=0.01
 #python train_on_poisoned_set.py -dataset=cifar10 -poison_type=clean_label -poison_rate=0.01 -resume_from_meta_info
 
-python create_poisoned_set.py -dataset=tinyimagenet200 -poison_type=badnet -poison_rate=0.1
+#python create_poisoned_set.py -dataset=tinyimagenet200 -poison_type=badnet -poison_rate=0.1
 python train_on_poisoned_set.py -dataset=tinyimagenet200 -poison_type=badnet -poison_rate=0.1
 
 #echo "cifar10 - badnet | START"
@@ -59,16 +59,16 @@ python train_on_poisoned_set.py -dataset=tinyimagenet200 -poison_type=badnet -po
 #echo "TEDPLUS | cifar10 - adaptive_patch | COMPLETE"
 #echo "cifar10 - adaptive_patch | COMPLETE"
 
-echo "cifar10 - adaptive_blend | START"
-# python create_poisoned_set.py -dataset=cifar10 -poison_type=adaptive_blend -poison_rate=0.1 -cover_rate=0.05
-# python train_on_poisoned_set.py -dataset=cifar10 -poison_type=adaptive_blend -poison_rate=0.1 -cover_rate=0.05
-# python test_model.py -dataset=cifar10 -poison_type=adaptive_blend -poison_rate=0.1 -cover_rate=0.05
-# python other_defense.py -defense=IBD_PSC -dataset=cifar10 -poison_type=adaptive_blend -poison_rate=0.1 -cover_rate=0.05 -validation_per_class=10
-python other_defense.py -defense=TED -dataset=cifar10 -poison_type=adaptive_blend -poison_rate=0.1 -cover_rate=0.05 -validation_per_class=5 -num_test_samples=50
-echo "TED | cifar10 - adaptive_blend | COMPLETE"
-#python other_defense.py -defense=TEDPLUS -dataset=cifar10 -poison_type=adaptive_blend -poison_rate=0.1 -cover_rate=0.05 -validation_per_class=2 -num_test_samples=50 -num_neighbors=3
-#echo "TEDPLUS | cifar10 - adaptive_blend | COMPLETE"
-echo "cifar10 - adaptive_blend | COMPLETE"
+#echo "cifar10 - adaptive_blend | START"
+## python create_poisoned_set.py -dataset=cifar10 -poison_type=adaptive_blend -poison_rate=0.1 -cover_rate=0.05
+## python train_on_poisoned_set.py -dataset=cifar10 -poison_type=adaptive_blend -poison_rate=0.1 -cover_rate=0.05
+## python test_model.py -dataset=cifar10 -poison_type=adaptive_blend -poison_rate=0.1 -cover_rate=0.05
+## python other_defense.py -defense=IBD_PSC -dataset=cifar10 -poison_type=adaptive_blend -poison_rate=0.1 -cover_rate=0.05 -validation_per_class=10
+#python other_defense.py -defense=TED -dataset=cifar10 -poison_type=adaptive_blend -poison_rate=0.1 -cover_rate=0.05 -validation_per_class=5 -num_test_samples=50
+#echo "TED | cifar10 - adaptive_blend | COMPLETE"
+##python other_defense.py -defense=TEDPLUS -dataset=cifar10 -poison_type=adaptive_blend -poison_rate=0.1 -cover_rate=0.05 -validation_per_class=2 -num_test_samples=50 -num_neighbors=3
+##echo "TEDPLUS | cifar10 - adaptive_blend | COMPLETE"
+#echo "cifar10 - adaptive_blend | COMPLETE"
 
 #echo "cifar10 - WaNet | START"
 ## python create_poisoned_set.py -dataset=cifar10 -poison_type=WaNet -poison_rate=0.1 -cover_rate=0.05
