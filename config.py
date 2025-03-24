@@ -1,10 +1,12 @@
-from utils import resnet, vgg, mobilenetv2, ember_nn, gtsrb_cnn, wresnet
+from utils import resnet, vgg, mobilenetv2, ember_nn, gtsrb_cnn, wresnet, deit
 from utils import supervisor
 from utils import tools
 import torch, torchvision
 from torchvision import transforms
 import os
 from networks.models import NetC_MNIST
+import timm
+import torch.nn as nn
 
 data_dir = './data' # defaul clean dataset directory
 triggers_dir = './triggers' # default triggers directory
@@ -139,7 +141,7 @@ arch = {
     'imagenet50': resnet.ResNet18,
     'imagenet100': resnet.ResNet18,
     'imagenet200': resnet.ResNet18,
-    'tinyimagenet200': resnet.ResNet18,
+    'tinyimagenet200': deit.deit_base_patch16_224,
     'ember': ember_nn.EmberNN,
     # 'imagenet' : resnet.ResNet18,
     'imagenet' : resnet.ResNet18,
