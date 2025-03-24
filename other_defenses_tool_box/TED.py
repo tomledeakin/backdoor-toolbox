@@ -76,7 +76,7 @@ class TED(BackdoorDefense):
                 dataset_path=config.data_dir,
                 batch_size=50,
                 split='test',
-                data_transform=None,
+                data_transform=self.data_transform,
                 shuffle=False,
                 drop_last=False,
                 noisy_test=False
