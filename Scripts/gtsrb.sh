@@ -23,7 +23,7 @@ export PYTHONUNBUFFERED=1
 # python create_poisoned_set.py -dataset=cifar10 -poison_type=clean_label -poison_rate=0.01
 #python train_on_poisoned_set.py -dataset=cifar10 -poison_type=clean_label -poison_rate=0.01 -resume_from_meta_info
 
-#python create_poisoned_set.py -dataset=tinyimagenet200 -poison_type=badnet -poison_rate=0.1
+python create_poisoned_set.py -dataset=tinyimagenet200 -poison_type=badnet -poison_rate=0.1
 python train_on_poisoned_set.py -dataset=tinyimagenet200 -poison_type=badnet -poison_rate=0.1
 
 #echo "cifar10 - badnet | START"
