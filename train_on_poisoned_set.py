@@ -382,19 +382,19 @@ if args.dataset != 'ember':
 else:
     criterion = nn.BCELoss().cuda()
 
-# optimizer = torch.optim.SGD(model.parameters(), learning_rate, momentum=momentum, weight_decay=weight_decay)
-# scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=milestones)
+optimizer = torch.optim.SGD(model.parameters(), learning_rate, momentum=momentum, weight_decay=weight_decay)
+scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=milestones)
 
 
-from torch.optim.lr_scheduler import SequentialLR, LinearLR, CosineAnnealingLR
-if args.dataset == 'tinyimagenet200':
-    optimizer = torch.optim.AdamW(model.parameters(), lr=3e-4, weight_decay=0.05)
-    warmup_scheduler = LinearLR(optimizer, start_factor=0.001, total_iters=5)
-    cosine_scheduler = CosineAnnealingLR(optimizer, T_max=epochs - 5)
-    scheduler = SequentialLR(optimizer, schedulers=[warmup_scheduler, cosine_scheduler], milestones=[5])
-else:
-    optimizer = torch.optim.SGD(model.parameters(), learning_rate, momentum=momentum, weight_decay=weight_decay)
-    scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=milestones)
+# from torch.optim.lr_scheduler import SequentialLR, LinearLR, CosineAnnealingLR
+# if args.dataset == 'tinyimagenet200':
+#     optimizer = torch.optim.AdamW(model.parameters(), lr=3e-4, weight_decay=0.05)
+#     warmup_scheduler = LinearLR(optimizer, start_factor=0.001, total_iters=5)
+#     cosine_scheduler = CosineAnnealingLR(optimizer, T_max=epochs - 5)
+#     scheduler = SequentialLR(optimizer, schedulers=[warmup_scheduler, cosine_scheduler], milestones=[5])
+# else:
+#     optimizer = torch.optim.SGD(model.parameters(), learning_rate, momentum=momentum, weight_decay=weight_decay)
+#     scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=milestones)
 
 
 if args.poison_type == 'TaCT' or args.poison_type == 'SleeperAgent':
