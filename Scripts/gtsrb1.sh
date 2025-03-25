@@ -20,7 +20,7 @@ cd "$HOME/BackdoorBox Research/backdoor-toolbox"
 #python create_poisoned_set.py -dataset=tinyimagenet200 -poison_type=badnet -poison_rate=0.01
 #python train_on_poisoned_set.py -dataset=tinyimagenet200 -poison_type=badnet -poison_rate=0.01
 
-python other_defense.py -defense=TEDPLUS -dataset=cifar10 -poison_type=WaNet -poison_rate=0.1 -cover_rate=0.05 -validation_per_class=2 -num_test_samples=50 -num_neighbors=3
+python other_defense.py -defense=TEDPLUS -dataset=cifar10 -poison_type=blend -poison_rate=0.1 -validation_per_class=5 -num_test_samples=50
 #python other_defense.py -defense=TEDPLUS -dataset=tinyimagenet200 -poison_type=badnet -poison_rate=0.1 -validation_per_class=5 -num_test_samples=50
 #python other_defense.py -defense=FOLD -dataset=tinyimagenet200 -poison_type=badnet -poison_rate=0.1 -validation_per_class=5 -num_test_samples=50
 #
