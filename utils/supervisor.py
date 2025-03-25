@@ -549,9 +549,10 @@ def get_transforms(args):
     elif args.dataset == 'tinyimagenet200':
         if args.no_normalize:
             data_transform_aug = transforms.Compose([
+                transforms.RandomResizedCrop(64, scale=(0.08, 1.0)),
                 transforms.RandomHorizontalFlip(),
-                transforms.RandomRotation(15),
-                transforms.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.3),  # Biến đổi màu sắc
+                transforms.ColorJitter(0.4, 0.4, 0.4, 0.1),
+                transforms.RandomGrayscale(p=0.1),
                 transforms.ToTensor(),
             ])
             data_transform = transforms.Compose([
@@ -570,11 +571,13 @@ def get_transforms(args):
             ############################
         else:
             data_transform_aug = transforms.Compose([
+                transforms.RandomResizedCrop(64, scale=(0.08, 1.0)),
                 transforms.RandomHorizontalFlip(),
-                transforms.RandomRotation(15),
-                transforms.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.3),
+                transforms.ColorJitter(0.4, 0.4, 0.4, 0.1),
+                transforms.RandomGrayscale(p=0.1),
                 transforms.ToTensor(),
-                transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
+                transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                     std=[0.229, 0.224, 0.225]),
             ])
             data_transform = transforms.Compose([
                 transforms.ToTensor(),

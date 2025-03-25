@@ -132,11 +132,11 @@ elif args.dataset == 'tinyimagenet200':
     num_classes = 200
     arch = supervisor.get_arch(args)
     momentum = 0.9
-    weight_decay = 3e-4
+    weight_decay = 	5e-4
     epochs = 200
     milestones = torch.tensor([40, 60])
-    learning_rate = 0.01
-    batch_size = 64
+    learning_rate = 0.1
+    batch_size = 128
 
 elif args.dataset == 'imagenet':
 
@@ -375,15 +375,19 @@ model = nn.DataParallel(model)
 model = model.cuda()
 
 if args.dataset != 'ember':
-    if args.dataset == 'imagenet':
-        criterion = nn.CrossEntropyLoss().cuda()
+    if args.dataset == 'tinyimagenet200':
+        criterion = nn.CrossEntropyLoss(label_smoothing=0.1).cuda()
     else:
         criterion = nn.CrossEntropyLoss().cuda()
 else:
     criterion = nn.BCELoss().cuda()
 
-optimizer = torch.optim.SGD(model.parameters(), learning_rate, momentum=momentum, weight_decay=weight_decay)
-scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=milestones)
+if args.dataset == 'tinyimagenet200':
+    optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate, momentum=momentum, weight_decay=weight_decay)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=200)
+else:
+    optimizer = torch.optim.SGD(model.parameters(), learning_rate, momentum=momentum, weight_decay=weight_decay)
+    scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=milestones)
 
 
 # from torch.optim.lr_scheduler import SequentialLR, LinearLR, CosineAnnealingLR
