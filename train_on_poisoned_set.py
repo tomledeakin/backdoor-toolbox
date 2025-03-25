@@ -132,10 +132,10 @@ elif args.dataset == 'tinyimagenet200':
     num_classes = 200
     arch = supervisor.get_arch(args)
     momentum = 0.9
-    weight_decay = 	5e-4
+    weight_decay = 5e-4
     epochs = 200
     milestones = torch.tensor([40, 60])
-    learning_rate = 0.1
+    learning_rate = 0.05
     batch_size = 128
 
 elif args.dataset == 'imagenet':
@@ -384,7 +384,7 @@ else:
 
 if args.dataset == 'tinyimagenet200':
     optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate, momentum=momentum, weight_decay=weight_decay)
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=200)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
 else:
     optimizer = torch.optim.SGD(model.parameters(), learning_rate, momentum=momentum, weight_decay=weight_decay)
     scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=milestones)
