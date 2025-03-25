@@ -118,7 +118,7 @@ trigger_default = {
     },
     'tinyimagenet200': {
         'none': 'none',
-        'badnet': 'badnet_patch_224.png',
+        'badnet': 'badnet_patch_64.png',
         'blend' : 'hellokitty_64.png',
         'adaptive_blend': 'hellokitty_64.png',
         'adaptive_patch': 'none',
@@ -141,7 +141,7 @@ arch = {
     'imagenet50': resnet.ResNet18,
     'imagenet100': resnet.ResNet18,
     'imagenet200': resnet.ResNet18,
-    'tinyimagenet200': deit.deit_base_patch16_224,
+    'tinyimagenet200': resnet.ResNet50,
     'ember': ember_nn.EmberNN,
     # 'imagenet' : resnet.ResNet18,
     'imagenet' : resnet.ResNet18,
@@ -319,13 +319,13 @@ def get_params(args):
 
         data_transform_normalize = transforms.Compose([
             transforms.ToTensor(),
-            transforms.Normalize((0.480, 0.448, 0.397), (0.276, 0.268, 0.281))
+            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
         ])
 
         data_transform_aug = transforms.Compose([
             transforms.RandomRotation(15),
             transforms.ToTensor(),
-            transforms.Normalize((0.480, 0.448, 0.397), (0.276, 0.268, 0.281))
+            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
         ])
 
         distillation_ratio = [1 / 2, 1 / 5, 1 / 25, 1 / 50, 1 / 100, 1 / 200]  # 6 giá trị, ví dụ: thêm 1/200 ở cuối

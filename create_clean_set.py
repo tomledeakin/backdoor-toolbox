@@ -111,13 +111,12 @@ elif args.dataset == 'imagenet200':
 elif args.dataset == 'tinyimagenet200':
 
     data_transform = transforms.Compose([
-        transforms.Resize((224, 224)),
         transforms.ToTensor(),
     ])
 
     clean_set = datasets.ImageFolder(os.path.join(os.path.join(data_dir, 'tinyimagenet200'), 'val'), data_transform)
 
-    img_size = 224
+    img_size = 64
     num_classes = 200
 
 elif args.dataset == 'imagenet':

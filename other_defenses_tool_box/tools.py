@@ -339,7 +339,7 @@ def generate_dataloader(dataset='cifar10', dataset_path='./data/', batch_size=12
         if data_transform is None:
             data_transform = transforms.Compose([
                 transforms.ToTensor(),
-                transforms.Normalize((0.480, 0.448, 0.397), (0.276, 0.268, 0.281))
+                transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
             ])
 
         dataset_path = os.path.join(dataset_path, 'tinyimagenet200')

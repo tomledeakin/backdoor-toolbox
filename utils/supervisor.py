@@ -549,18 +549,15 @@ def get_transforms(args):
     elif args.dataset == 'tinyimagenet200':
         if args.no_normalize:
             data_transform_aug = transforms.Compose([
-                transforms.Resize((224, 224)),
-                transforms.RandomHorizontalFlip(),  # Lật ngang
-                transforms.RandomRotation(15),  # Xoay ngẫu nhiên ±15 độ
+                transforms.RandomHorizontalFlip(),
+                transforms.RandomRotation(15),
                 transforms.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.3),  # Biến đổi màu sắc
                 transforms.ToTensor(),
             ])
             data_transform = transforms.Compose([
-                transforms.Resize((224, 224)),
                 transforms.ToTensor(),
             ])
             trigger_transform = transforms.Compose([
-                transforms.Resize((224, 224)),
                 transforms.ToTensor(),
             ])
             normalizer = transforms.Compose([
@@ -573,20 +570,17 @@ def get_transforms(args):
             ############################
         else:
             data_transform_aug = transforms.Compose([
-                transforms.Resize((224, 224)),
                 transforms.RandomHorizontalFlip(),
                 transforms.RandomRotation(15),
                 transforms.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.3),
                 transforms.ToTensor(),
-                transforms.Normalize((0.480, 0.448, 0.397), (0.276, 0.268, 0.281))
+                transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
             ])
             data_transform = transforms.Compose([
-                transforms.Resize((224, 224)),
                 transforms.ToTensor(),
                 transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
             ])
             trigger_transform = transforms.Compose([
-                transforms.Resize((224, 224)),
                 transforms.ToTensor(),
                 transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
             ])
@@ -625,7 +619,7 @@ def get_poison_transform(poison_type, dataset_name, target_class, source_class=1
     elif dataset_name in ['mnist']:
         img_size = 28
     elif dataset_name in ['tinyimagenet200']:
-        img_size = 224
+        img_size = 64
     elif dataset_name in ['imagenette', 'imagenet', 'imagenet50', 'imagenet100', 'imagenet200']:
         img_size = 224
     else:
