@@ -15,6 +15,7 @@ cd "$HOME/BackdoorBox Research/backdoor-toolbox" || { echo "Directory not found"
 # Activate the Python virtual environment
 source "my_env/bin/activate"
 cd "$HOME/BackdoorBox Research/backdoor-toolbox"
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
 #python create_poisoned_set.py -dataset=tinyimagenet200 -poison_type=badnet -poison_rate=0.01
 #python train_on_poisoned_set.py -dataset=tinyimagenet200 -poison_type=badnet -poison_rate=0.01
