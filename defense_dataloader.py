@@ -171,6 +171,8 @@ def get_dataset(opt, train=True):
             opt.data_root, train, transform, download=True)
     elif opt.dataset == "imagenet200":
         dataset = ImageNet(opt, train, transform)
+    elif opt.dataset == "tinyimagenet200":
+        dataset = ImageNet(opt, train, transform)
     elif opt.dataset == "pubfig":
         dataset = PubFig(opt, train, transform)
     else:
