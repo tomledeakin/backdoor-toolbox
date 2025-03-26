@@ -133,8 +133,8 @@ elif args.dataset == 'tinyimagenet200':
     arch = supervisor.get_arch(args)
     momentum = 0.9
     weight_decay = 1e-4
-    epochs = 200
-    milestones = torch.tensor([40, 80])
+    epochs = 100
+    milestones = torch.tensor([40, 70])
     learning_rate = 0.01
     batch_size = 32
 
