@@ -106,9 +106,16 @@ class ImageNet(data.Dataset):
             self.data_folder = os.path.join(dataset_dir, 'train')
             self.data = datasets.ImageFolder(self.data_folder, transform=transform)
         else:
-            self.data_folder = os.path.join(dataset_dir, 'val')
-            self.data = datasets.ImageFolder(self.data_folder, transform=transform)
-            
+            # self.data_folder = os.path.join(dataset_dir, 'val')
+            # self.data = datasets.ImageFolder(self.data_folder, transform=transform)
+
+            from torch.utils.data import ConcatDataset
+            test_folder = os.path.join(dataset_dir, 'test')
+            val_folder = os.path.join(dataset_dir, 'val')
+            test_data = datasets.ImageFolder(test_folder, transform=transform)
+            val_data = datasets.ImageFolder(val_folder, transform=transform)
+            self.data = ConcatDataset([test_data, val_data])
+
         self.transform = transform
 
     def __len__(self):

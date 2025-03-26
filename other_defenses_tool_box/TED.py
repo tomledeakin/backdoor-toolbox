@@ -7,7 +7,6 @@ import random
 from collections import Counter, defaultdict
 from tqdm import tqdm
 import numpy as np
-from scipy.spatial.distance import pdist, squareform
 import pandas as pd
 import matplotlib.pyplot as plt
 import pickle
@@ -33,7 +32,7 @@ from other_defenses_tool_box.backdoor_defense import BackdoorDefense
 from networks.models import Generator, NetC_MNIST
 from defense_dataloader import get_dataset, get_dataloader
 import seaborn as sns
-from matplotlib.lines import Line2D
+
 # ------------------------------
 # Seed settings for reproducibility
 # ------------------------------
@@ -521,7 +520,7 @@ class TED(BackdoorDefense):
         all_h_label, pred_set = [], []
         activation_container = {}
 
-        if self.dataset == 'tinyimagenet200':
+        if self.dataset == 'aaa':
             # Dùng phiên bản uncomment (sử dụng torch.no_grad)
             with torch.no_grad():
                 # Khởi tạo hook bằng 1 batch
@@ -718,7 +717,66 @@ class TED(BackdoorDefense):
         print('STEP 2')
         self.create_poison_clean_dataloaders()
 
-        
+        print('STEP 3')
+        images_to_display = []
+        predictions_to_display = []
+
+        pairs = [
+            (self.poison_loader, 3, "Poison Image"),
+            (self.clean_loader, 9, "Clean Image")
+        ]
+        for loader, limit, prefix in pairs:
+            count = 0
+            for inputs, labels in loader:
+                inputs = inputs.to(self.device)
+                predictions = torch.argmax(self.model(inputs), dim=1).cpu()
+                for input_image, pred_ in zip(inputs, predictions):
+                    if count < limit:
+                        images_to_display.append(input_image.unsqueeze(0))
+                        predictions_to_display.append(pred_)
+                        count += 1
+                    else:
+                        break
+                if count >= limit:
+                    break
+            self.display_images_grid(images_to_display, predictions_to_display, title_prefix=prefix)
+            images_to_display.clear()
+            predictions_to_display.clear()
+
+        print('DEBUG')
+
+        def print_loader_info(loader, name):
+            print(f"{name} loader info:")
+            print(f"Total samples: {len(loader.dataset)}")
+            for batch in loader:
+                inputs, labels = batch
+                print(f"Batch - Inputs shape: {inputs.shape}, Labels shape: {labels.shape}")
+                print(f"Sample labels: {labels[:5]}")
+                for i in range(3):
+                    img = inputs[i].squeeze().cpu().numpy()
+                    plt.imshow(img.transpose(1, 2, 0) if img.ndim == 3 else img, cmap="gray")
+                    plt.title(f"{name} - Label: {labels[i]}")
+                    plt.axis("off")
+                    sample_path = os.path.join(self.save_dir, f"{name}_sample_{i}.png")
+                    plt.savefig(sample_path, dpi=300)
+                    plt.show()
+                break
+
+        print_loader_info(self.poison_loader, "Poison")
+        print_loader_info(self.clean_loader, "Clean")
+        print_loader_info(self.defense_loader, "Defense")
+
+        try:
+            for images, labels in self.defense_loader:
+                print(f"Images shape: {images.shape}, Labels shape: {labels.shape}")
+                break
+        except Exception as e:
+            print(f"Error loading data from defense_loader: {e}")
+
+        print(f"Using device: {self.device}")
+        print(f"Model is on device: {next(self.model.parameters()).device}")
+
+        print('DEBUG')
         print('STEP 4')
 
         self.h_defense_ori_labels, self.h_defense_activations, self.h_defense_preds = self.fetch_activation(
@@ -842,149 +900,6 @@ class TED(BackdoorDefense):
 
         inputs_all_unknown = np.concatenate(inputs_all_unknown)
         labels_all_unknown = np.concatenate(labels_all_unknown)
-
-        # --- Loop over each layer for visualization ---
-        for layer_name in self.h_defense_activations.keys():
-            # --- Extract activations for the current layer ---
-            defense_act = self.h_defense_activations[layer_name]  # shape: (n_defense, dim)
-            poison_act = self.h_poison_activations[layer_name]  # shape: (n_poison, dim)
-            clean_act = self.h_clean_activations[layer_name]  # shape: (n_clean, dim)
-
-            # --- Convert tensors to NumPy arrays ---
-            defense_np = defense_act.cpu().detach().numpy()
-            poison_np = poison_act.cpu().detach().numpy()
-            clean_np = clean_act.cpu().detach().numpy()
-
-            # --- Process defense labels using self.h_defense_ori_labels ---
-            defense_ori_labels = self.h_defense_ori_labels.cpu().detach().numpy()
-            # Nếu nhãn gốc bằng self.target thì gán "Target", ngược lại gán "Defense"
-            defense_labels = np.where(defense_ori_labels == self.target, "Target", "Defense")
-
-            # --- Create labels for poison samples ---
-            poison_labels = np.array(["Poison"] * poison_np.shape[0])
-
-            # --- Automatically assign labels for clean samples based on nearest defense sample ---
-            n_clean = clean_np.shape[0]
-            clean_labels = []
-            # Chuyển defense_np thành tensor một lần để tránh lặp lại
-            defense_tensor = torch.from_numpy(defense_np).to(self.device)
-            for i in range(n_clean):
-                clean_vector = torch.from_numpy(clean_np[i: i + 1]).to(self.device)
-                distances = pairwise_euclidean_distance(clean_vector, defense_tensor)
-                nearest_defense_idx = torch.argmin(distances).item()
-                # Nếu defense sample gần nhất có nhãn "Target" (ranking = 0) thì gán clean sample là "Target Clean"
-                if defense_labels[nearest_defense_idx] == "Target":
-                    clean_labels.append("Target Clean")
-                else:
-                    clean_labels.append("Clean")
-            clean_labels = np.array(clean_labels)
-
-            # --- Concatenate activations and labels ---
-            all_activations = np.concatenate([defense_np, poison_np, clean_np], axis=0)
-            all_labels = np.concatenate([defense_labels, poison_labels, clean_labels], axis=0)
-
-            # Số lượng mẫu của mỗi tập
-            n_defense = defense_np.shape[0]
-            n_poison = poison_np.shape[0]
-            # n_clean đã có ở trên
-
-            # --- Set default color mapping ---
-            default_color_map = {
-                "Defense": "purple",  # defense không phải target
-                "Target": "black",  # defense target
-                "Poison": "red",
-                "Clean": "green",
-                "Target Clean": "blue"  # clean samples tự động có target
-            }
-            colors = [default_color_map[label] for label in all_labels]
-
-            # --- Set marker sizes (default = 10) ---
-            marker_sizes = [10] * len(all_labels)
-            # Đối với defense samples có nhãn "Target"
-            for i in range(n_defense):
-                if defense_labels[i] == "Target":
-                    marker_sizes[i] = 50
-            # Đối với clean samples được gán nhãn "Target Clean"
-            for i in range(n_clean):
-                if clean_labels[i] == "Target Clean":
-                    marker_sizes[n_defense + n_poison + i] = 50
-
-            # --- Apply UMAP to reduce dimensions to 2D ---
-            umap_model = UMAP(n_components=2, random_state=42)
-            embedding = umap_model.fit_transform(all_activations)
-
-            # --- Set a publication-friendly style ---
-            plt.style.use("seaborn-v0_8-paper")
-            plt.figure(figsize=(10, 8))
-
-            # Vẽ scatter plot
-            plt.scatter(embedding[:, 0], embedding[:, 1], c=colors, s=marker_sizes, alpha=0.7, zorder=3)
-
-            # --- Draw connection lines for poison samples (giữ nguyên như cũ) ---
-            distance_matrix = squareform(pdist(poison_np, metric='euclidean'))
-            best_indices = None
-            best_sum = np.inf
-            for i in range(n_poison):
-                nearest_idxs = np.argsort(distance_matrix[i])[:40]
-                total_distance = distance_matrix[i, nearest_idxs].sum()
-                if total_distance < best_sum:
-                    best_sum = total_distance
-                    best_indices = nearest_idxs
-
-            for idx in best_indices:
-                if idx < n_poison:
-                    global_idx = n_defense + idx  # poison sample index trong all_activations
-                    special_vector_np = poison_np[idx: idx + 1]
-                    special_vector = torch.from_numpy(special_vector_np).to(self.device)
-                    defense_tensor = torch.from_numpy(defense_np).to(self.device)
-                    distances = pairwise_euclidean_distance(special_vector, defense_tensor)
-                    nearest_defense_idx = torch.argmin(distances).item()
-                    if defense_labels[nearest_defense_idx] == "Target":
-                        plt.plot([embedding[global_idx, 0], embedding[nearest_defense_idx, 0]],
-                                 [embedding[global_idx, 1], embedding[nearest_defense_idx, 1]],
-                                 c='red', linestyle='--', linewidth=2, zorder=2)
-                        # Vẽ lại poison sample với marker lớn
-                        plt.scatter(embedding[global_idx, 0], embedding[global_idx, 1], c=colors[global_idx], s=50, zorder=4)
-
-            # --- Draw connection lines cho clean samples có nhãn "Target Clean" ---
-            # Ở đây, ta lặp qua các clean sample đã được gán nhãn "Target Clean"
-            target_clean_indices = np.where(clean_labels == "Target Clean")[0]
-            for idx in target_clean_indices:
-                global_idx = n_defense + n_poison + idx
-                clean_vector_np = clean_np[idx: idx + 1]
-                clean_vector = torch.from_numpy(clean_vector_np).to(self.device)
-                defense_tensor = torch.from_numpy(defense_np).to(self.device)
-                distances = pairwise_euclidean_distance(clean_vector, defense_tensor)
-                nearest_defense_idx = torch.argmin(distances).item()
-                # Nếu defense gần nhất có nhãn "Target" (tức ranking = 0) thì vẽ đường nối
-                if defense_labels[nearest_defense_idx] == "Target":
-                    plt.plot([embedding[global_idx, 0], embedding[nearest_defense_idx, 0]],
-                             [embedding[global_idx, 1], embedding[nearest_defense_idx, 1]],
-                             c='blue', linestyle='--', linewidth=2, zorder=2)
-
-            # --- Customize legend and ticks ---
-            # --- Customize legend and ticks ---
-            legend_elements = [
-                Line2D([0], [0], marker='o', color='w', label='Validation Sample', markerfacecolor='purple',
-                       markersize=10),
-                Line2D([0], [0], marker='o', color='w', label='Target Validation Sample', markerfacecolor='black',
-                       markersize=10),
-                Line2D([0], [0], marker='o', color='w', label='Clean Sample', markerfacecolor='green', markersize=10),
-                Line2D([0], [0], marker='o', color='w', label='Target Clean Sample', markerfacecolor='blue',
-                       markersize=10),
-                Line2D([0], [0], marker='o', color='w', label='Poison Sample', markerfacecolor='red', markersize=10),
-                Line2D([0], [0], linestyle='--', color='gray', label='Ranking = 0', linewidth=2)
-            ]
-            plt.legend(handles=legend_elements, loc='upper left', fontsize=25)
-            plt.xticks(fontsize=25)
-            plt.yticks(fontsize=25)
-            plt.tight_layout()
-
-            # --- Save the figure in PDF format for publication ---
-            plot_save_path = os.path.join(self.save_dir, f"umap_{layer_name}.pdf")
-            plt.savefig(plot_save_path, bbox_inches='tight', format='pdf', dpi=300)
-            plt.close()
-            print(f"UMAP plot for layer '{layer_name}' saved to: {plot_save_path}")
 
         print('STEP 9')
         pca_t = sklearn_PCA(n_components=2)
