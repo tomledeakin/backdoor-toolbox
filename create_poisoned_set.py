@@ -320,7 +320,10 @@ if args.poison_type in ['basic', 'badnet', 'blend', 'clean_label', 'refool',
 
     elif args.poison_type == 'WaNet':
         # Prepare grid
-        s = 0.5
+        if args.dataset == 'tinyimagenet200':
+            s = 1
+        else:
+            s = 0.5
         k = 4
         grid_rescale = 1
         ins = torch.rand(1, 2, k, k) * 2 - 1
