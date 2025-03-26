@@ -139,6 +139,7 @@ class BackdoorDefense():
             print(self.model)
 
             # Tạo và tải trọng số cho netG
+            print("Args content:", args.__dict__)
             self.netG = Generator(args)
             self.netG = self.load_state(self.netG, state_dict["netG"])
 
