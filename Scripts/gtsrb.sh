@@ -27,7 +27,9 @@ export PYTHONUNBUFFERED=1
 #python create_poisoned_set.py -dataset=tinyimagenet200 -poison_type=badnet -poison_rate=0.1
 #python train_on_poisoned_set.py -dataset=tinyimagenet200 -poison_type=badnet -poison_rate=0.1 -resume_from_meta_info
 
-python other_defense.py -defense=TEDPLUS -dataset=tinyimagenet200 -poison_type=badnet -poison_rate=0.1 -validation_per_class=10 -num_test_samples=50
+python other_defense.py -defense=TED -dataset=tinyimagenet200 -poison_type=SSDT -validation_per_class=5 -num_test_samples=50
+
+#python other_defense.py -defense=TEDPLUS -dataset=tinyimagenet200 -poison_type=badnet -poison_rate=0.1 -validation_per_class=10 -num_test_samples=50
 #python other_defense.py -defense=TEDPLUS -dataset=tinyimagenet200 -poison_type=badnet -poison_rate=0.1 -validation_per_class=5 -num_test_samples=50
 
 #echo "cifar10 - badnet | START"
