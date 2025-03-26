@@ -3,7 +3,7 @@
 #SBATCH --output=output1.log
 #SBATCH --error=error1.log
 #SBATCH --partition=gpu
-#SBATCH --gres=gpu:a100:1   # Yêu cầu 1 GPU A100 trên node radagast
+#SBATCH --gres=gpu:l40s:1   # Yêu cầu 1 GPU A100 trên node radagast
 #SBATCH --nodelist=boromir     # Cấp đủ RAM hệ thống nếu cần
 #SBATCH --time=24:00:00
 #SBATCH --mail-user=tomledeakin@gmail.com
@@ -20,7 +20,7 @@ cd "$HOME/BackdoorBox Research/backdoor-toolbox"
 #python create_poisoned_set.py -dataset=tinyimagenet200 -poison_type=badnet -poison_rate=0.01
 #python train_on_poisoned_set.py -dataset=tinyimagenet200 -poison_type=badnet -poison_rate=0.01
 
-python other_defense.py -defense=TEDPLUS -dataset=cifar10 -poison_type=blend -poison_rate=0.1 -validation_per_class=5 -num_test_samples=50
+python other_defense.py -defense=TEDPLUS -dataset=tinyimagenet200 -poison_type=SSDT -validation_per_class=5 -num_test_samples=50
 #python other_defense.py -defense=TEDPLUS -dataset=tinyimagenet200 -poison_type=badnet -poison_rate=0.1 -validation_per_class=5 -num_test_samples=50
 #python other_defense.py -defense=FOLD -dataset=tinyimagenet200 -poison_type=badnet -poison_rate=0.1 -validation_per_class=5 -num_test_samples=50
 #
