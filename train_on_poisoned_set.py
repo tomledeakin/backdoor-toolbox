@@ -134,7 +134,7 @@ elif args.dataset == 'tinyimagenet200':
     momentum = 0.9
     weight_decay = 1e-4
     epochs = 200
-    milestones = torch.tensor([40, 60])
+    milestones = torch.tensor([40, 80])
     learning_rate = 0.01
     batch_size = 32
 
