@@ -141,7 +141,7 @@ arch = {
     'imagenet50': resnet.ResNet18,
     'imagenet100': resnet.ResNet18,
     'imagenet200': resnet.ResNet18,
-    'tinyimagenet200': resnet.ResNet50,
+    'tinyimagenet200': resnet.ResNet18,
     'ember': ember_nn.EmberNN,
     # 'imagenet' : resnet.ResNet18,
     'imagenet' : resnet.ResNet18,
