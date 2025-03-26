@@ -38,6 +38,9 @@ def get_transform(opt, train=True):
     elif opt.dataset == "imagenet200":
         transforms_list.append(transforms.Normalize([0.485, 0.456, 0.406],
                                                     [0.229, 0.224, 0.225]))
+    elif opt.dataset == "tinyimagenet200":
+        transforms_list.append(transforms.Normalize([0.485, 0.456, 0.406],
+                                                    [0.229, 0.224, 0.225]))
     elif opt.dataset == "pubfig":
         print("PubFig dataset does not need normalization")
     else:
@@ -144,6 +147,8 @@ def get_dataloader(opt, train=True):
         dataset = torchvision.datasets.CIFAR10(
             opt.data_root, train, transform, download=True)
     elif opt.dataset == "imagenet200":
+        dataset = ImageNet(opt, train, transform)
+    elif opt.dataset == "tinyimagenet200":
         dataset = ImageNet(opt, train, transform)
     elif opt.dataset == "pubfig":
         dataset = PubFig(opt, train, transform)
