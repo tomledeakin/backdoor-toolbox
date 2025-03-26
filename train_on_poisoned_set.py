@@ -136,7 +136,7 @@ elif args.dataset == 'tinyimagenet200':
     epochs = 200
     milestones = torch.tensor([40, 60])
     learning_rate = 0.01
-    batch_size = 128
+    batch_size = 32
 
 elif args.dataset == 'imagenet':
 
