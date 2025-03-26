@@ -3,7 +3,7 @@
 #SBATCH --output=output1.log
 #SBATCH --error=error1.log
 #SBATCH --partition=gpu
-#SBATCH --gres=gpu:l40s:2   # Yêu cầu 1 GPU A100 trên node radagast
+#SBATCH --gres=gpu:l40s:1   # Yêu cầu 1 GPU A100 trên node radagast
 #SBATCH --time=24:00:00
 #SBATCH --mail-user=tomledeakin@gmail.com
 #SBATCH --mail-type=ALL
