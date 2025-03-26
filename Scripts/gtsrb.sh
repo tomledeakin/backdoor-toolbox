@@ -3,10 +3,10 @@
 #SBATCH --output=output.log
 #SBATCH --error=error.log
 #SBATCH --partition=gpu
-#SBATCH --gres=gpu:a100:1   # Yêu cầu 2 GPU A100 (nhưng node radagast có 4 GPU, bạn có thể sử dụng đủ bộ nhớ của GPU0)
+#SBATCH --gres=gpu:l40s:1   # Yêu cầu 2 GPU A100 (nhưng node radagast có 4 GPU, bạn có thể sử dụng đủ bộ nhớ của GPU0)
 #SBATCH --mem=200G          # Cấp đủ RAM hệ thống nếu cần
 #SBATCH --time=24:00:00
-#SBATCH --mail-user=your_email@domain.com
+#SBATCH --mail-user=tomledeakin@gmail.com
 #SBATCH --mail-type=ALL
 
 # Navigate to the project directory
@@ -27,8 +27,8 @@ export PYTHONUNBUFFERED=1
 #python create_poisoned_set.py -dataset=tinyimagenet200 -poison_type=badnet -poison_rate=0.1
 #python train_on_poisoned_set.py -dataset=tinyimagenet200 -poison_type=badnet -poison_rate=0.1 -resume_from_meta_info
 
-python other_defense.py -defense=TED -dataset=tinyimagenet200 -poison_type=badnet -poison_rate=0.1 -validation_per_class=10 -num_test_samples=50
-python other_defense.py -defense=TEDPLUS -dataset=tinyimagenet200 -poison_type=badnet -poison_rate=0.1 -validation_per_class=10 -num_test_samples=50
+python other_defense.py -defense=TED -dataset=tinyimagenet200 -poison_type=badnet -poison_rate=0.1 -validation_per_class=5 -num_test_samples=50
+python other_defense.py -defense=TEDPLUS -dataset=tinyimagenet200 -poison_type=badnet -poison_rate=0.1 -validation_per_class=5 -num_test_samples=50
 
 #echo "cifar10 - badnet | START"
 ## python create_poisoned_set.py -dataset=cifar10 -poison_type=badnet -poison_rate='0.1'
