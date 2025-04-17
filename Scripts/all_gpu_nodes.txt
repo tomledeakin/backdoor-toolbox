@@ -1,0 +1,10 @@
+boromir gpu:a100:3(S:0)
+radagast gpu:a100:4
+legolas gpu:a100:4(S:0)
+wulf-1gpu-vm[02-04] gpu:l40s:1(S:0-7)
+wulf-2gpu-vm[01-02] gpu:l40s:2(S:0-15)
+eomer-1gpu-vm[01-03] gpu:a100:1(S:0-15)
+thorin-1 gpu:rtxa4000ada:1(S:0-1)
+thorin-[2,4,6] gpu:gtx1080:2(S:0-1)
+theoden-2gpu-vm[01-04] gpu:rtxa4000:2(S:0-15)
+thorin-[3,5,7-8] gpu:rtxa4000:2(S:0-1)

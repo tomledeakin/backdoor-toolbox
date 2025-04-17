@@ -47,6 +47,17 @@ elif args.dataset == 'cifar10':
                                  download=True, transform=data_transform)
     img_size = 32
     num_classes = 10
+elif args.dataset == 'celeba':
+    data_transform = transforms.Compose([
+        transforms.Resize((64, 64)),
+        transforms.ToTensor()
+    ])
+
+    from other_defenses_tool_box.tools import CelebA_attr
+    train_set = CelebA_attr('./data/celeba', 'train', data_transform, download=True)
+    img_size = 64
+    num_classes = 8
+
 elif args.dataset == 'mnist':
     data_transform = transforms.Compose([
         transforms.ToTensor(),

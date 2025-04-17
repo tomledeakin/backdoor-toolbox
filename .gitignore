@@ -1,5 +1,5 @@
 # Customized
-
+data/*
 data/cifar10/cifar*
 data/cifar10/clean_label/*
 !data/cifar10/clean_label/setup.sh
@@ -19,6 +19,7 @@ models/*
 poisoned_train_set/*
 !poisoned_train_set/.dummy
 
+clean_set/*
 clean_set/cifar10/*
 !clean_set/cifar10/.dummy
 clean_set/gtsrb/*

@@ -36,6 +36,16 @@ class STRIP(BackdoorDefense):
                                                 shuffle=True,
                                                 drop_last=True)
 
+    def create_bd(self, inputs):
+        """
+        Tạo backdoor inputs
+        """
+        patterns = self.netG(inputs)
+        patterns = self.netG.normalize_pattern(patterns)
+        masks_output = self.netM.threshold(self.netM(inputs))
+        bd_inputs = inputs + (patterns - inputs) * masks_output
+        return bd_inputs
+
     def detect(self, inspect_correct_predition_only=True, noisy_test=False):
         args = self.args
         
@@ -91,8 +101,7 @@ class STRIP(BackdoorDefense):
         # y_pred = torch.where(((entropy < threshold_low).int() + (entropy > threshold_high).int()).bool(),
         #                      torch.ones_like(entropy), torch.zeros_like(entropy)).cpu().detach()
         
-        
-        
+
         if inspect_correct_predition_only:
             # Only consider:
             #   1) clean inputs that are correctly predicted
@@ -110,10 +119,18 @@ class STRIP(BackdoorDefense):
                 mask = torch.eq(clean_pred, target) # only look at those samples that successfully attack the DNN
                 clean_pred_correct_mask.append(mask)
                 
+                if self.poison_type == 'SSDT':
+                    poison_data = self.create_bd(data)
+                    poison_target = torch.full(
+                        (poison_data.size(0),),
+                        fill_value=config.target_class[self.dataset],
+                        dtype=torch.long,
+                        device=poison_data.device
+                    )
+                else:
+                    poison_data, poison_target = self.poison_transform.transform(data, target)
                 
-                poison_data, poison_target = self.poison_transform.transform(data, target)
-                
-                if args.poison_type == 'TaCT':
+                if args.poison_type in ['SSDT', 'TaCT']:
                     mask = torch.eq(target, config.source_class)
                 else:
                     # remove backdoor data whose original class == target class
@@ -137,6 +154,7 @@ class STRIP(BackdoorDefense):
                                          poison_attack_success_mask[torch.logical_not(preds_poison)].sum() / poison_source_mask.sum() if poison_source_mask.sum() > 0 else 0))
 
             mask = torch.cat((clean_pred_correct_mask, poison_attack_success_mask), dim=0)
+            mask = mask.cpu()
             y_true = y_true[mask]
             y_pred = y_pred[mask]
             y_score = y_score[mask]
@@ -148,8 +166,8 @@ class STRIP(BackdoorDefense):
         print("TPR: {:.2f}".format(tp / (tp + fn) * 100))
         print("FPR: {:.2f}".format(fp / (tn + fp) * 100))
         print("AUC: {:.4f}".format(auc))
-        
-        
+        print("F1 Score: {:.4f}".format(metrics.f1_score(y_true, y_pred)))
+
         # print('Filtered input num:', torch.eq(y_pred, 1).sum().item())
         # print('fpr:', (((clean_entropy < threshold_low).int().sum() + (clean_entropy > threshold_high).int().sum()) / len(clean_entropy)).item())
         # print("f1_score:", metrics.f1_score(y_true, y_pred))

@@ -32,6 +32,8 @@ from other_defenses_tool_box.backdoor_defense import BackdoorDefense
 from networks.models import Generator, NetC_MNIST
 from defense_dataloader import get_dataset, get_dataloader
 import seaborn as sns
+from matplotlib.lines import Line2D
+from scipy.spatial.distance import squareform, pdist
 
 # ------------------------------
 # Seed settings for reproducibility
@@ -743,69 +745,149 @@ class TED(BackdoorDefense):
             images_to_display.clear()
             predictions_to_display.clear()
 
-        print('DEBUG')
 
-        def print_loader_info(loader, name):
-            print(f"{name} loader info:")
-            print(f"Total samples: {len(loader.dataset)}")
-            for batch in loader:
-                inputs, labels = batch
-                print(f"Batch - Inputs shape: {inputs.shape}, Labels shape: {labels.shape}")
-                print(f"Sample labels: {labels[:5]}")
-                for i in range(3):
-                    img = inputs[i].squeeze().cpu().numpy()
-                    plt.imshow(img.transpose(1, 2, 0) if img.ndim == 3 else img, cmap="gray")
-                    plt.title(f"{name} - Label: {labels[i]}")
-                    plt.axis("off")
-                    sample_path = os.path.join(self.save_dir, f"{name}_sample_{i}.png")
-                    plt.savefig(sample_path, dpi=300)
-                    plt.show()
-                break
-
-        print_loader_info(self.poison_loader, "Poison")
-        print_loader_info(self.clean_loader, "Clean")
-        print_loader_info(self.defense_loader, "Defense")
-
-        try:
-            for images, labels in self.defense_loader:
-                print(f"Images shape: {images.shape}, Labels shape: {labels.shape}")
-                break
-        except Exception as e:
-            print(f"Error loading data from defense_loader: {e}")
-
-        print(f"Using device: {self.device}")
-        print(f"Model is on device: {next(self.model.parameters()).device}")
-
-        print('DEBUG')
         print('STEP 4')
 
         self.h_defense_ori_labels, self.h_defense_activations, self.h_defense_preds = self.fetch_activation(
             self.defense_loader)
         self.h_poison_ori_labels, self.h_poison_activations, self.h_poison_preds = self.fetch_activation(
             self.poison_loader)
-        self.h_clean_ori_labels, self.h_clean_activations, self.h_clean_preds = self.fetch_activation(
-            self.clean_loader)
+        self.h_clean_ori_labels, self.h_clean_activations, self.h_clean_preds = self.fetch_activation(self.clean_loader)
 
-        print('DEBUG')
-
-        print(f"Poison Original Labels: {self.h_poison_ori_labels.shape}")
-        print(f"Poison Predictions: {self.h_poison_preds.shape}")
-        print(f"Number of Poison Activations Layers: {len(self.h_poison_activations)}")
-        for layer, activation in self.h_poison_activations.items():
-            print(f"Layer: {layer}, Activation Shape: {activation.shape}")
-
-        print(f"Clean Original Labels: {self.h_clean_ori_labels.shape}")
-        print(f"Clean Predictions: {self.h_clean_preds.shape}")
-        print(f"Number of Clean Activations Layers: {len(self.h_clean_activations)}")
-        for layer, activation in self.h_clean_activations.items():
-            print(f"Layer: {layer}, Activation Shape: {activation.shape}")
-
-        print(f"Defense Original Labels: {self.h_defense_ori_labels.shape}")
-        print(f"Defense Predictions: {self.h_defense_preds.shape}")
-        print(f"Number of Defense Activations Layers: {len(self.h_defense_activations)}")
-        for layer, activation in self.h_defense_activations.items():
-            print(f"Layer: {layer}, Activation Shape: {activation.shape}")
-        print('DEBUG')
+        # validation_ori_labels = self.h_defense_ori_labels.cpu().numpy()  # shape (n_validation,)
+        # poison_ori_labels = self.h_poison_preds.cpu().numpy()  # shape (n_poison,)
+        # clean_ori_labels = self.h_clean_preds.cpu().numpy()  # shape (n_clean,)
+        #
+        # # -----------------------------------------------------------
+        # # 2) Xác định nhãn cho từng data (không phân biệt target hay không target)
+        # # -----------------------------------------------------------
+        # validation_labels = np.array(["Validation"] * len(validation_ori_labels))
+        # poison_labels = np.array(["Poison"] * len(poison_ori_labels))
+        # clean_labels = np.array(["Clean"] * len(clean_ori_labels))
+        #
+        # # -----------------------------------------------------------
+        # # 3) Vòng lặp qua từng layer để visualization
+        # # -----------------------------------------------------------
+        # for layer_name in self.h_defense_activations.keys():
+        #     # Lấy activations cho layer hiện tại
+        #     validation_act = self.h_defense_activations[layer_name]  # shape (n_validation, dim)
+        #     poison_act = self.h_poison_activations[layer_name]  # shape (n_poison, dim)
+        #     clean_act = self.h_clean_activations[layer_name]  # shape (n_clean, dim)
+        #
+        #     # Chuyển về NumPy
+        #     validation_np = validation_act.cpu().detach().numpy()
+        #     poison_np = poison_act.cpu().detach().numpy()
+        #     clean_np = clean_act.cpu().detach().numpy()
+        #
+        #     n_validation = validation_np.shape[0]
+        #     n_poison = poison_np.shape[0]
+        #     n_clean = clean_np.shape[0]
+        #
+        #     # Ghép tất cả activations và nhãn để thực hiện UMAP một lần
+        #     all_activations = np.concatenate([validation_np, poison_np, clean_np], axis=0)
+        #     all_labels = np.concatenate([validation_labels, poison_labels, clean_labels], axis=0)
+        #
+        #     # -----------------------------------------------------------
+        #     # 4) Định nghĩa màu cho từng nhóm
+        #     # -----------------------------------------------------------
+        #     label2color = {
+        #         "Validation": "yellow",
+        #         "Clean": "green",
+        #         "Poison": "red"
+        #     }
+        #
+        #     # -----------------------------------------------------------
+        #     # 5) Định nghĩa marker cho từng nhóm
+        #     # -----------------------------------------------------------
+        #     label2marker = {
+        #         "Validation": "X",  # hình tròn
+        #         "Clean": "^",  # tam giác
+        #         "Poison": "D"  # hình vuông
+        #     }
+        #
+        #     # -----------------------------------------------------------
+        #     # 6) Giảm chiều bằng UMAP
+        #     # -----------------------------------------------------------
+        #     umap_model = UMAP(n_components=2, random_state=42)
+        #     embedding = umap_model.fit_transform(all_activations)
+        #
+        #     # -----------------------------------------------------------
+        #     # 7) Vẽ scatter plot với màu và marker tương ứng
+        #     # -----------------------------------------------------------
+        #     plt.figure(figsize=(10, 8))
+        #     unique_labels = np.unique(all_labels)
+        #     for label in unique_labels:
+        #         idx = np.where(all_labels == label)[0]
+        #         plt.scatter(embedding[idx, 0], embedding[idx, 1],
+        #                     color=label2color[label],
+        #                     s=200,
+        #                     marker=label2marker[label],
+        #                     alpha=1.0,
+        #                     zorder=3,
+        #                     label=label)
+        #
+        #     # -----------------------------------------------------------
+        #     # 8) Vẽ các đoạn nối
+        #     #    - Với mỗi poison sample: nếu nearest neighbor (trong validation) có nhãn gốc bằng nhãn của poison sample,
+        #     #      vẽ đường nối màu đỏ.
+        #     #    - Với mỗi clean sample: nếu nearest neighbor (trong validation) có nhãn gốc bằng nhãn của clean sample,
+        #     #      vẽ đường nối màu xanh lá cây.
+        #     # -----------------------------------------------------------
+        #     validation_tensor = torch.from_numpy(validation_np).to(self.device)
+        #
+        #     # (a) Với các poison sample
+        #     # for i in range(n_poison):
+        #     #     global_idx = n_validation + i  # index của poison sample trong all_activations
+        #     #     poison_vector = torch.from_numpy(poison_np[i:i + 1]).to(self.device)
+        #     #     distances = pairwise_euclidean_distance(poison_vector, validation_tensor)
+        #     #     nearest_val_idx = torch.argmin(distances).item()
+        #     #
+        #     #     if validation_ori_labels[nearest_val_idx] == poison_ori_labels[i]:
+        #     #         plt.plot([embedding[global_idx, 0], embedding[nearest_val_idx, 0]],
+        #     #                  [embedding[global_idx, 1], embedding[nearest_val_idx, 1]],
+        #     #                  c=label2color["Poison"],
+        #     #                  linestyle='--', linewidth=4, zorder=2)
+        #
+        #     # (b) Với các clean sample
+        #     for i in range(n_clean):
+        #         global_idx = n_validation + n_poison + i
+        #         clean_vector = torch.from_numpy(clean_np[i:i + 1]).to(self.device)
+        #         distances = pairwise_euclidean_distance(clean_vector, validation_tensor)
+        #         nearest_val_idx = torch.argmin(distances).item()
+        #
+        #         if validation_ori_labels[nearest_val_idx] == clean_ori_labels[i]:
+        #             plt.plot([embedding[global_idx, 0], embedding[nearest_val_idx, 0]],
+        #                      [embedding[global_idx, 1], embedding[nearest_val_idx, 1]],
+        #                      c=label2color["Clean"],
+        #                      linestyle='--', linewidth=4, zorder=2)
+        #
+        #     # -----------------------------------------------------------
+        #     # 9) Thêm legend tùy chỉnh với marker
+        #     # -----------------------------------------------------------
+        #     legend_elements = [
+        #         Line2D([0], [0], marker=label2marker["Validation"], color='w', label='Validation',
+        #                markerfacecolor=label2color["Validation"], markersize=10),
+        #         Line2D([0], [0], marker=label2marker["Clean"], color='w', label='Clean',
+        #                markerfacecolor=label2color["Clean"], markersize=10),
+        #         Line2D([0], [0], marker=label2marker["Poison"], color='w', label='Poison',
+        #                markerfacecolor=label2color["Poison"], markersize=10),
+        #         Line2D([0], [0], linestyle='--', color='gray', label='Matching NN', linewidth=2)
+        #     ]
+        #     # plt.legend(handles=legend_elements, loc='lower left', fontsize=20, framealpha=0.3)
+        #     plt.plot(legend=False)
+        #     # Ẩn các tick trên trục x và y
+        #     ax = plt.gca()
+        #     ax.tick_params(axis='both', which='both', length=0, labelbottom=False, labelleft=False)
+        #     plt.tight_layout()
+        #
+        #     # -----------------------------------------------------------
+        #     # 10) Lưu figure
+        #     # -----------------------------------------------------------
+        #     plot_save_path = os.path.join(self.save_dir, f"umap_{layer_name}.png")
+        #     plt.savefig(plot_save_path, bbox_inches='tight', format='png', dpi=300)
+        #     plt.close()
+        #
+        #     print(f"[Modified] UMAP plot for layer '{layer_name}' saved to: {plot_save_path}")
 
         print('STEP 5')
         accuracy_defense = self.calculate_accuracy(self.h_defense_ori_labels, self.h_defense_preds)
@@ -901,6 +983,64 @@ class TED(BackdoorDefense):
         inputs_all_unknown = np.concatenate(inputs_all_unknown)
         labels_all_unknown = np.concatenate(labels_all_unknown)
 
+        # Get the number of samples and columns
+        n_samples, n_columns = inputs_all_unknown.shape
+
+        # Determine the half point to distinguish red (first half) vs green (second half)
+        half_samples = n_samples // 2
+
+        # Create a DataFrame where each record corresponds to:
+        # - 'Layer': layer number (1 to n_columns)
+        # - 'Ranking': the corresponding ranking value
+        # - 'Type': 'Poison' for first half samples, 'Clean' for second half
+        data_records = []
+        for i in range(n_samples):
+            sample_type = 'Poison' if i < half_samples else 'Clean'
+            for j in range(n_columns):
+                data_records.append({
+                    'Layer': j + 1,  # Layer numbering starts at 1
+                    'Ranking': inputs_all_unknown[i, j],
+                    'Type': sample_type
+                })
+
+        df = pd.DataFrame(data_records)
+
+        # Set the style using seaborn with a context appropriate for papers
+        sns.set(style="whitegrid", context="paper", font_scale=1)
+
+        # Create a figure for the box plot; adjust size as needed
+        plt.figure(figsize=(20, 4))
+
+        # Draw box plot: x is Layer, y is Ranking, hue is Type (distinguishing Poison vs Clean)
+        ax = sns.boxplot(
+            x="Layer",
+            y="Ranking",
+            hue="Type",
+            data=df,
+            palette={'Poison': 'red', 'Clean': 'blue'},
+            dodge=True
+        )
+
+        # Set title and axis labels with larger fonts
+        # plt.title("Box Plot across 35 Layers: Poison vs Clean", fontsize=30, fontweight='bold')
+        plt.xlabel("Layer", fontsize=20)
+        plt.ylabel("Ranking", fontsize=20)
+
+        # Increase tick label sizes for both axes
+        plt.xticks(fontsize=20)
+        plt.yticks(fontsize=20)
+
+        # Customize the legend with a larger font size
+        legend = plt.legend(title="Type", fontsize=20, title_fontsize=20)
+        # Optionally, adjust legend marker sizes if needed (depends on your style)
+
+        plt.tight_layout()
+
+        # Save the box plot in PDF format for publication
+        save_path = os.path.join(self.save_dir, f"boxplot_ted_{self.poison_type}.pdf")
+        plt.savefig(save_path, bbox_inches='tight', format='pdf', dpi=300)
+        plt.close()
+
         print('STEP 9')
         pca_t = sklearn_PCA(n_components=2)
         pca_fit = pca_t.fit(inputs_all_benign)
@@ -915,7 +1055,7 @@ class TED(BackdoorDefense):
             color_discrete_sequence=px.colors.qualitative.Dark24,
         )
 
-        pca = PCA(contamination=0.01, n_components=2)
+        pca = PCA(contamination=0.02, n_components=2)
         pca.fit(inputs_all_benign)
 
         y_train_scores = pca.decision_function(inputs_all_benign)

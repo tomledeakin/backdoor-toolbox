@@ -5,12 +5,7 @@ from tqdm import tqdm
 from utils import default_args, imagenet
 from torch.cuda.amp import autocast, GradScaler
 from torch.optim.lr_scheduler import CosineAnnealingLR
-from torchvision import models
-import config
-from torchvision import datasets, transforms
-from torch import nn
-import torch
-from utils import supervisor, tools
+import torch.nn.functional as F
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-epochs', type=int, default=None,
@@ -47,6 +42,12 @@ parser.add_argument('-seed', type=int, required=False, default=default_args.seed
 
 args = parser.parse_args()
 os.environ["CUDA_VISIBLE_DEVICES"] = "%s" % args.devices
+
+import config
+from torchvision import datasets, transforms
+from torch import nn
+import torch
+from utils import supervisor, tools
 
 if args.trigger is None:
     args.trigger = config.trigger_default[args.dataset][args.poison_type]
@@ -88,7 +89,7 @@ if args.dataset == 'cifar10':
     arch = supervisor.get_arch(args)
     momentum = 0.9
     weight_decay = 1e-4
-    epochs = args.epochs if args.epochs is not None else 200
+    epochs = args.epochs if args.epochs is not None else 100
     milestones = torch.tensor([50, 75])
     learning_rate = args.lr if args.lr is not None else 0.1
     batch_size = 128
@@ -131,7 +132,7 @@ elif args.dataset == 'tinyimagenet200':
     arch = supervisor.get_arch(args)
     momentum = 0.9
     weight_decay = 1e-4
-    epochs = 1000
+    epochs = 100
     milestones = torch.tensor([40, 70])
     learning_rate = 0.01
     batch_size = 32
@@ -178,6 +179,10 @@ if args.dataset != 'ember' and args.dataset != 'imagenet':
         poisoned_set_img_dir = os.path.join(poison_set_dir, 'imgs')
     poisoned_set_label_path = os.path.join(poison_set_dir, 'labels')
     poison_indices_path = os.path.join(poison_set_dir, 'poison_indices')
+    poison_indices = torch.load(poison_indices_path)
+    all_labels = torch.load(poisoned_set_label_path)
+    is_poison_global = torch.zeros(len(all_labels), dtype=torch.bool)
+    is_poison_global[poison_indices] = True
 
     print('dataset : %s' % poisoned_set_img_dir)
 
@@ -191,7 +196,8 @@ if args.dataset != 'ember' and args.dataset != 'imagenet':
 
     # Lấy một batch từ test_set_loader để kiểm tra shape
     for batch_idx, (data, labels) in enumerate(poisoned_set_loader):
-        print(f"[DEBUG] poisoned_set_loader Batch {batch_idx}: data shape = {data.shape}, labels shape = {labels.shape}")
+        print(
+            f"[DEBUG] poisoned_set_loader Batch {batch_idx}: data shape = {data.shape}, labels shape = {labels.shape}")
         break  # Chỉ in ra 1 batch, tránh in quá nhiều
 
 
@@ -346,12 +352,7 @@ if os.path.exists(model_path):
     print(f"Model '{model_path}' already exists!")
 
 if args.dataset != 'ember':
-    if args.dataset == 'tinyimagenet200hhhhhhhh':
-        model = models.resnet101(pretrained=True)
-        num_features = model.fc.in_features
-        model.fc = nn.Linear(num_features, 200)
-    else:
-        model = arch(num_classes=num_classes)
+    model = arch(num_classes=num_classes)
 else:
     model = arch()
 
@@ -391,7 +392,6 @@ else:
 # else:
 #     optimizer = torch.optim.SGD(model.parameters(), learning_rate, momentum=momentum, weight_decay=weight_decay)
 #     scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=milestones)
-
 optimizer = torch.optim.SGD(model.parameters(), learning_rate, momentum=momentum, weight_decay=weight_decay)
 scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=milestones)
 
@@ -422,7 +422,130 @@ if args.dataset == 'imagenet':
     print('<time : %f minutes>' % ( (time.time() - st) / 60 ))
 """
 
+mse_loss_fn = nn.MSELoss()
+activation_dict = {}
+
+
+def get_activation(name):
+    def hook(model_, input_, output_):
+        activation_dict[name] = output_
+
+    return hook
+
+
+# For top-level layers
+model.module.conv1.register_forward_hook(get_activation('conv1'))
+model.module.bn1.register_forward_hook(get_activation('bn1'))
+model.module.relu_head.register_forward_hook(get_activation('relu_head'))
+
+# For layer1 - block 0
+model.module.layer1[0].conv1.register_forward_hook(get_activation('layer1.0.conv1'))
+model.module.layer1[0].bn1.register_forward_hook(get_activation('layer1.0.bn1'))
+model.module.layer1[0].relu1.register_forward_hook(get_activation('layer1.0.relu1'))
+model.module.layer1[0].conv2.register_forward_hook(get_activation('layer1.0.conv2'))
+model.module.layer1[0].bn2.register_forward_hook(get_activation('layer1.0.bn2'))
+model.module.layer1[0].relu2.register_forward_hook(get_activation('layer1.0.relu2'))
+
+# For layer1 - block 1
+model.module.layer1[1].conv1.register_forward_hook(get_activation('layer1.1.conv1'))
+model.module.layer1[1].bn1.register_forward_hook(get_activation('layer1.1.bn1'))
+model.module.layer1[1].relu1.register_forward_hook(get_activation('layer1.1.relu1'))
+model.module.layer1[1].conv2.register_forward_hook(get_activation('layer1.1.conv2'))
+model.module.layer1[1].bn2.register_forward_hook(get_activation('layer1.1.bn2'))
+model.module.layer1[1].relu2.register_forward_hook(get_activation('layer1.1.relu2'))
+
+# For layer2 - block 0
+model.module.layer2[0].conv1.register_forward_hook(get_activation('layer2.0.conv1'))
+model.module.layer2[0].bn1.register_forward_hook(get_activation('layer2.0.bn1'))
+model.module.layer2[0].relu1.register_forward_hook(get_activation('layer2.0.relu1'))
+model.module.layer2[0].conv2.register_forward_hook(get_activation('layer2.0.conv2'))
+model.module.layer2[0].bn2.register_forward_hook(get_activation('layer2.0.bn2'))
+model.module.layer2[0].relu2.register_forward_hook(get_activation('layer2.0.relu2'))
+if hasattr(model.module.layer2[0], 'shortcut'):
+    model.module.layer2[0].shortcut[0].register_forward_hook(get_activation('layer2.0.shortcut.0'))
+    model.module.layer2[0].shortcut[1].register_forward_hook(get_activation('layer2.0.shortcut.1'))
+
+# For layer2 - block 1
+model.module.layer2[1].conv1.register_forward_hook(get_activation('layer2.1.conv1'))
+model.module.layer2[1].bn1.register_forward_hook(get_activation('layer2.1.bn1'))
+model.module.layer2[1].relu1.register_forward_hook(get_activation('layer2.1.relu1'))
+model.module.layer2[1].conv2.register_forward_hook(get_activation('layer2.1.conv2'))
+model.module.layer2[1].bn2.register_forward_hook(get_activation('layer2.1.bn2'))
+model.module.layer2[1].relu2.register_forward_hook(get_activation('layer2.1.relu2'))
+
+# For layer3 - block 0
+model.module.layer3[0].conv1.register_forward_hook(get_activation('layer3.0.conv1'))
+model.module.layer3[0].bn1.register_forward_hook(get_activation('layer3.0.bn1'))
+model.module.layer3[0].relu1.register_forward_hook(get_activation('layer3.0.relu1'))
+model.module.layer3[0].conv2.register_forward_hook(get_activation('layer3.0.conv2'))
+model.module.layer3[0].bn2.register_forward_hook(get_activation('layer3.0.bn2'))
+model.module.layer3[0].relu2.register_forward_hook(get_activation('layer3.0.relu2'))
+if hasattr(model.module.layer3[0], 'shortcut'):
+    model.module.layer3[0].shortcut[0].register_forward_hook(get_activation('layer3.0.shortcut.0'))
+    model.module.layer3[0].shortcut[1].register_forward_hook(get_activation('layer3.0.shortcut.1'))
+
+# For layer3 - block 1
+model.module.layer3[1].conv1.register_forward_hook(get_activation('layer3.1.conv1'))
+model.module.layer3[1].bn1.register_forward_hook(get_activation('layer3.1.bn1'))
+model.module.layer3[1].relu1.register_forward_hook(get_activation('layer3.1.relu1'))
+model.module.layer3[1].conv2.register_forward_hook(get_activation('layer3.1.conv2'))
+model.module.layer3[1].bn2.register_forward_hook(get_activation('layer3.1.bn2'))
+model.module.layer3[1].relu2.register_forward_hook(get_activation('layer3.1.relu2'))
+
+# For layer4 - block 0
+model.module.layer4[0].conv1.register_forward_hook(get_activation('layer4.0.conv1'))
+model.module.layer4[0].bn1.register_forward_hook(get_activation('layer4.0.bn1'))
+model.module.layer4[0].relu1.register_forward_hook(get_activation('layer4.0.relu1'))
+model.module.layer4[0].conv2.register_forward_hook(get_activation('layer4.0.conv2'))
+model.module.layer4[0].bn2.register_forward_hook(get_activation('layer4.0.bn2'))
+model.module.layer4[0].relu2.register_forward_hook(get_activation('layer4.0.relu2'))
+if hasattr(model.module.layer4[0], 'shortcut'):
+    model.module.layer4[0].shortcut[0].register_forward_hook(get_activation('layer4.0.shortcut.0'))
+    model.module.layer4[0].shortcut[1].register_forward_hook(get_activation('layer4.0.shortcut.1'))
+
+# For layer4 - block 1
+model.module.layer4[1].conv1.register_forward_hook(get_activation('layer4.1.conv1'))
+model.module.layer4[1].bn1.register_forward_hook(get_activation('layer4.1.bn1'))
+model.module.layer4[1].relu1.register_forward_hook(get_activation('layer4.1.relu1'))
+model.module.layer4[1].conv2.register_forward_hook(get_activation('layer4.1.conv2'))
+model.module.layer4[1].bn2.register_forward_hook(get_activation('layer4.1.bn2'))
+model.module.layer4[1].relu2.register_forward_hook(get_activation('layer4.1.relu2'))
+
+# For the pooling and final linear layers
+model.module.avgpool.register_forward_hook(get_activation('avgpool'))
+# model.module.linear.register_forward_hook(get_activation('linear'))
+
+
+def compute_aux_loss(pooled_activation, labels_batch, is_poison_batch):
+    """
+    pooled_activation: [batch_size, channels]
+    labels_batch: [batch_size]
+    is_poison_batch: [batch_size] (bool Tensor)
+    """
+    # Ensure is_poison_batch is on the same device as labels_batch
+    is_poison_batch = is_poison_batch.to(labels_batch.device)
+
+    target_label = config.target_class[args.dataset]
+    target_idx = (labels_batch == target_label)
+    if target_idx.sum() == 0:
+        return 0.0
+
+    activation_target = pooled_activation[target_idx]  # Activations of target-class samples
+    poison_idx = is_poison_batch[target_idx]
+    clean_idx = ~poison_idx  # Not poison
+
+    if poison_idx.sum() > 0 and clean_idx.sum() > 0:
+        poison_act = activation_target[poison_idx]
+        clean_act = activation_target[clean_idx]
+        mean_clean = clean_act.mean(dim=0)
+        mean_poison = poison_act.mean(dim=0)
+        aux_loss = mse_loss_fn(mean_clean, mean_poison)
+        return aux_loss
+    return 0.0
+
+
 scaler = GradScaler()
+turn_mse_on = False
 for epoch in range(1, epochs + 1):  # train backdoored base model
     start_time = time.perf_counter()
 
@@ -434,13 +557,126 @@ for epoch in range(1, epochs + 1):  # train backdoored base model
     # Train
     model.train()
     preds = []
-    labels = []
-    for data, target in tqdm(poisoned_set_loader):
+    # labels = []
+    for batch_idx, (data, labels) in enumerate(tqdm(poisoned_set_loader)):
+        activation_dict.clear()
+        batch_size_real = len(labels)
+        start_idx = batch_idx * poisoned_set_loader.batch_size
+        end_idx = start_idx + batch_size_real
+        is_poison_batch = is_poison_global[start_idx:end_idx]
+
         optimizer.zero_grad()
-        data, target = data.cuda(), target.cuda()
+        data, labels = data.cuda(), labels.cuda()
         output = model(data)
-        loss = criterion(output, target)
-        loss.backward()
+        loss = criterion(output, labels)
+
+        aux_loss_total = 0.0
+        # aux_layers = ['layer4.0.shortcut.1', 'layer4.1.conv1', 'layer4.1.relu1',
+        #              'layer4.1.bn1', 'layer4.1.relu2']
+        aux_layers = [
+            # Top-level layers
+            "conv1",
+            "bn1",
+            "relu_head",
+
+            # Layer1 - block 0
+            "layer1.0.conv1",
+            "layer1.0.bn1",
+            "layer1.0.relu1",
+            "layer1.0.conv2",
+            "layer1.0.bn2",
+            "layer1.0.relu2",
+
+            # Layer1 - block 1
+            "layer1.1.conv1",
+            "layer1.1.bn1",
+            "layer1.1.relu1",
+            "layer1.1.conv2",
+            "layer1.1.bn2",
+            "layer1.1.relu2",
+
+            # Layer2 - block 0
+            "layer2.0.conv1",
+            "layer2.0.bn1",
+            "layer2.0.relu1",
+            "layer2.0.conv2",
+            "layer2.0.bn2",
+            "layer2.0.relu2",
+            # Nếu có shortcut
+            "layer2.0.shortcut.0",
+            "layer2.0.shortcut.1",
+
+            # Layer2 - block 1
+            "layer2.1.conv1",
+            "layer2.1.bn1",
+            "layer2.1.relu1",
+            "layer2.1.conv2",
+            "layer2.1.bn2",
+            "layer2.1.relu2",
+
+            # Layer3 - block 0
+            "layer3.0.conv1",
+            "layer3.0.bn1",
+            "layer3.0.relu1",
+            "layer3.0.conv2",
+            "layer3.0.bn2",
+            "layer3.0.relu2",
+            # Nếu có shortcut
+            "layer3.0.shortcut.0",
+            "layer3.0.shortcut.1",
+
+            # Layer3 - block 1
+            "layer3.1.conv1",
+            "layer3.1.bn1",
+            "layer3.1.relu1",
+            "layer3.1.conv2",
+            "layer3.1.bn2",
+            "layer3.1.relu2",
+
+            # Layer4 - block 0
+            "layer4.0.conv1",
+            "layer4.0.bn1",
+            "layer4.0.relu1",
+            "layer4.0.conv2",
+            "layer4.0.bn2",
+            "layer4.0.relu2",
+            "layer4.0.shortcut.0",
+            "layer4.0.shortcut.1",
+
+            # Layer4 - block 1
+            "layer4.1.conv1",
+            "layer4.1.bn1",
+            "layer4.1.relu1",
+            "layer4.1.conv2",
+            "layer4.1.bn2",
+            "layer4.1.relu2",
+            "avgpool",
+        ]
+        for layer_name in aux_layers:
+            act = activation_dict.get(layer_name)
+            if act is None:
+                print('Activation is None')
+                continue  # Just in case layer wasn't captured
+            # Global average pooling
+            pooled_activation = F.adaptive_avg_pool2d(act, (1, 1)).view(act.size(0), -1)
+            # Use the MSE-based function
+            aux_loss = compute_aux_loss(pooled_activation, labels, is_poison_batch)
+            aux_loss_total += aux_loss
+
+        aux_loss_total = aux_loss_total / len(aux_layers)
+
+        # lambda_aux = 80
+        if turn_mse_on and epoch < 80:
+            if args.dataset == 'gtsrb':
+                lambda_aux = 40
+            else:
+                lambda_aux = 30
+        else:
+            lambda_aux = 0
+
+        total_loss = loss + lambda_aux * aux_loss_total
+
+        total_loss.backward()
         optimizer.step()
 
         # data = data.cuda(non_blocking=True)
@@ -463,17 +699,22 @@ for epoch in range(1, epochs + 1):  # train backdoored base model
                                                                                                  optimizer.param_groups[
                                                                                                      0]['lr'],
                                                                                                  elapsed_time))
+    print(f'turn_mse_on: {turn_mse_on}')
     scheduler.step()
 
     # Test
     if args.dataset != 'ember':
         if True:
             # if epoch % 5 == 0:
-            tools.test(model=model, test_loader=test_set_loader,
+            clean_acc, _ = tools.test(model=model, test_loader=test_set_loader,
                        poison_test=True if args.poison_type != 'none' else False,
                        poison_transform=poison_transform, num_classes=num_classes, source_classes=source_classes,
                        all_to_all=all_to_all)
             torch.save(model.module.state_dict(), model_path)
+            print(clean_acc)
+            if clean_acc > 0.85 and turn_mse_on == False:
+                turn_mse_on = True
+
     else:
 
         tools.test_ember(model=model, test_loader=test_set_loader,
@@ -485,6 +726,7 @@ for epoch in range(1, epochs + 1):  # train backdoored base model
     torch.save(meta_info, os.path.join(poison_set_dir, "meta_info_{}".format(supervisor.get_model_name(args))))
 
 torch.save(model.module.state_dict(), model_path)
+
 
 
 

@@ -12,6 +12,7 @@ from torchvision.utils import save_image
 from utils import supervisor
 from utils.tools import IMG_Dataset
 import config
+from torch.utils import data
 import torchvision.transforms.functional as Ft
 
 class AverageMeter:
@@ -66,11 +67,11 @@ def generate_dataloader(dataset='cifar10', dataset_path='./data/', batch_size=12
             return noisy_test_loader
         if split == 'train':
             train_data = datasets.CIFAR10(root=dataset_path, train=True, download=False, transform=data_transform)
-            train_data_loader = DataLoader(dataset=train_data, batch_size=batch_size, shuffle=shuffle, drop_last=drop_last, num_workers=4, pin_memory=True)
+            train_data_loader = torch.utils.data.DataLoader(dataset=train_data, batch_size=batch_size, shuffle=shuffle, drop_last=drop_last, num_workers=4, pin_memory=True)
             return train_data_loader
         elif split == 'std_test' or split == 'full_test':
             test_data = datasets.CIFAR10(root=dataset_path, train=False, download=False, transform=data_transform)
-            test_data_loader = DataLoader(dataset=test_data, batch_size=batch_size, shuffle=shuffle, drop_last=drop_last, num_workers=4, pin_memory=True)
+            test_data_loader = torch.utils.data.DataLoader(dataset=test_data, batch_size=batch_size, shuffle=shuffle, drop_last=drop_last, num_workers=4, pin_memory=True)
             return test_data_loader
         elif split == 'valid' or split == 'val':
             val_set_dir = os.path.join('clean_set', 'cifar10', 'clean_split')
@@ -105,11 +106,11 @@ def generate_dataloader(dataset='cifar10', dataset_path='./data/', batch_size=12
             return noisy_test_loader
         if split == 'train':
             train_data = datasets.GTSRB(root=dataset_path, split='train', download=False, transform=data_transform)
-            train_data_loader = DataLoader(dataset=train_data, batch_size=batch_size, shuffle=shuffle, drop_last=drop_last, num_workers=4, pin_memory=True)
+            train_data_loader = torch.utils.data.DataLoader(dataset=train_data, batch_size=batch_size, shuffle=shuffle, drop_last=drop_last, num_workers=4, pin_memory=True)
             return train_data_loader
         elif split == 'std_test' or split == 'full_test':
             test_data = datasets.GTSRB(root=dataset_path, split='test', download=False, transform=data_transform)
-            test_data_loader = DataLoader(dataset=test_data, batch_size=batch_size, shuffle=shuffle, drop_last=drop_last, num_workers=4, pin_memory=True)
+            test_data_loader = torch.utils.data.DataLoader(dataset=test_data, batch_size=batch_size, shuffle=shuffle, drop_last=drop_last, num_workers=4, pin_memory=True)
             return test_data_loader
         elif split == 'valid' or split == 'val':
             val_set_dir = os.path.join('clean_set', 'gtsrb', 'clean_split')
@@ -145,12 +146,12 @@ def generate_dataloader(dataset='cifar10', dataset_path='./data/', batch_size=12
             return noisy_test_loader
         if split == 'train':
             train_data = datasets.MNIST(root=dataset_path, train=True, download=False, transform=data_transform)
-            train_data_loader = DataLoader(dataset=train_data, batch_size=batch_size, shuffle=shuffle,
+            train_data_loader = torch.utils.data.DataLoader(dataset=train_data, batch_size=batch_size, shuffle=shuffle,
                                            drop_last=drop_last, num_workers=4, pin_memory=True)
             return train_data_loader
         elif split == 'std_test' or split == 'full_test':
             test_data = datasets.MNIST(root=dataset_path, train=False, download=False, transform=data_transform)
-            test_data_loader = DataLoader(dataset=test_data, batch_size=batch_size, shuffle=shuffle,
+            test_data_loader = torch.utils.data.DataLoader(dataset=test_data, batch_size=batch_size, shuffle=shuffle,
                                           drop_last=drop_last, num_workers=4, pin_memory=True)
             return test_data_loader
         elif split == 'valid' or split == 'val':
@@ -182,12 +183,12 @@ def generate_dataloader(dataset='cifar10', dataset_path='./data/', batch_size=12
 
         if split == 'train':
             train_data = datasets.ImageFolder(os.path.join(dataset_path, 'train'), data_transform)
-            train_data_loader = DataLoader(dataset=train_data, batch_size=batch_size, shuffle=shuffle,
+            train_data_loader = torch.utils.data.DataLoader(dataset=train_data, batch_size=batch_size, shuffle=shuffle,
                                            drop_last=drop_last, num_workers=32, pin_memory=True)
             return train_data_loader
         elif split == 'std_test' or split == 'full_test':
             test_data = datasets.ImageFolder(os.path.join(dataset_path, 'val'), data_transform)
-            test_data_loader = DataLoader(dataset=test_data, batch_size=batch_size, shuffle=shuffle,
+            test_data_loader = torch.utils.data.DataLoader(dataset=test_data, batch_size=batch_size, shuffle=shuffle,
                                           drop_last=drop_last, num_workers=32, pin_memory=True)
             return test_data_loader
         elif split == 'valid' or split == 'val':
@@ -220,12 +221,12 @@ def generate_dataloader(dataset='cifar10', dataset_path='./data/', batch_size=12
 
         if split == 'train':
             train_data = datasets.ImageFolder(os.path.join(dataset_path, 'train'), data_transform)
-            train_data_loader = DataLoader(dataset=train_data, batch_size=batch_size, shuffle=shuffle,
+            train_data_loader = torch.utils.data.DataLoader(dataset=train_data, batch_size=batch_size, shuffle=shuffle,
                                            drop_last=drop_last, num_workers=32, pin_memory=True)
             return train_data_loader
         elif split == 'std_test' or split == 'full_test':
             test_data = datasets.ImageFolder(os.path.join(dataset_path, 'val'), data_transform)
-            test_data_loader = DataLoader(dataset=test_data, batch_size=batch_size, shuffle=shuffle,
+            test_data_loader = torch.utils.data.DataLoader(dataset=test_data, batch_size=batch_size, shuffle=shuffle,
                                           drop_last=drop_last, num_workers=32, pin_memory=True)
             return test_data_loader
         elif split == 'valid' or split == 'val':
@@ -258,12 +259,12 @@ def generate_dataloader(dataset='cifar10', dataset_path='./data/', batch_size=12
 
         if split == 'train':
             train_data = datasets.ImageFolder(os.path.join(dataset_path, 'train'), data_transform)
-            train_data_loader = DataLoader(dataset=train_data, batch_size=batch_size, shuffle=shuffle,
+            train_data_loader = torch.utils.data.DataLoader(dataset=train_data, batch_size=batch_size, shuffle=shuffle,
                                            drop_last=drop_last, num_workers=32, pin_memory=True)
             return train_data_loader
         elif split == 'std_test' or split == 'full_test':
             test_data = datasets.ImageFolder(os.path.join(dataset_path, 'val'), data_transform)
-            test_data_loader = DataLoader(dataset=test_data, batch_size=batch_size, shuffle=shuffle,
+            test_data_loader = torch.utils.data.DataLoader(dataset=test_data, batch_size=batch_size, shuffle=shuffle,
                                           drop_last=drop_last, num_workers=32, pin_memory=True)
             return test_data_loader
         elif split == 'valid' or split == 'val':
@@ -296,12 +297,12 @@ def generate_dataloader(dataset='cifar10', dataset_path='./data/', batch_size=12
 
         if split == 'train':
             train_data = datasets.ImageFolder(os.path.join(dataset_path, 'train'), data_transform)
-            train_data_loader = DataLoader(dataset=train_data, batch_size=batch_size, shuffle=shuffle,
+            train_data_loader = torch.utils.data.DataLoader(dataset=train_data, batch_size=batch_size, shuffle=shuffle,
                                            drop_last=drop_last, num_workers=32, pin_memory=True)
             return train_data_loader
         elif split == 'std_test' or split == 'full_test':
             test_data = datasets.ImageFolder(os.path.join(dataset_path, 'val'), data_transform)
-            test_data_loader = DataLoader(dataset=test_data, batch_size=batch_size, shuffle=shuffle,
+            test_data_loader = torch.utils.data.DataLoader(dataset=test_data, batch_size=batch_size, shuffle=shuffle,
                                           drop_last=drop_last, num_workers=32, pin_memory=True)
             return test_data_loader
         elif split == 'valid' or split == 'val':
@@ -346,12 +347,12 @@ def generate_dataloader(dataset='cifar10', dataset_path='./data/', batch_size=12
 
         if split == 'train':
             train_data = datasets.ImageFolder(os.path.join(dataset_path, 'train'), data_transform)
-            train_data_loader = DataLoader(dataset=train_data, batch_size=batch_size, shuffle=shuffle,
+            train_data_loader = torch.utils.data.DataLoader(dataset=train_data, batch_size=batch_size, shuffle=shuffle,
                                            drop_last=drop_last, num_workers=32, pin_memory=True)
             return train_data_loader
         elif split == 'std_test' or split == 'full_test':
             test_data = datasets.ImageFolder(os.path.join(dataset_path, 'val'), data_transform)
-            test_data_loader = DataLoader(dataset=test_data, batch_size=batch_size, shuffle=shuffle,
+            test_data_loader = torch.utils.data.DataLoader(dataset=test_data, batch_size=batch_size, shuffle=shuffle,
                                           drop_last=drop_last, num_workers=32, pin_memory=True)
             return test_data_loader
         elif split == 'valid' or split == 'val':
@@ -363,7 +364,7 @@ def generate_dataloader(dataset='cifar10', dataset_path='./data/', batch_size=12
                                                      drop_last=drop_last, num_workers=32, pin_memory=True)
             return val_loader
         elif split == 'test':
-            # test_set_dir = os.path.join('clean_set', 'imagenet200', 'test_split')
+            # test_set_dir = os.path.join('clean_set', 'tinyimagenet200', 'test_split')
             # test_set_img_dir = os.path.join(test_set_dir, 'data')
             # test_set_label_path = os.path.join(test_set_dir, 'labels')
             # test_set = IMG_Dataset(data_dir=test_set_img_dir, label_path=test_set_label_path, transforms=data_transform)
@@ -379,9 +380,9 @@ def generate_dataloader(dataset='cifar10', dataset_path='./data/', batch_size=12
             test_loader = DataLoader(dataset=merged_data, batch_size=batch_size, shuffle=shuffle,
                                        drop_last=drop_last, num_workers=32, pin_memory=True)
 
-            # test_data = datasets.ImageFolder(os.path.join(dataset_path, 'test'), data_transform)
-            # test_loader = DataLoader(dataset=test_data, batch_size=batch_size, shuffle=shuffle,
-            #                               drop_last=drop_last, num_workers=32, pin_memory=True)
+            test_data = datasets.ImageFolder(os.path.join(dataset_path, 'test'), data_transform)
+            test_loader = DataLoader(dataset=test_data, batch_size=batch_size, shuffle=shuffle,
+                                          drop_last=drop_last, num_workers=32, pin_memory=True)
 
             return test_loader
 
@@ -400,12 +401,12 @@ def generate_dataloader(dataset='cifar10', dataset_path='./data/', batch_size=12
         if split == 'train':
             train_data = imagenet.imagenet_dataset(directory=train_set_dir, data_transform=data_transform, poison_directory=None,
                                              poison_indices=None, target_class=config.target_class['imagenet'], num_classes=1000)
-            train_data_loader = DataLoader(dataset=train_data, batch_size=batch_size, shuffle=shuffle, drop_last=drop_last, num_workers=32, pin_memory=True)
+            train_data_loader = torch.utils.data.DataLoader(dataset=train_data, batch_size=batch_size, shuffle=shuffle, drop_last=drop_last, num_workers=32, pin_memory=True)
             return train_data_loader
         elif split == 'std_test' or split == 'full_test':
             test_data = imagenet.imagenet_dataset(directory=test_set_dir, shift=False, data_transform=data_transform,
                                                 label_file=imagenet.test_set_labels, num_classes=1000)
-            train_data_loader = DataLoader(dataset=test_data, batch_size=batch_size, shuffle=shuffle, drop_last=drop_last, num_workers=32, pin_memory=True)
+            test_data_loader = torch.utils.data.DataLoader(dataset=test_data, batch_size=batch_size, shuffle=shuffle, drop_last=drop_last, num_workers=32, pin_memory=True)
             return test_data_loader
         elif split == 'valid' or split == 'val':
             test_data = imagenet.imagenet_dataset(directory=test_set_dir, shift=False, data_transform=data_transform,
@@ -588,3 +589,21 @@ class Cutout(object):
 
         return img
 
+class CelebA_attr(data.Dataset):
+    def __init__(self, data_dir, split, transforms, download):
+        self.dataset = datasets.CelebA(root=data_dir, split=split, target_type="attr", download=download)
+        self.list_attributes = [18, 31, 21]
+        self.transforms = transforms
+        self.split = split
+
+    def _convert_attributes(self, bool_attributes):
+        return (bool_attributes[0] << 2) + (bool_attributes[1] << 1) + (bool_attributes[2])
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, index):
+        input, target = self.dataset[index]
+        input = self.transforms(input)
+        target = self._convert_attributes(target[self.list_attributes])
+        return (input, target)

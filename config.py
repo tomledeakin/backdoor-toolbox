@@ -7,6 +7,7 @@ import os
 from networks.models import NetC_MNIST
 import timm
 import torch.nn as nn
+from torchvision import models
 
 data_dir = './data' # defaul clean dataset directory
 triggers_dir = './triggers' # default triggers directory
@@ -15,6 +16,7 @@ target_class = {
     'cifar10' : 0,
     'gtsrb' : 2,
     'mnist' : 0,
+    'celeba': 0,
     # 'gtsrb' : 12, # BadEncoder
     'imagenette': 0,
     'imagenet50': 0,
@@ -44,6 +46,30 @@ trigger_default = {
         'trojan': 'trojan_square_28_gray.png',
     },
     'cifar10': {
+        'none' : 'none',
+        'adaptive_blend': 'hellokitty_32.png',
+        'adaptive_patch': 'none',
+        'adaptive_k_way': 'none',
+        'clean_label' : 'badnet_patch4_dup_32.png',
+        'basic' : 'badnet_patch_32.png',
+        'badnet' : 'badnet_patch_32.png',
+        'blend' : 'hellokitty_32.png',
+        'refool': 'none',
+        'TaCT' : 'trojan_square_32.png',
+        'SIG' : 'none',
+        'WaNet': 'none',
+        'dynamic' : 'none',
+        'ISSBA': 'none',
+        'SleeperAgent': 'none',
+        'badnet_all_to_all' : 'badnet_patch_32.png',
+        'trojannn': 'none',
+        'BadEncoder': 'none',
+        'SRA': 'phoenix_corner_32.png',
+        'trojan': 'trojan_square_32.png',
+        'bpp': 'none',
+        'WB': 'none',
+    },
+    'celeba': {
         'none' : 'none',
         'adaptive_blend': 'hellokitty_32.png',
         'adaptive_patch': 'none',
@@ -129,9 +155,14 @@ trigger_default = {
     },
 }
 
+model = models.resnet101(pretrained=True)
+num_features = model.fc.in_features
+model.fc = nn.Linear(num_features, 200)
+
 arch = {
     ### for base model & poison distillation
     'cifar10': resnet.ResNet18,
+    'celeba': resnet.ResNet18,
     # 'cifar10': vgg.vgg16_bn,
     # 'cifar10': mobilenetv2.mobilenetv2,
     'gtsrb' : resnet.ResNet18,
@@ -140,7 +171,7 @@ arch = {
     'imagenette': resnet.ResNet18,
     'imagenet50': resnet.ResNet18,
     'imagenet100': resnet.ResNet18,
-    'imagenet200': resnet.ResNet18,
+    'imagenet200': model,
     'tinyimagenet200': resnet.ResNet18,
     'ember': ember_nn.EmberNN,
     # 'imagenet' : resnet.ResNet18,

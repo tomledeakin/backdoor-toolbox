@@ -39,6 +39,16 @@ class ScaleUp(BackdoorDefense):
         self.std = None
         self.init_spc_norm()
 
+    def create_bd(self, inputs):
+        """
+        Tạo backdoor inputs
+        """
+        patterns = self.netG(inputs)
+        patterns = self.netG.normalize_pattern(patterns)
+        masks_output = self.netM.threshold(self.netM(inputs))
+        bd_inputs = inputs + (patterns - inputs) * masks_output
+        return bd_inputs
+
     def detect(self, inspect_correct_predition_only=True, noisy_test=False):
         args = self.args
 
@@ -119,10 +129,18 @@ class ScaleUp(BackdoorDefense):
                 clean_pred = clean_output.argmax(dim=1)
                 mask = torch.eq(clean_pred, target)  # only look at those samples that successfully attack the DNN
                 clean_pred_correct_mask.append(mask)
+                if self.poison_type == 'SSDT':
+                    poison_data = self.create_bd(data)
+                    poison_target = torch.full(
+                        (poison_data.size(0),),
+                        fill_value=config.target_class[self.dataset],
+                        dtype=torch.long,
+                        device=poison_data.device
+                    )
+                else:
+                    poison_data, poison_target = self.poison_transform.transform(data, target)
 
-                poison_data, poison_target = self.poison_transform.transform(data, target)
-
-                if args.poison_type == 'TaCT':
+                if args.poison_type in ['TaCT', 'SSDT']:
                     mask = torch.eq(target, config.source_class)
                 else:
                     # remove backdoor data whose original class == target class
@@ -165,7 +183,7 @@ class ScaleUp(BackdoorDefense):
         print("TPR: {:.2f}".format(tp / (tp + fn) * 100))
         print("FPR: {:.2f}".format(fp / (tn + fp) * 100))
         print("AUC: {:.4f}".format(auc))
-
+        print("F1 Score: {:.4f}".format(metrics.f1_score(y_true, y_pred)))
         # print("The final detection TPR (threshold - {}):{}".format(self.threshold, TPR / total_num))
         # print("The final detection FPR (threshold - {}):{}".format(self.threshold, FPR / total_num))
 
